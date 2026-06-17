@@ -16,6 +16,7 @@ wrangler.*.local
 # Environment & secrets
 .env
 .env.*
+.dev.env
 !.env.example
 
 # Logs

@@ -1,8 +1,12 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { neon } from "@neondatabase/serverless";
 
 type Bindings = {
-  DB: D1Database;
+  // Neon Postgres connection string. In dev it is loaded from the repo-root
+  // `.dev.env` (via `wrangler dev --env-file`); in production set it with
+  // `wrangler secret put DB_CONN`.
+  DB_CONN: string;
 };
 
 type MessageRow = {
@@ -30,11 +34,15 @@ app.get("/api/health", (c) => {
 });
 
 app.get("/api/messages", async (c) => {
-  const { results } = await c.env.DB.prepare(
-    "SELECT id, body, created_at FROM messages ORDER BY id DESC LIMIT 100",
-  ).all<MessageRow>();
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`
+    SELECT id, body, created_at
+    FROM messages
+    ORDER BY id DESC
+    LIMIT 100
+  `) as MessageRow[];
 
-  return c.json({ messages: results });
+  return c.json({ messages: rows });
 });
 
 app.post("/api/messages", async (c) => {
@@ -50,12 +58,16 @@ app.post("/api/messages", async (c) => {
     return c.json({ error: "`body` must be a non-empty string" }, 400);
   }
 
-  const created = await c.env.DB.prepare(
-    "INSERT INTO messages (body) VALUES (?) RETURNING id, body, created_at",
-  )
-    .bind(body.trim())
-    .first<MessageRow>();
+  const sql = neon(c.env.DB_CONN);
+  // Values interpolated into the tagged template are sent as bound
+  // parameters by the Neon driver — safe from SQL injection.
+  const rows = (await sql`
+    INSERT INTO messages (body)
+    VALUES (${body.trim()})
+    RETURNING id, body, created_at
+  `) as MessageRow[];
 
+  const created = rows[0];
   if (!created) {
     return c.json({ error: "Failed to create message" }, 500);
   }

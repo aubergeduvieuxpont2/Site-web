@@ -4,14 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env-file ../../.dev.env",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
-    "db:migrate:local": "wrangler d1 migrations apply site-web-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply site-web-db --remote"
+    "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
     "hono": "^4.7.10"
   },
   "devDependencies": {

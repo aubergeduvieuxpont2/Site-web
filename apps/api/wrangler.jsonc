@@ -3,15 +3,14 @@
   "name": "site-web-api",
   "main": "src/index.ts",
   "compatibility_date": "2025-06-16",
+  // The Neon serverless driver uses fetch/WebSocket; nodejs_compat is not
+  // required for HTTP queries but is enabled for broader driver compatibility.
+  "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "site-web-db",
-      // Create the database with `wrangler d1 create site-web-db`
-      // and paste the returned database_id below (replace the placeholder).
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
-      "migrations_dir": "migrations"
-    }
-  ]
+
+  // Data lives in Neon Postgres, reached via the DB_CONN connection string.
+  //   - Local dev: DB_CONN is loaded from the repo-root `.dev.env`
+  //     (the `dev` script passes `--env-file ../../.dev.env`).
+  //   - Production: set it as a secret with `wrangler secret put DB_CONN`.
+  // No binding block is needed — DB_CONN is a plain var/secret on `c.env`.
 }

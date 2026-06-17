@@ -13,8 +13,7 @@
     "deploy:web": "npm run deploy --workspace apps/web",
     "deploy:api": "npm run deploy --workspace apps/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "db:migrate:local": "npm run db:migrate:local --workspace apps/api",
-    "db:migrate:remote": "npm run db:migrate:remote --workspace apps/api"
+    "db:migrate": "npm run db:migrate --workspace apps/api"
   },
   "engines": {
     "node": ">=20"
