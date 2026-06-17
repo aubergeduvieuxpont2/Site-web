@@ -1,1 +1,137 @@
 @import "tailwindcss";
+
+/* ============================================================
+   L'Auberge du Vieux Pont — "Industrial Hospitality"
+   Technical-manual precision meets a warm rural refuge.
+   Palette + type from the project's Industrial Light system.
+   ============================================================ */
+
+@theme {
+  /* Warm cream canvas */
+  --color-surface: #fbf9f8;
+  --color-surface-2: #f5f3f3;
+  --color-surface-3: #efeded;
+  --color-surface-4: #e9e6e4;
+
+  /* Ink */
+  --color-ink: #1b1c1c;
+  --color-ink-soft: #5b403b; /* warm brown */
+  --color-ink-mute: #8a807c;
+
+  /* Terracotta / "safety orange" accent */
+  --color-terracotta: #b32002;
+  --color-terracotta-bright: #d73b1c;
+  --color-ember: #ffb4a4;
+  --color-ember-pale: #ffdad3;
+
+  /* Structure */
+  --color-outline: #8f7069;
+  --color-hairline: #e4beb6;
+  --color-hairline-2: #ddd6d2;
+
+  /* Dark mode surfaces (charcoal sections) */
+  --color-charcoal: #211f1e;
+  --color-charcoal-2: #2c2927;
+  --color-on-charcoal: #f2efed;
+  --color-on-charcoal-soft: #c7b8b2;
+
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
+  --font-serif: "IBM Plex Serif", ui-serif, Georgia, serif;
+
+  --radius-blueprint: 0.25rem;
+
+  --ease-industrial: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-surface);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    font-feature-settings: "ss01", "cv05";
+  }
+
+  ::selection {
+    background-color: var(--color-terracotta);
+    color: #fff;
+  }
+
+  /* Thin terracotta scrollbar — instrumentation feel */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-surface-3);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-outline);
+    border: 2px solid var(--color-surface-3);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-terracotta);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+/* ---------- Custom utilities ---------- */
+
+/* All-caps technical label, mimics industrial labeling systems */
+@utility tech-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+/* 1px structural hairline (blueprint section borders) */
+@utility hairline {
+  border: 1px solid var(--color-hairline-2);
+}
+
+/* Fine grain / paper texture overlay (printed-manual feel) */
+@utility grain {
+  position: relative;
+}
+@utility grain-overlay {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+}
+
+/* Duotone image treatment: desaturate + warm terracotta cast.
+   Apply to an <img>; pair with a blend layer for full duotone. */
+@utility duotone {
+  filter: grayscale(1) contrast(1.05) brightness(1.02);
+}
+
+/* Reveal animation default state (Motion sets the visible state). */
+@utility will-reveal {
+  opacity: 0;
+}

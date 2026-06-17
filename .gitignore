@@ -36,3 +36,4 @@ npm-debug.log*
 # Type generation
 worker-configuration.d.ts
 *.tsbuildinfo
+.playwright-mcp/
