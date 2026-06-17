@@ -1,0 +1,12 @@
+{
+  // Cloudflare Worker that serves the built single-page application (SPA).
+  // `npm run build` outputs static assets to ./dist, which are served directly;
+  // unknown routes fall back to index.html so client-side routing works.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site-web-web",
+  "compatibility_date": "2025-06-16",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}

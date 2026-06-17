@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site-web-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-16",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "site-web-db",
+      // Create the database with `wrangler d1 create site-web-db`
+      // and paste the returned database_id below (replace the placeholder).
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

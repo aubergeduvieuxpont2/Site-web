@@ -1,0 +1,22 @@
+{
+  "name": "site-web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Full-stack web application on Cloudflare (Workers + D1).",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "dev:api": "npm run dev --workspace apps/api",
+    "build:web": "npm run build --workspace apps/web",
+    "deploy:web": "npm run deploy --workspace apps/web",
+    "deploy:api": "npm run deploy --workspace apps/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:migrate:local": "npm run db:migrate:local --workspace apps/api",
+    "db:migrate:remote": "npm run db:migrate:remote --workspace apps/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

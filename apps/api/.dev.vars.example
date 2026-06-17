@@ -1,0 +1,5 @@
+# Local development secrets for `wrangler dev`.
+# Copy this file to `.dev.vars` (gitignored) and fill in real values.
+# Each line is KEY=value and is exposed on `c.env` at runtime.
+#
+# EXAMPLE_SECRET=value
