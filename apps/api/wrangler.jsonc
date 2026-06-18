@@ -8,6 +8,16 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // Custom-domain routing: the more-specific /api/* route wins over the web
+  // Worker's catch-all, so the SPA's relative `/api/*` calls stay same-origin.
+  // NOTE: only deploy with this route once the `aubergeduvieuxpont.ca` zone is
+  // ACTIVE on the account (Add Site + registrar nameservers + a proxied `www`
+  // DNS record). Deploying against an inactive zone fails; until then the
+  // Worker stays reachable on its workers.dev URL.
+  "routes": [
+    { "pattern": "www.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" }
+  ],
+
   // Data lives in Neon Postgres, reached via the DB_CONN connection string.
   //   - Local dev: DB_CONN is loaded from the repo-root `.dev.env`
   //     (the `dev` script passes `--env-file ../../.dev.env`).
