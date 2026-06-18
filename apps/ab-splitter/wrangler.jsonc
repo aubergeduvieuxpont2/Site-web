@@ -1,0 +1,18 @@
+{
+  // A/B traffic-splitter Worker for the concept-testing surface.
+  // Routes dev.aubergeduvieuxpont.ca/* and forwards each visitor (stickily) to
+  // variant A or B. /api/* on dev is handled by the API Worker via a more-
+  // specific route (see apps/api/wrangler.jsonc), not by this Worker.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site-web-ab-splitter",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-16",
+  "observability": { "enabled": true },
+
+  // Percentage of new visitors sent to variant A (rest go to B). Tune + redeploy.
+  "vars": { "WEIGHT_A": "50" },
+
+  "routes": [
+    { "pattern": "dev.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
+  ]
+}
