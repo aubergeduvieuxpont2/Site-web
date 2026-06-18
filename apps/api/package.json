@@ -11,8 +11,10 @@
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
     "@neondatabase/serverless": "^0.10.4",
-    "hono": "^4.7.10"
+    "hono": "^4.7.10",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250607.0",
