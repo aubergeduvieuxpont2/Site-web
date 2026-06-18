@@ -71,12 +71,14 @@ const rateLimitMiddleware = async (c: Context, next: () => Promise<void>) => {
 };
 
 // CORS for the API surface.
-// Starter default allows all origins ("*"). For production, replace "*" with
-// your frontend origin, e.g. origin: "https://your-site.example.com".
+// The SPA is served same-origin (www.aubergeduvieuxpont.ca/* → web Worker,
+// /api/* → this Worker), so we scope CORS to that origin rather than "*".
+// Add more origins to this array if other front-ends need to call the API.
+const ALLOWED_ORIGINS = ["https://www.aubergeduvieuxpont.ca"];
 app.use(
   "/api/*",
   cors({
-    origin: "*",
+    origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : null),
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type"],
   }),
