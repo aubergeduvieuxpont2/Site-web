@@ -29,12 +29,15 @@ across all surfaces.
 - Route `dev.aubergeduvieuxpont.ca/*`. Pure Worker (no static assets).
 - Per request: read the `ab_variant` cookie. If absent, assign `a` with probability
   `WEIGHT_A`% (var, default 50), else `b`; set a 30-day `Set-Cookie` (Path=/, SameSite=Lax).
-- Forward the request by **fetch** to `https://a.` or `https://b.` + original path + query, and
-  return the upstream response (with the assignment cookie added for new visitors).
+- Forward the request to the chosen variant via a **service binding** (`VARIANT_A` /
+  `VARIANT_B`) and return its response (with the assignment cookie added for new visitors).
 - `/api/*` on `dev` is NOT handled here — a more-specific `dev.../api/*` route sends it
   straight to the shared API, keeping reservation POSTs same-origin.
-- **Fetch-based forwarding (not service bindings)** so the splitter deploys even if a variant
-  Worker doesn't exist yet (no deploy-order coupling).
+- **Service bindings (not fetch-by-hostname):** a same-zone Worker subrequest to a variant's
+  custom-domain route is not reliably intercepted by that route — it falls through to the
+  placeholder origin and returns HTTP 522. A binding invokes the variant Worker directly.
+  Trade-off: deploy-order coupling — the variant Workers must exist before the splitter
+  deploys (they do; `deploy-prod` runs after the variant workflows have created them).
 
 ### 2. Variant Web Workers (wrangler environments in `apps/web/wrangler.jsonc`)
 - `env.a` → name `site-web-web-a`, route `a.aubergeduvieuxpont.ca/*`.
@@ -62,8 +65,8 @@ across all surfaces.
 
 ```
 visitor → dev.aubergeduvieuxpont.ca/* → splitter
-   ├─ cookie ab_variant=a → fetch https://a.aubergeduvieuxpont.ca/<path> → return
-   └─ cookie ab_variant=b → fetch https://b.aubergeduvieuxpont.ca/<path> → return
+   ├─ cookie ab_variant=a → VARIANT_A binding (site-web-web-a) → return
+   └─ cookie ab_variant=b → VARIANT_B binding (site-web-web-b) → return
 visitor → dev.aubergeduvieuxpont.ca/api/* → (more-specific route) → site-web-api → Neon
 ```
 

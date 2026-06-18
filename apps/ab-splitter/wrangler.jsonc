@@ -12,6 +12,12 @@
   // Percentage of new visitors sent to variant A (rest go to B). Tune + redeploy.
   "vars": { "WEIGHT_A": "50" },
 
+  // Service bindings to the variant Workers (must exist before this deploys).
+  "services": [
+    { "binding": "VARIANT_A", "service": "site-web-web-a" },
+    { "binding": "VARIANT_B", "service": "site-web-web-b" }
+  ],
+
   "routes": [
     { "pattern": "dev.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
   ]
