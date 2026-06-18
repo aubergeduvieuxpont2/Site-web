@@ -1,0 +1,38 @@
+name: Deploy Variant B
+
+# Deploys the path-b front-end variant to b.aubergeduvieuxpont.ca
+# (Worker site-web-web-b). Web only — the API is shared from production.
+on:
+  push:
+    branches: [path-b]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-path-b
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Deploy variant B (b.aubergeduvieuxpont.ca)
+        run: npx wrangler deploy --env b
+        working-directory: apps/web

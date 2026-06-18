@@ -74,7 +74,13 @@ const rateLimitMiddleware = async (c: Context, next: () => Promise<void>) => {
 // The SPA is served same-origin (www.aubergeduvieuxpont.ca/* → web Worker,
 // /api/* → this Worker), so we scope CORS to that origin rather than "*".
 // Add more origins to this array if other front-ends need to call the API.
-const ALLOWED_ORIGINS = ["https://www.aubergeduvieuxpont.ca"];
+const ALLOWED_ORIGINS = [
+  "https://www.aubergeduvieuxpont.ca",
+  // A/B concept-testing surfaces (served same-origin, so this is defensive).
+  "https://dev.aubergeduvieuxpont.ca",
+  "https://a.aubergeduvieuxpont.ca",
+  "https://b.aubergeduvieuxpont.ca",
+];
 app.use(
   "/api/*",
   cors({

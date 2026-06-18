@@ -1,0 +1,47 @@
+name: Deploy Production
+
+# Production deploy: API + web (www) and the A/B splitter (dev).
+# Runs on every push to main, plus manual dispatch.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build web
+        run: npm run build:web
+
+      - name: Deploy API (www/api/*, dev+a+b /api/*)
+        run: npx wrangler deploy
+        working-directory: apps/api
+
+      - name: Deploy web (www)
+        run: npx wrangler deploy
+        working-directory: apps/web
+
+      - name: Deploy A/B splitter (dev)
+        run: npx wrangler deploy
+        working-directory: apps/ab-splitter

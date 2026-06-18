@@ -17,5 +17,32 @@
   // workers.dev URL.
   "routes": [
     { "pattern": "www.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
-  ]
+  ],
+
+  // A/B variant environments. Same SPA build, deployed under distinct Worker
+  // names + subdomains; the *content* differs because each is built from its
+  // own branch (path-a / path-b). Deploy with `wrangler deploy --env a|b`.
+  // Explicit `name` avoids wrangler's default "<name>-<env>" suffixing.
+  "env": {
+    "a": {
+      "name": "site-web-web-a",
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+      },
+      "routes": [
+        { "pattern": "a.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
+      ]
+    },
+    "b": {
+      "name": "site-web-web-b",
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "single-page-application"
+      },
+      "routes": [
+        { "pattern": "b.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
+      ]
+    }
+  }
 }
