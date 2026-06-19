@@ -13,3 +13,6 @@ cache/
 
 # Hook markers
 .dirty
+
+# Tracked so the Agentic OS dashboard can download the index
+!codegraph.db
