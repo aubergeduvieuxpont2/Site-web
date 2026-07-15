@@ -47,7 +47,7 @@ app.post(
     try {
       const result = await executeOp(c.env, parseResult.envelope);
       if (result.ok) {
-        return c.json({ ok: true, hubspotId: result.hubspotId }, 200);
+        return c.json({ ok: true, hubspotId: result.hubspotId, data: result.data }, 200);
       } else {
         return c.json(result, result.status as any);
       }

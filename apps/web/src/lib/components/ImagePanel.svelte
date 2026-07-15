@@ -1,73 +1,155 @@
 <script lang="ts">
-  import Contour from "./Contour.svelte";
+  import { onMount, onDestroy } from 'svelte';
 
-  /**
-   * Duotone image panel. Uses a deterministic Lorem Picsum photo unified
-   * into the brand palette with a terracotta/charcoal duotone wash, over a
-   * structural charcoal fallback so it always reads as an intentional panel
-   * even if the photo fails to load. Drop real photos into /public and pass
-   * `src` to override.
-   */
   let {
-    seed,
-    src = undefined,
-    alt = "",
-    label = "",
-    code = "",
-    ratio = "4 / 3",
-    class: klass = "",
+    imgKey,
+    picsumSeed,
+    alt,
+    aspectRatio = '4/3',
+    caption,
   }: {
-    seed: string;
-    src?: string;
-    alt?: string;
-    label?: string;
-    code?: string;
-    ratio?: string;
-    class?: string;
+    imgKey: string;
+    picsumSeed: string | number;
+    alt: string;
+    aspectRatio?: string;
+    caption?: string;
   } = $props();
 
-  const resolved = $derived(
-    src ?? `https://picsum.photos/seed/avp-${seed}/1000/800`,
-  );
-  let failed = $state(false);
+  let el: HTMLElement | undefined = $state();
+  let observer: IntersectionObserver | undefined;
+
+  onMount(() => {
+    if (!el) return;
+
+    const img = el.querySelector('[data-testid="image-panel-img"]') as HTMLImageElement | null;
+
+    if (img) {
+      img.addEventListener('error', () => {
+        const fallback = img.dataset.picsumSrc;
+        if (fallback && img.src !== fallback) {
+          img.src = fallback;
+        }
+      });
+    }
+
+    observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            el!.classList.add('is-revealed');
+            observer!.unobserve(el!);
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+  });
+
+  onDestroy(() => {
+    observer?.disconnect();
+  });
 </script>
 
 <figure
-  class="grain relative overflow-hidden rounded-[var(--radius-blueprint)] bg-charcoal {klass}"
-  style="aspect-ratio:{ratio}"
+  class="image-panel"
+  style="--aspect: {aspectRatio}"
+  data-testid="image-panel"
+  bind:this={el}
 >
-  {#if !failed}
+  <div class="image-panel__clip">
     <img
-      src={resolved}
+      class="image-panel__img"
+      src="/img/{imgKey}"
       {alt}
       loading="lazy"
-      onerror={() => (failed = true)}
-      class="duotone absolute inset-0 h-full w-full scale-[1.02] object-cover transition-transform duration-[1.2s] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-105"
+      data-picsum-src="https://picsum.photos/seed/{picsumSeed}/1200/800"
+      data-testid="image-panel-img"
     />
-  {/if}
-
-  <!-- duotone washes -->
-  <div class="absolute inset-0 bg-terracotta/30 mix-blend-multiply"></div>
-  <div
-    class="absolute inset-0 bg-gradient-to-t from-charcoal/70 via-charcoal/10 to-transparent"
-  ></div>
-  <Contour
-    class="absolute -right-10 -top-10 h-48 w-48 text-ember/20"
-    rings={7}
-  />
-  <span class="grain-overlay"></span>
-
-  {#if code}
-    <span
-      class="tech-label absolute right-3 top-3 text-on-charcoal/70"
-      style="writing-mode:vertical-rl">{code}</span
-    >
-  {/if}
-  {#if label}
-    <figcaption
-      class="tech-label absolute bottom-3 left-3 text-on-charcoal/85"
-    >
-      {label}
-    </figcaption>
-  {/if}
+  </div>
+  <figcaption
+    class="image-panel__caption"
+    data-testid="image-panel-caption"
+    hidden={!caption}
+  >
+    {caption ?? ''}
+  </figcaption>
 </figure>
+
+<style>
+  .image-panel {
+    --aspect: 4/3;
+    display: block;
+    position: relative;
+    aspect-ratio: var(--aspect);
+    margin: 0;
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      opacity 600ms cubic-bezier(0.33, 1, 0.68, 1),
+      transform 600ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  /* :global needed because class is added dynamically via JS */
+  .image-panel:global(.is-revealed) {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .image-panel {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+
+  .image-panel__clip {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .image-panel__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 500ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .image-panel:hover .image-panel__img {
+    transform: scale(1.02);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .image-panel__img {
+      transition: none;
+    }
+
+    .image-panel:hover .image-panel__img {
+      transform: none;
+    }
+  }
+
+  .image-panel__caption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    padding: var(--space-xs, 4px) var(--space-sm, 8px);
+    font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1.4;
+    color: var(--color-inverse-on-surface, #f0f1f3);
+    background-color: rgba(45, 49, 51, 0.7);
+    background-color: color-mix(in srgb, var(--color-inverse-surface, #2d3133) 70%, transparent);
+    max-width: 75%;
+  }
+
+  .image-panel__caption[hidden] {
+    display: none;
+  }
+</style>

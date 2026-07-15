@@ -1,0 +1,257 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, fireEvent, waitFor, cleanup } from "@testing-library/svelte";
+import type { ReservationRow, OutboxRow, User, ApiError } from "$lib/api";
+
+// ---------------------------------------------------------------------------
+// Mock the typed API client. The admin page must reach the network only
+// through these helpers — never a raw fetch — so mocking the module fully
+// isolates the component's behaviour. `isError` keeps the real semantics so
+// the component's success/error branching is exercised faithfully.
+// ---------------------------------------------------------------------------
+const getMe = vi.fn();
+const adminReservations = vi.fn();
+const adminOutbox = vi.fn();
+const requeueOutbox = vi.fn();
+
+vi.mock("$lib/api", () => ({
+  getMe: (...a: unknown[]) => getMe(...a),
+  adminReservations: (...a: unknown[]) => adminReservations(...a),
+  adminOutbox: (...a: unknown[]) => adminOutbox(...a),
+  requeueOutbox: (...a: unknown[]) => requeueOutbox(...a),
+  isError: (r: unknown): r is ApiError =>
+    typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
+}));
+
+// Import AFTER the mock is registered so the component binds to the mock.
+import Page from "../admin/+page.svelte";
+
+const ADMIN: User = { id: 1, email: "admin@example.com", name: "Admin", role: "admin" };
+const GUEST: User = { id: 2, email: "guest@example.com", name: "Guest", role: "guest" };
+
+function reservation(over: Partial<ReservationRow> = {}): ReservationRow {
+  return {
+    id: 100,
+    email: "jean@example.com",
+    name: "Jean Tremblay",
+    check_in: "2026-08-01",
+    check_out: "2026-08-03",
+    guests: 2,
+    message: null,
+    created_at: "2026-07-01T12:00:00.000Z",
+    updated_at: "2026-07-01T12:00:00.000Z",
+    ...over,
+  };
+}
+
+function outbox(over: Partial<OutboxRow> = {}): OutboxRow {
+  return {
+    id: 500,
+    kind: "contact.upsert",
+    status: "failed",
+    attempts: 3,
+    dedupe_key: null,
+    last_error: "HubSpot 429 rate limited",
+    hubspot_id: null,
+    next_attempt_at: "2026-07-02T09:00:00.000Z",
+    created_at: "2026-07-01T09:00:00.000Z",
+    updated_at: "2026-07-01T10:00:00.000Z",
+    ...over,
+  };
+}
+
+beforeEach(() => {
+  getMe.mockReset();
+  adminReservations.mockReset();
+  adminOutbox.mockReset();
+  requeueOutbox.mockReset();
+  // Sensible defaults; individual tests override.
+  getMe.mockResolvedValue({ user: ADMIN });
+  adminReservations.mockResolvedValue({ reservations: [reservation()] });
+  adminOutbox.mockResolvedValue({ rows: [outbox()] });
+  requeueOutbox.mockResolvedValue({ row: outbox({ status: "pending", attempts: 0, last_error: null }) });
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe("page-admin auth gate", () => {
+  it("shows a denied state (not a redirect) for a non-admin user", async () => {
+    getMe.mockResolvedValue({ user: GUEST });
+    const { findByTestId, queryByTestId } = render(Page);
+
+    expect(await findByTestId("admin-denied")).toBeTruthy();
+    expect(await findByTestId("denied-msg")).toBeTruthy();
+    // No admin data is ever requested for a non-admin.
+    expect(adminReservations).not.toHaveBeenCalled();
+    expect(queryByTestId("panel-reservations")).toBeNull();
+  });
+
+  it("shows the denied state when getMe returns an error (unauthenticated)", async () => {
+    getMe.mockResolvedValue({ error: "Non authentifié" });
+    const { findByTestId } = render(Page);
+    expect(await findByTestId("admin-denied")).toBeTruthy();
+    expect(adminReservations).not.toHaveBeenCalled();
+  });
+
+  it("renders the dashboard and loads reservations for an admin", async () => {
+    const { findByTestId } = render(Page);
+    expect(await findByTestId("panel-reservations")).toBeTruthy();
+    await waitFor(() => expect(adminReservations).toHaveBeenCalledTimes(1));
+    expect(await findByTestId("reservations-table")).toBeTruthy();
+  });
+});
+
+describe("page-admin reservations", () => {
+  it("renders a row per reservation and a live count", async () => {
+    adminReservations.mockResolvedValue({
+      reservations: [reservation({ id: 1 }), reservation({ id: 2, name: "Marie" })],
+    });
+    const { findByTestId, findAllByTestId } = render(Page);
+    const rows = await findAllByTestId("reservation-row");
+    expect(rows).toHaveLength(2);
+    const count = await findByTestId("reservations-count");
+    expect(count.textContent).toContain("2");
+  });
+
+  it("surfaces an error banner when the reservations request fails", async () => {
+    adminReservations.mockResolvedValue({ error: "Erreur 500" });
+    const { findByTestId } = render(Page);
+    const banner = await findByTestId("reservations-error");
+    expect(banner.getAttribute("role")).toBe("alert");
+    expect(banner.textContent).toContain("Erreur 500");
+  });
+
+  it("debounces the search input and queries by the trimmed term", async () => {
+    vi.useFakeTimers();
+    try {
+      const { findByTestId, getByTestId } = render(Page);
+      // Flush onMount (getMe + initial load) under fake timers.
+      await vi.waitFor(() => expect(adminReservations).toHaveBeenCalledTimes(1));
+      const input = getByTestId("search-input") as HTMLInputElement;
+      await fireEvent.input(input, { target: { value: "  Jean  " } });
+      // Not yet — still within the 300ms debounce window.
+      expect(adminReservations).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(300);
+      await vi.waitFor(() => expect(adminReservations).toHaveBeenCalledTimes(2));
+      expect(adminReservations).toHaveBeenLastCalledWith("Jean");
+      await findByTestId("reservations-table");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("page-admin outbox tab", () => {
+  it("loads the outbox only after switching to its tab", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    await findByTestId("panel-reservations");
+    expect(adminOutbox).not.toHaveBeenCalled();
+
+    await fireEvent.click(getByTestId("tab-outbox"));
+    await waitFor(() => expect(adminOutbox).toHaveBeenCalledTimes(1));
+    expect(await findByTestId("outbox-table")).toBeTruthy();
+  });
+
+  it("reloads the outbox when the status filter changes", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    await waitFor(() => expect(adminOutbox).toHaveBeenCalledTimes(1));
+
+    await fireEvent.change(getByTestId("status-filter"), { target: { value: "failed" } });
+    await waitFor(() => expect(adminOutbox).toHaveBeenLastCalledWith("failed"));
+  });
+
+  it("expands and collapses the last_error detail", async () => {
+    const { findByTestId, queryByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    const toggle = await findByTestId("error-toggle");
+    expect(queryByTestId("error-detail")).toBeNull();
+
+    await fireEvent.click(toggle);
+    const detail = await findByTestId("error-detail");
+    expect(detail.textContent).toContain("HubSpot 429 rate limited");
+    expect(getByTestId("error-toggle").getAttribute("aria-expanded")).toBe("true");
+
+    await fireEvent.click(getByTestId("error-toggle"));
+    await waitFor(() => expect(queryByTestId("error-detail")).toBeNull());
+  });
+
+  it("renders the last_error as text content, never as HTML", async () => {
+    adminOutbox.mockResolvedValue({
+      rows: [outbox({ last_error: "<img src=x onerror=alert(1)>" })],
+    });
+    const { findByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    await fireEvent.click(await findByTestId("error-toggle"));
+    const detail = await findByTestId("error-detail");
+    // The payload appears verbatim as text; no <img> element is created.
+    expect(detail.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(detail.querySelector("img")).toBeNull();
+  });
+});
+
+describe("page-admin requeue (optimistic update)", () => {
+  it("optimistically flips a failed row to pending and calls requeueOutbox", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    const btn = await findByTestId("requeue-btn");
+
+    await fireEvent.click(btn);
+    expect(requeueOutbox).toHaveBeenCalledWith(500);
+    await waitFor(() => {
+      expect(getByTestId("outbox-row").getAttribute("data-status")).toBe("pending");
+    });
+    // A pending row no longer offers a requeue action.
+    await waitFor(() => expect(document.querySelector("[data-testid='requeue-btn']")).toBeNull());
+  });
+
+  it("rolls back to failed when the requeue request errors", async () => {
+    requeueOutbox.mockResolvedValue({ error: "Erreur 500" });
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    await fireEvent.click(await findByTestId("requeue-btn"));
+
+    await waitFor(() => expect(requeueOutbox).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(getByTestId("outbox-row").getAttribute("data-status")).toBe("failed");
+    });
+  });
+
+  it("only renders a requeue button for failed rows", async () => {
+    adminOutbox.mockResolvedValue({
+      rows: [outbox({ id: 1, status: "done" }), outbox({ id: 2, status: "pending" })],
+    });
+    const { findByTestId, queryByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-outbox"));
+    await findByTestId("outbox-table");
+    expect(queryByTestId("requeue-btn")).toBeNull();
+  });
+});
+
+describe("page-admin ARIA tab semantics", () => {
+  it("marks the active tab with aria-selected and roving tabindex", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    const resTab = await findByTestId("tab-reservations");
+    expect(resTab.getAttribute("aria-selected")).toBe("true");
+    expect(resTab.getAttribute("tabindex")).toBe("0");
+    expect(getByTestId("tab-outbox").getAttribute("tabindex")).toBe("-1");
+
+    await fireEvent.click(getByTestId("tab-outbox"));
+    await waitFor(() => {
+      expect(getByTestId("tab-outbox").getAttribute("aria-selected")).toBe("true");
+      expect(getByTestId("tab-reservations").getAttribute("aria-selected")).toBe("false");
+    });
+  });
+
+  it("moves between tabs with ArrowRight/ArrowLeft", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    const resTab = await findByTestId("tab-reservations");
+    await fireEvent.keyDown(resTab, { key: "ArrowRight" });
+    await waitFor(() => expect(getByTestId("tab-outbox").getAttribute("aria-selected")).toBe("true"));
+    await fireEvent.keyDown(getByTestId("tab-outbox"), { key: "ArrowLeft" });
+    await waitFor(() =>
+      expect(getByTestId("tab-reservations").getAttribute("aria-selected")).toBe("true"),
+    );
+  });
+});

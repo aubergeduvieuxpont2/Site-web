@@ -1,47 +1,60 @@
 {
-  // Cloudflare Worker that serves the built single-page application (SPA).
-  // `npm run build` outputs static assets to ./dist, which are served directly;
-  // unknown routes fall back to index.html so client-side routing works.
+  // Cloudflare Worker that serves the SvelteKit build output.
+  // `npm run build` (adapter-cloudflare) writes the Worker to
+  // .svelte-kit/cloudflare/_worker.js and static assets to .svelte-kit/cloudflare.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "site-web-web",
   "compatibility_date": "2025-06-16",
+  "main": ".svelte-kit/cloudflare/_worker.js",
   "assets": {
-    "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "directory": ".svelte-kit/cloudflare",
+    "binding": "ASSETS"
   },
 
-  // Catch-all route for the SPA. The API Worker's `/api/*` route is more
-  // specific and wins, so reservation POSTs reach the API on the same origin.
+  // Catch-all route for the site. The API Worker's `/api/*` route is more
+  // specific and wins, so API calls reach the API Worker on the same origin.
   // NOTE: only deploy with this route once the `aubergeduvieuxpont.ca` zone is
-  // ACTIVE (see apps/api/wrangler.jsonc). Until then the SPA stays on its
+  // ACTIVE (see apps/api/wrangler.jsonc). Until then the Worker stays on its
   // workers.dev URL.
   "routes": [
     { "pattern": "www.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
   ],
 
-  // A/B variant environments. Same SPA build, deployed under distinct Worker
+  "r2_buckets": [
+    { "binding": "IMG", "bucket_name": "img" }
+  ],
+
+  // A/B variant environments. Same SvelteKit build, deployed under distinct Worker
   // names + subdomains; the *content* differs because each is built from its
   // own branch (path-a / path-b). Deploy with `wrangler deploy --env a|b`.
   // Explicit `name` avoids wrangler's default "<name>-<env>" suffixing.
   "env": {
     "a": {
       "name": "site-web-web-a",
+      "main": ".svelte-kit/cloudflare/_worker.js",
       "assets": {
-        "directory": "./dist",
-        "not_found_handling": "single-page-application"
+        "directory": ".svelte-kit/cloudflare",
+        "binding": "ASSETS"
       },
       "routes": [
         { "pattern": "a.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
+      ],
+      "r2_buckets": [
+        { "binding": "IMG", "bucket_name": "img" }
       ]
     },
     "b": {
       "name": "site-web-web-b",
+      "main": ".svelte-kit/cloudflare/_worker.js",
       "assets": {
-        "directory": "./dist",
-        "not_found_handling": "single-page-application"
+        "directory": ".svelte-kit/cloudflare",
+        "binding": "ASSETS"
       },
       "routes": [
         { "pattern": "b.aubergeduvieuxpont.ca/*", "zone_name": "aubergeduvieuxpont.ca" }
+      ],
+      "r2_buckets": [
+        { "binding": "IMG", "bucket_name": "img" }
       ]
     }
   }

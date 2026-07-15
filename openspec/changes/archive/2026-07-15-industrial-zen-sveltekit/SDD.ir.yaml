@@ -1,0 +1,744 @@
+REQ:
+  R-WEB-001:
+    actor: Site visitor
+    capability: "browse apps/web migrated in place from a Vite SPA to SvelteKit (Svelte 5 runes) with adapter-cloudflare and Tailwind v4"
+    constraints: "hand-rolled router.ts and App.svelte replaced by SvelteKit file routing plus a +layout.svelte shell; worker names and www/a/b topology unchanged"
+    priority: MUST
+    tests:
+      - T-WEB-001a
+      - T-WEB-001b
+  R-WEB-002:
+    actor: Site visitor
+    capability: "see the Industrial Zen theme (surface #f7f9fb family, primary #000, secondary #9d4300 / container #fd761a, IBM Plex Sans, full-color imagery)"
+    constraints: "structural utilities tech-label, hairline, reveal retained and retuned"
+    priority: MUST
+    tests:
+      - T-WEB-002a
+  R-WEB-003:
+    actor: Site visitor
+    capability: "load each French route in its render mode (SSG / SSR / CSR)"
+    constraints: "modes selected via +page(.server).ts prerender and ssr export flags"
+    priority: MUST
+    tests:
+      - T-WEB-003a
+      - T-WEB-003b
+      - T-WEB-003c
+  R-WEB-004:
+    actor: Site visitor
+    capability: "be 301-redirected from legacy paths to merged anchors"
+    constraints: "GET /chambres to /le-site#chambres and GET /attraits to /le-site#attraits"
+    priority: MUST
+    tests:
+      - T-WEB-004a
+  R-NAV-001:
+    actor: Site visitor
+    capability: "use a fully responsive site with persistent header nav and a working mobile menu"
+    constraints: "no horizontal overflow 360px-1440px; touch targets >=44px; Connexion always shown, Profil only when authenticated"
+    priority: MUST
+    tests:
+      - T-WEB-005a
+  R-SHADER-001:
+    actor: Site visitor
+    capability: "see a lazy WebGL hero shader on the landing hero with graceful fallback"
+    constraints: "lazy init; paused offscreen via IntersectionObserver; static gradient fallback under prefers-reduced-motion or no WebGL"
+    priority: SHOULD
+    tests:
+      - T-WEB-006a
+  R-AUTH-001:
+    actor: Guest user
+    capability: "register, log in, log out, and read own session via the auth endpoints"
+    constraints: "open guest registration; Neon-backed sessions; HttpOnly Secure SameSite=Lax host-scoped cookie; login errors do not distinguish unknown-email from wrong-password"
+    priority: MUST
+    tests:
+      - T-AUTH-001a
+      - T-AUTH-001b
+      - T-AUTH-001c
+  R-AUTH-002:
+    actor: System
+    capability: "hash and verify passwords with PBKDF2 via WebCrypto"
+    constraints: "SHA-256, iterations >=100000, per-user salt, stored pbkdf2$iterations$salt$hash, constant-time compare"
+    priority: MUST
+    tests:
+      - T-AUTH-002a
+  R-AUTH-003:
+    actor: Operator
+    capability: "create users and sessions tables and bootstrap the admin role via idempotent migrations"
+    constraints: "own migration files; no embedded semicolons; admin seed upserts role=admin for ADMIN_EMAIL and is safe to re-run"
+    priority: MUST
+    tests:
+      - T-AUTH-003a
+  R-ADMIN-001:
+    actor: Admin user
+    capability: "list/search reservations, list outbox by status, and requeue a failed outbox row to pending"
+    constraints: "all /api/admin/* require role=admin; requeue only transitions failed to pending resetting attempts and last_error"
+    priority: MUST
+    tests:
+      - T-ADMIN-001a
+      - T-ADMIN-001b
+  R-PROF-001:
+    actor: Authenticated user
+    capability: "view own profile with reservations and HubSpot-enriched contact and deals"
+    constraints: "reservations matched by lower(email); enrichment via gateway contact.get and deal.listByContact; gateway failure degrades to null contact and empty deals without failing the request"
+    priority: MUST
+    tests:
+      - T-PROF-001a
+      - T-PROF-001b
+  R-GW-001:
+    actor: API service
+    capability: "call new gateway read ops contact.get and deal.listByContact via /ops/execute"
+    constraints: "added to the typed union, EnvelopeSchema enum, and registry map together; execute return widened with optional data"
+    priority: MUST
+    tests:
+      - T-GW-001a
+      - T-GW-001b
+  R-IMG-001:
+    actor: Site visitor
+    capability: "load images from GET /img/<key> served from R2 by the SvelteKit server"
+    constraints: "IMG r2 binding on all three web envs; hit sets Cache-Control public, max-age=31536000, immutable; miss falls back to Picsum"
+    priority: MUST
+    tests:
+      - T-IMG-001a
+      - T-IMG-001b
+  R-RES-001:
+    actor: Site visitor
+    capability: "submit the contact form and create a reservation with unchanged external contract"
+    constraints: "POST /api/reservations still returns 201 { reservation }, keeps the 400 { error } shape, and still enqueues contact.upsert and deal.create"
+    priority: MUST
+    tests:
+      - T-RES-001a
+  R-TEST-001:
+    actor: CI
+    capability: "run all workspace typechecks and vitest suites green"
+    constraints: "new apps/api auth/session/admin-gating tests plus new gateway op tests; existing 57 hubspot tests still pass; CI verify runs typecheck + tests + build:web"
+    priority: MUST
+    tests:
+      - T-CI-001a
+
+E:
+  E-User:
+    fields:
+      id: "bigint identity primary key"
+      email: "text not null unique (case-insensitive)"
+      password_hash: "text not null (pbkdf2$iterations$salt$hash)"
+      name: "text nullable"
+      role: "text not null default guest"
+      created_at: "timestamptz not null default now()"
+    tenancy: single-tenant
+    invariants:
+      - INV-password-hashed
+  E-Session:
+    fields:
+      token_hash: "text primary key (sha-256 hex of opaque cookie token)"
+      user_id: "bigint not null references users(id)"
+      expires_at: "timestamptz not null"
+      created_at: "timestamptz not null default now()"
+    tenancy: single-tenant
+    invariants:
+      - INV-session-hash-only
+  E-Reservation:
+    fields:
+      id: "bigint identity primary key (existing, unchanged)"
+      email: "text not null (linkage key)"
+      name: "text"
+      room: "text nullable"
+      arrive: "date nullable"
+      depart: "date nullable"
+      people: "integer default 1"
+      message: "text nullable"
+      created_at: "timestamptz"
+    tenancy: single-tenant
+    invariants:
+      - INV-email-linkage
+  E-HubspotOutbox:
+    fields:
+      id: "bigint identity primary key (existing, unchanged)"
+      kind: "text not null"
+      status: "text not null default pending"
+      attempts: "integer not null default 0"
+      last_error: "text nullable"
+      next_attempt_at: "timestamptz"
+    tenancy: single-tenant
+    invariants: []
+
+OP:
+  OP-Auth.register:
+    input: "{ email, password, name? }"
+    auth: []
+    pre:
+      - "email not already registered"
+    err:
+      - ERR-VALIDATION
+      - ERR-DUPLICATE
+      - ERR-RATELIMIT
+    out: "{ user } with Set-Cookie session; status 201"
+  OP-Auth.login:
+    input: "{ email, password }"
+    auth: []
+    pre:
+      - "user exists and password verifies"
+    err:
+      - ERR-VALIDATION
+      - ERR-UNAUTHORIZED
+      - ERR-RATELIMIT
+    out: "{ user } with Set-Cookie session; status 200"
+  OP-Auth.logout:
+    input: "session cookie"
+    auth: [auth-any]
+    pre: []
+    err: []
+    out: "{ ok: true } clearing the session cookie; status 200"
+  OP-Auth.me:
+    input: "session cookie"
+    auth: [auth-any]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+    out: "{ user }; status 200"
+  OP-Admin.listReservations:
+    input: "{ q?, limit? }"
+    auth: [auth-admin]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    out: "{ reservations }; status 200"
+  OP-Admin.listOutbox:
+    input: "{ status? }"
+    auth: [auth-admin]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    out: "{ rows }; status 200"
+  OP-Admin.requeueOutbox:
+    input: "{ id }"
+    auth: [auth-admin]
+    pre:
+      - "row exists"
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+      - ERR-NOTFOUND
+    out: "{ row } transitioned failed->pending; status 200"
+  OP-Profile.get:
+    input: "session cookie"
+    auth: [auth-any]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+    out: "{ user, reservations, hubspot }; status 200 (hubspot degrades on gateway failure)"
+  OP-Gateway.contactGet:
+    input: "{ email }"
+    auth: [gateway-internal]
+    pre: []
+    err:
+      - ERR-NOTFOUND
+    out: "{ ok: true, hubspotId, data } or normalized 404"
+  OP-Gateway.dealListByContact:
+    input: "{ email }"
+    auth: [gateway-internal]
+    pre: []
+    err: []
+    out: "{ ok: true, data } where data is a possibly-empty deals array"
+  OP-Image.get:
+    input: "{ key }"
+    auth: []
+    pre: []
+    err: []
+    out: "R2 bytes with immutable cache on hit; Picsum placeholder on miss"
+
+AUTH:
+  auth-any: "any valid session may call the operation"
+  auth-admin: "only a session whose user role is admin may call the operation"
+  gateway-internal: "callable only over the HUBSPOT service binding, not a public route"
+
+INV:
+  INV-password-hashed: "passwords are only ever stored as PBKDF2 hashes, never plaintext"
+  INV-session-hash-only: "only the SHA-256 hash of a session token is stored; the raw token exists only in the cookie"
+  INV-email-linkage: "profile and admin resolve reservations by lower(email); reservations has no foreign key and no schema change"
+  INV-admin-gating: "no /api/admin/* response returns data to a non-admin session"
+  INV-worker-names: "worker names site-web-web, -a, -b and www/a/b routes and envs are unchanged"
+  INV-migration-semicolon: "each migration statement contains no embedded semicolon and no dollar-quoted body (runner splits on semicolon)"
+  INV-reduced-motion: "all animations including the hero shader are disabled under prefers-reduced-motion"
+
+ERR:
+  ERR-VALIDATION:
+    code: 400
+    meaning: "request body failed validation; body is { error }"
+  ERR-UNAUTHORIZED:
+    code: 401
+    meaning: "no valid session (or invalid credentials, with a non-enumerating message)"
+  ERR-FORBIDDEN:
+    code: 403
+    meaning: "authenticated but not an admin"
+  ERR-NOTFOUND:
+    code: 404
+    meaning: "resource (contact, outbox row) not found"
+  ERR-DUPLICATE:
+    code: 409
+    meaning: "an account with this email already exists"
+  ERR-RATELIMIT:
+    code: 429
+    meaning: "auth rate limit exceeded (~10 per 15 min per IP)"
+
+API:
+  "POST /api/auth/register":
+    input: "{ email, password, name? }"
+    output: "{ user }"
+    errors:
+      - ERR-VALIDATION
+      - ERR-DUPLICATE
+      - ERR-RATELIMIT
+    auth: auth-any
+  "POST /api/auth/login":
+    input: "{ email, password }"
+    output: "{ user }"
+    errors:
+      - ERR-VALIDATION
+      - ERR-UNAUTHORIZED
+      - ERR-RATELIMIT
+    auth: auth-any
+  "POST /api/auth/logout":
+    input: "session cookie"
+    output: "{ ok: true }"
+    errors: []
+    auth: auth-any
+  "GET /api/auth/me":
+    input: "session cookie"
+    output: "{ user }"
+    errors:
+      - ERR-UNAUTHORIZED
+    auth: auth-any
+  "GET /api/admin/reservations":
+    input: "{ q?, limit? }"
+    output: "{ reservations }"
+    errors:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    auth: auth-admin
+  "GET /api/admin/outbox":
+    input: "{ status? }"
+    output: "{ rows }"
+    errors:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    auth: auth-admin
+  "POST /api/admin/outbox/:id/requeue":
+    input: "{ id }"
+    output: "{ row }"
+    errors:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+      - ERR-NOTFOUND
+    auth: auth-admin
+  "GET /api/profile":
+    input: "session cookie"
+    output: "{ user, reservations, hubspot }"
+    errors:
+      - ERR-UNAUTHORIZED
+    auth: auth-any
+  "POST /ops/execute (contact.get)":
+    input: "{ kind: contact.get, payload: { email } }"
+    output: "{ ok: true, hubspotId, data }"
+    errors:
+      - ERR-NOTFOUND
+    auth: gateway-internal
+  "POST /ops/execute (deal.listByContact)":
+    input: "{ kind: deal.listByContact, payload: { email } }"
+    output: "{ ok: true, data }"
+    errors: []
+    auth: gateway-internal
+  "GET /img/{key}":
+    input: "{ key }"
+    output: "R2 bytes or Picsum placeholder"
+    errors: []
+    auth: auth-any
+
+UI:
+  screen-accueil:
+    mode: SSG
+    actions: [navigate, reveal, hero-shader]
+    state: [static]
+  screen-le-site:
+    mode: SSG
+    actions: [anchor-nav]
+    state: [static]
+  screen-contact:
+    mode: SSR
+    actions: [submit-reservation]
+    state: [idle, submitting, success, error]
+  screen-connexion:
+    mode: SSR
+    actions: [login, register]
+    state: [idle, submitting, error, redirect-to-profil]
+  screen-profil:
+    mode: CSR
+    actions: [load-me, load-profile, logout]
+    state: [loading, unauthenticated, loaded, error]
+  screen-admin:
+    mode: CSR
+    actions: [search-reservations, filter-outbox, requeue]
+    state: [loading, denied, loaded, error]
+  screen-404:
+    mode: prerendered
+    actions: [go-home]
+    state: [static]
+
+DATA:
+  migration-0004-users: "CREATE TABLE IF NOT EXISTS users + unique index on lower(email); own file"
+  migration-0005-sessions: "CREATE TABLE IF NOT EXISTS sessions + index on user_id; own file"
+  migration-0006-admin-seed: "idempotent UPDATE users SET role=admin WHERE lower(email)=lower(:ADMIN_EMAIL); own file; safe no-op when unset"
+  schema-sql-mirror: "apps/api/schema.sql mirrors users, sessions, and admin seed"
+  migrate-runner: "scripts/migrate.mjs substitutes :ADMIN_EMAIL from process.env before splitting on semicolon"
+
+TEST:
+  T-WEB-001a:
+    verifies: R-WEB-001
+    behaviour: "npm run typecheck passes in apps/web under SvelteKit"
+    steps:
+      - "run npm run typecheck --workspace apps/web -> exit 0"
+  T-WEB-001b:
+    verifies: R-WEB-001
+    behaviour: "npm run build:web produces an adapter-cloudflare Worker build"
+    steps:
+      - "run npm run build:web -> .svelte-kit/cloudflare output exists; no not_found_handling SPA in wrangler.jsonc"
+  T-WEB-002a:
+    verifies: R-WEB-002
+    behaviour: "app.css exposes Industrial Zen tokens and retains structural utilities"
+    steps:
+      - "grep app.css for #f7f9fb, #9d4300, #fd761a, IBM Plex Sans, tech-label, hairline, reveal"
+  T-WEB-003a:
+    verifies: R-WEB-003
+    behaviour: "SSG routes are prerendered to static HTML"
+    steps:
+      - "build; assert prerendered HTML exists for /, /a-propos, /le-site, /politiques, /confidentialite"
+  T-WEB-003b:
+    verifies: R-WEB-003
+    behaviour: "SSR routes render on the server"
+    steps:
+      - "assert /contact and /connexion render server-side (no prerender export)"
+  T-WEB-003c:
+    verifies: R-WEB-003
+    behaviour: "CSR routes export ssr=false"
+    steps:
+      - "assert /profil and /admin +page.ts export ssr=false"
+  T-WEB-004a:
+    verifies: R-WEB-004
+    behaviour: "legacy paths 301-redirect to merged anchors"
+    steps:
+      - "GET /chambres -> 301 Location /le-site#chambres"
+      - "GET /attraits -> 301 Location /le-site#attraits"
+  T-WEB-005a:
+    verifies: R-NAV-001
+    behaviour: "responsive nav with mobile menu and conditional Profil link"
+    steps:
+      - "at 360px no horizontal overflow; mobile menu opens; touch targets >=44px"
+      - "Connexion visible always; Profil visible only when GET /api/auth/me is authenticated"
+  T-WEB-006a:
+    verifies: R-SHADER-001
+    behaviour: "hero shader lazy with reduced-motion and no-WebGL fallback"
+    steps:
+      - "with prefers-reduced-motion no GL context is created and a static gradient renders"
+      - "shader pauses when the hero is offscreen"
+  T-AUTH-001a:
+    verifies: R-AUTH-001
+    behaviour: "register issues a guest session cookie"
+    steps:
+      - "POST /api/auth/register { new email, password } -> 201 { user role=guest } + Set-Cookie session (HttpOnly, Secure, SameSite=Lax, no Domain)"
+      - "POST /api/auth/register duplicate email -> 409"
+  T-AUTH-001b:
+    verifies: R-AUTH-001
+    behaviour: "login and me and logout lifecycle"
+    steps:
+      - "POST /api/auth/login valid -> 200 + cookie"
+      - "GET /api/auth/me with cookie -> 200 { user }; without cookie -> 401"
+      - "POST /api/auth/logout -> cookie cleared; subsequent me -> 401"
+  T-AUTH-001c:
+    verifies: R-AUTH-001
+    behaviour: "login errors do not enumerate users"
+    steps:
+      - "POST /api/auth/login unknown email and wrong password both -> 401 with identical message"
+  T-AUTH-002a:
+    verifies: R-AUTH-002
+    behaviour: "PBKDF2 hash round-trip and format"
+    steps:
+      - "hashPassword returns pbkdf2$<iterations>=100000$salt$hash"
+      - "verifyPassword true for correct password, false for wrong password"
+  T-AUTH-003a:
+    verifies: R-AUTH-003
+    behaviour: "idempotent migrations create users/sessions and seed admin"
+    steps:
+      - "apply migrations twice -> no error; users and sessions exist; ADMIN_EMAIL user has role=admin"
+  T-ADMIN-001a:
+    verifies: R-ADMIN-001
+    behaviour: "admin endpoints gate on role"
+    steps:
+      - "guest session -> GET /api/admin/reservations -> 403; anonymous -> 401"
+      - "admin session -> 200 with reservations; ?q filters by name/email"
+  T-ADMIN-001b:
+    verifies: R-ADMIN-001
+    behaviour: "requeue transitions failed to pending"
+    steps:
+      - "admin POST /api/admin/outbox/:id/requeue on a failed row -> 200 { row status=pending, attempts=0, last_error null }"
+      - "unknown id -> 404"
+  T-PROF-001a:
+    verifies: R-PROF-001
+    behaviour: "profile returns own reservations by email"
+    steps:
+      - "guest session -> GET /api/profile -> 200 { user, reservations matched by lower(email), hubspot }"
+  T-PROF-001b:
+    verifies: R-PROF-001
+    behaviour: "profile degrades on gateway failure"
+    steps:
+      - "with the gateway unreachable -> 200 with hubspot.contact null and hubspot.deals []"
+  T-GW-001a:
+    verifies: R-GW-001
+    behaviour: "contact.get returns data or normalized 404"
+    steps:
+      - "POST /ops/execute { kind: contact.get, payload:{ email } } present -> { ok:true, data }"
+      - "absent contact -> { ok:false, status:404 }"
+  T-GW-001b:
+    verifies: R-GW-001
+    behaviour: "deal.listByContact returns a deals array"
+    steps:
+      - "contact with deals -> { ok:true, data:[...] }"
+      - "contact with no deals -> { ok:true, data:[] }"
+  T-IMG-001a:
+    verifies: R-IMG-001
+    behaviour: "img hit sets immutable cache"
+    steps:
+      - "GET /img/<existing key> -> 200 bytes with Cache-Control public, max-age=31536000, immutable"
+  T-IMG-001b:
+    verifies: R-IMG-001
+    behaviour: "img miss falls back to Picsum"
+    steps:
+      - "GET /img/<missing key> -> a Picsum placeholder response"
+  T-RES-001a:
+    verifies: R-RES-001
+    behaviour: "reservations contract unchanged"
+    steps:
+      - "POST /api/reservations valid -> 201 { reservation }; invalid -> 400 { error }"
+      - "gateway enqueue of contact.upsert and deal.create still occurs in waitUntil"
+  T-CI-001a:
+    verifies: R-TEST-001
+    behaviour: "all workspaces typecheck and all vitest suites pass"
+    steps:
+      - "npm run typecheck -> exit 0 for apps/web, apps/api, apps/hubspot"
+      - "npm test --workspaces --if-present -> 57 existing hubspot tests + new gateway op tests + new apps/api tests pass"
+
+NFR:
+  performance: "SSG routes prerendered; hero shader lazy and offscreen-paused; /img hits carry a 1-year immutable cache; no horizontal overflow 360-1440px"
+  security: "session tokens stored only as sha-256 hashes; constant-time password compare; HttpOnly Secure SameSite=Lax host-scoped cookies; non-enumerating login errors; admin gating; ~10/15min auth rate limit"
+  availability: "profile HubSpot enrichment degrades to null contact and empty deals on gateway failure without failing the request"
+  compatibility: "worker names and www/a/b routes+envs unchanged; A/B pipeline ships the same SvelteKit build; apps/api<->apps/hubspot service-binding contract preserved"
+  observability: "existing API observability retained; migrations logged per statement"
+
+FILE:
+  "apps/web/package.json": TASK-web-config
+  "apps/web/svelte.config.js": TASK-web-config
+  "apps/web/vite.config.ts": TASK-web-config
+  "apps/web/tsconfig.json": TASK-web-config
+  "apps/web/wrangler.jsonc": TASK-web-config
+  "apps/web/src/app.html": TASK-web-shell
+  "apps/web/src/app.css": TASK-web-shell
+  "apps/web/src/app.d.ts": TASK-web-shell
+  "apps/web/src/routes/+layout.svelte": TASK-web-shell
+  "apps/web/src/routes/+layout.ts": TASK-web-shell
+  "apps/web/src/lib/**/*.ts": TASK-web-shell
+  "apps/web/src/lib/components/**/*.svelte": TASK-web-components
+  "apps/web/src/routes/**/+page.svelte": TASK-web-pages
+  "apps/web/src/routes/**/+page.ts": TASK-web-pages
+  "apps/web/src/routes/+error.svelte": TASK-web-pages
+  "apps/web/src/routes/img/**/*.ts": TASK-web-pages
+  "apps/api/migrations/*.sql": TASK-api-auth
+  "apps/api/schema.sql": TASK-api-auth
+  "apps/api/scripts/migrate.mjs": TASK-api-auth
+  "apps/api/src/auth/**/*.ts": TASK-api-auth
+  "apps/api/src/index.ts": TASK-api-endpoints
+  "apps/api/wrangler.jsonc": TASK-api-endpoints
+  "apps/api/vitest.config.ts": TASK-api-tests
+  "apps/api/test/**/*.ts": TASK-api-tests
+  "apps/hubspot/src/ops/contactGet.ts": TASK-gateway
+  "apps/hubspot/src/ops/dealList.ts": TASK-gateway
+  "apps/hubspot/src/ops/registry.ts": TASK-gateway
+  "apps/hubspot/test/ops.test.ts": TASK-gateway
+  ".dev.env.example": TASK-ci-docs
+  ".github/workflows/ci.yml": TASK-ci-docs
+  ".github/workflows/deploy-prod.yml": TASK-ci-docs
+  "package.json": TASK-ci-docs
+
+TASK:
+  TASK-web-config:
+    scope:
+      - R-WEB-001
+      - INV-worker-names
+      - R-IMG-001
+    files:
+      - "apps/web/package.json"
+      - "apps/web/svelte.config.js"
+      - "apps/web/vite.config.ts"
+      - "apps/web/tsconfig.json"
+      - "apps/web/wrangler.jsonc"
+    must_preserve:
+      - INV-worker-names
+    produce: [config]
+    verifies:
+      - R-WEB-001
+  TASK-web-shell:
+    scope:
+      - R-WEB-001
+      - R-WEB-002
+      - R-NAV-001
+      - INV-reduced-motion
+    files:
+      - "apps/web/src/app.html"
+      - "apps/web/src/app.css"
+      - "apps/web/src/app.d.ts"
+      - "apps/web/src/routes/+layout.svelte"
+      - "apps/web/src/routes/+layout.ts"
+      - "apps/web/src/lib/**/*.ts"
+    must_preserve:
+      - INV-reduced-motion
+    produce: [code]
+    verifies:
+      - R-WEB-002
+      - R-NAV-001
+  TASK-web-components:
+    scope:
+      - R-WEB-002
+      - R-SHADER-001
+      - R-IMG-001
+      - INV-reduced-motion
+    files:
+      - "apps/web/src/lib/components/**/*.svelte"
+    must_preserve:
+      - INV-reduced-motion
+    produce: [code]
+    verifies:
+      - R-WEB-002
+      - R-SHADER-001
+  TASK-web-pages:
+    scope:
+      - R-WEB-003
+      - R-WEB-004
+      - R-IMG-001
+      - R-RES-001
+      - R-PROF-001
+      - R-ADMIN-001
+    files:
+      - "apps/web/src/routes/**/+page.svelte"
+      - "apps/web/src/routes/**/+page.ts"
+      - "apps/web/src/routes/+error.svelte"
+      - "apps/web/src/routes/img/**/*.ts"
+    must_preserve:
+      - INV-email-linkage
+    produce: [code]
+    verifies:
+      - R-WEB-003
+      - R-WEB-004
+      - R-IMG-001
+  TASK-api-auth:
+    scope:
+      - R-AUTH-001
+      - R-AUTH-002
+      - R-AUTH-003
+      - INV-password-hashed
+      - INV-session-hash-only
+      - INV-migration-semicolon
+    files:
+      - "apps/api/migrations/*.sql"
+      - "apps/api/schema.sql"
+      - "apps/api/scripts/migrate.mjs"
+      - "apps/api/src/auth/**/*.ts"
+    must_preserve:
+      - INV-password-hashed
+      - INV-session-hash-only
+      - INV-migration-semicolon
+    produce: [code, migrations]
+    verifies:
+      - R-AUTH-001
+      - R-AUTH-002
+      - R-AUTH-003
+  TASK-api-endpoints:
+    scope:
+      - R-AUTH-001
+      - R-ADMIN-001
+      - R-PROF-001
+      - R-RES-001
+      - INV-admin-gating
+      - INV-email-linkage
+    files:
+      - "apps/api/src/index.ts"
+      - "apps/api/wrangler.jsonc"
+    must_preserve:
+      - INV-admin-gating
+      - INV-email-linkage
+      - INV-worker-names
+    produce: [code]
+    verifies:
+      - R-ADMIN-001
+      - R-PROF-001
+      - R-RES-001
+  TASK-api-tests:
+    scope:
+      - R-AUTH-002
+      - R-AUTH-001
+      - R-ADMIN-001
+      - R-TEST-001
+    files:
+      - "apps/api/vitest.config.ts"
+      - "apps/api/test/**/*.ts"
+    must_preserve:
+      - INV-admin-gating
+    produce: [tests]
+    verifies:
+      - R-TEST-001
+  TASK-gateway:
+    scope:
+      - R-GW-001
+      - R-PROF-001
+    files:
+      - "apps/hubspot/src/ops/contactGet.ts"
+      - "apps/hubspot/src/ops/dealList.ts"
+      - "apps/hubspot/src/ops/registry.ts"
+      - "apps/hubspot/test/ops.test.ts"
+    must_preserve: []
+    produce: [code, tests]
+    verifies:
+      - R-GW-001
+  TASK-ci-docs:
+    scope:
+      - R-TEST-001
+      - R-AUTH-003
+    files:
+      - ".dev.env.example"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/deploy-prod.yml"
+      - "package.json"
+    must_preserve:
+      - INV-worker-names
+    produce: [config, docs]
+    verifies:
+      - R-TEST-001
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "SvelteKit adapter-cloudflare Worker replaces the static-assets Worker; not_found_handling SPA is removed and wrangler main/assets point at .svelte-kit/cloudflare"
+    rationale: "per-route SSG/SSR/CSR requires the SvelteKit Worker to own routing"
+  ST-02:
+    status: locked
+    decision: "sessions store only the sha-256 hash of an opaque token; cookies are HttpOnly Secure SameSite=Lax host-scoped"
+    rationale: "a DB leak yields no usable tokens; host-scoping keeps auth on www only"
+  ST-03:
+    status: locked
+    decision: "admin bootstrap via idempotent 0006_admin_seed.sql substituting :ADMIN_EMAIL in the migration runner, not a login-time allowlist"
+    rationale: "migrations remain the single source of truth; safe to re-run"
+  ST-04:
+    status: locked
+    decision: "two gateway read ops wired through the union, enum, and registry map together with a widened execute return that adds optional data"
+    rationale: "the registry is a strict typed union; partial edits fail typecheck"
+  ST-05:
+    status: locked
+    decision: "sliding session TTL: 30-day expiry renewed on authenticated activity (expires_at pushed forward at most once per hour to limit writes)"
+    rationale: "guest-facing site favors staying signed in; sliding renewal keeps active users logged in while idle sessions still expire; hourly cap avoids a DB write per request"

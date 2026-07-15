@@ -88,7 +88,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="flex flex-col justify-between gap-6 md:flex-row md:items-end">
       <div class="max-w-2xl">
-        <SectionLabel code="MAP" label="Les attraits" />
+        <SectionLabel text="Les attraits" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -109,12 +109,11 @@
           style="--color-surface-container-lowest:#ffffff"
         >
           <ImagePanel
-            seed={a.seed}
-            code={a.code}
-            label={a.category}
-            ratio="4 / 3"
+            imgKey={a.seed}
+            picsumSeed={a.seed}
+            aspectRatio="4 / 3"
+            caption={a.category}
             alt={a.name}
-            class="group"
           />
 
           <div class="flex flex-1 flex-col p-5 md:p-6">
@@ -179,16 +178,16 @@
     <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
       <div use:reveal={{ x: -24, y: 0 }} class="group order-2 lg:order-1">
         <ImagePanel
-          seed="season"
-          ratio="3 / 2"
-          code="CAL · 02"
-          label="Ce qu'on roule · au fil de l'année"
+          imgKey="season"
+          picsumSeed="season"
+          aspectRatio="3 / 2"
+          caption="Ce qu'on roule · au fil de l'année"
           alt="Les sentiers de la Vallée Bras-du-Nord au fil des saisons"
         />
       </div>
 
       <div class="order-1 lg:order-2">
-        <SectionLabel code="CAL" label="Quand venir" />
+        <SectionLabel text="Quand venir" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.04] tracking-[-0.02em] text-ink md:text-[3.2rem]"

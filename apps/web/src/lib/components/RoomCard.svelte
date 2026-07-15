@@ -1,86 +1,133 @@
 <script lang="ts">
-  import type { Room } from "../content";
-  import ImagePanel from "./ImagePanel.svelte";
+  import ImagePanel from './ImagePanel.svelte';
+  import Button from './Button.svelte';
 
-  let { room }: { room: Room } = $props();
+  let { room } = $props<{
+    room: {
+      name: string;
+      description: string;
+      pricePerNight: number;
+      imgKey: string;
+      picsumSeed: number;
+      slug: string;
+    };
+  }>();
+
+  const contactHref = $derived(`/contact?chambre=${encodeURIComponent(room.slug)}`);
+  const priceLabel = $derived(`${room.pricePerNight} $/nuit`);
 </script>
 
-<article
-  class="group flex h-full flex-col overflow-hidden rounded-[var(--radius-blueprint)] border border-hairline-2 bg-surface-container-lowest transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-terracotta hover:shadow-[0_18px_40px_-24px_rgba(27,28,28,0.5)]"
-  style="--color-surface-container-lowest:#ffffff"
->
-  <ImagePanel
-    seed={room.seed}
-    code={room.code}
-    ratio="16 / 11"
-    alt={room.name}
-    class="group"
-  />
+<article class="room-card" data-testid="room-card">
+  <div class="room-card__image">
+    <ImagePanel
+      imgKey={room.imgKey}
+      picsumSeed={room.picsumSeed}
+      alt={room.name}
+      aspectRatio="4/3"
+    />
+  </div>
 
-  <div class="flex flex-1 flex-col p-5 md:p-6">
-    <div class="flex items-start justify-between gap-4">
-      <div>
-        <span class="tech-label text-ink-mute">{room.kind}</span>
-        <h3
-          class="mt-1.5 font-sans text-[1.4rem] font-semibold leading-tight tracking-[-0.01em] text-ink"
-        >
-          {room.name}
-        </h3>
-      </div>
-      <span
-        class="shrink-0 rounded-[var(--radius-blueprint)] bg-surface-3 px-2.5 py-1 font-mono text-[0.7rem] font-medium text-ink-soft"
-      >
-        {room.code}
-      </span>
-    </div>
+  <div class="room-card__body">
+    <span class="room-card__price" data-testid="room-card-price">
+      {priceLabel}
+    </span>
 
-    <p class="mt-3 text-[0.95rem] leading-relaxed text-ink-soft">{room.blurb}</p>
+    <h3 class="room-card__name" data-testid="room-card-name">
+      {room.name}
+    </h3>
 
-    <dl
-      class="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-[var(--radius-blueprint)] border border-hairline-2 bg-hairline-2 text-center"
-    >
-      <div class="bg-surface px-2 py-3">
-        <dt class="tech-label text-ink-mute">Capacité</dt>
-        <dd class="mt-1 text-sm font-medium text-ink">{room.capacity}</dd>
-      </div>
-      <div class="bg-surface px-2 py-3">
-        <dt class="tech-label text-ink-mute">Couchage</dt>
-        <dd class="mt-1 text-sm font-medium text-ink">{room.beds}</dd>
-      </div>
-      <div class="bg-surface px-2 py-3">
-        <dt class="tech-label text-ink-mute">Surface</dt>
-        <dd class="mt-1 text-sm font-medium text-ink">{room.size}</dd>
-      </div>
-    </dl>
+    <p class="room-card__description" data-testid="room-card-description">
+      {room.description}
+    </p>
 
-    <ul class="mt-5 space-y-2">
-      {#each room.specs as spec (spec)}
-        <li class="flex items-start gap-2.5 text-sm text-ink-soft">
-          <span
-            class="mt-[7px] h-1.5 w-1.5 shrink-0 bg-terracotta"
-            aria-hidden="true"
-          ></span>
-          {spec}
-        </li>
-      {/each}
-    </ul>
-
-    <div
-      class="mt-6 flex items-end justify-between border-t border-hairline-2 pt-4"
-    >
-      <div>
-        <span class="tech-label text-ink-mute">Dès</span>
-        <p class="font-sans text-2xl font-semibold tracking-[-0.01em] text-ink">
-          {room.priceFrom} $<span class="text-sm font-normal text-ink-mute"
-            >/nuit</span
-          >
-        </p>
-      </div>
-      <span
-        class="font-mono text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-terracotta transition-transform duration-300 group-hover:translate-x-1"
-      >
-        Réserver →
-      </span>
+    <div class="room-card__cta" data-testid="room-card-cta">
+      <Button variant="secondary" href={contactHref}>Réserver</Button>
     </div>
   </div>
 </article>
+
+<style>
+  .room-card {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-surface-container-lowest, #ffffff);
+    border: 1px solid var(--color-outline-variant, #c6c6cd);
+    border-radius: var(--radius-lg, 0.5rem);
+    overflow: hidden;
+    transition:
+      transform 320ms cubic-bezier(0.33, 1, 0.68, 1),
+      border-color 200ms ease,
+      box-shadow 320ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  .room-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--color-outline, #76777d);
+    box-shadow: 0 8px 32px rgba(25, 28, 30, 0.08);
+  }
+
+  /* Propagate image scale when hovering the card body area */
+  .room-card:hover :global(.image-panel__img) {
+    transform: scale(1.02);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .room-card {
+      transition: border-color 150ms ease;
+    }
+
+    .room-card:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    .room-card:hover :global(.image-panel__img) {
+      transform: none;
+    }
+  }
+
+  .room-card__image {
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .room-card__body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: var(--space-lg, 24px);
+    gap: var(--space-sm, 8px);
+  }
+
+  .room-card__price {
+    font-family: var(--font-mono, "IBM Plex Mono", "Fira Code", ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-ink-variant, #45464d);
+  }
+
+  .room-card__name {
+    font-family: var(--font-sans, "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif);
+    font-size: 20px;
+    font-weight: 400;
+    line-height: 1.3;
+    color: var(--color-ink, #191c1e);
+    margin: 0;
+  }
+
+  .room-card__description {
+    font-family: var(--font-sans, "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif);
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.65;
+    color: var(--color-ink-variant, #45464d);
+    margin: 0;
+    flex: 1;
+  }
+
+  .room-card__cta {
+    margin-top: var(--space-md, 16px);
+  }
+</style>
