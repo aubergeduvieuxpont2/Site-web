@@ -1,0 +1,304 @@
+REQ:
+  R-COPY-001:
+    actor: Site visitor (industrial worker)
+    capability: read marketing copy free of adventure/leisure-tourism vocabulary
+    constraints: French (Québec) with correct accents; sober Industrial Zen tone
+    priority: MUST
+    tests:
+      - T-COPY-001a
+  R-COPY-002:
+    actor: Content owner
+    capability: rooms/amenities/attractions/stats/policies read as worker lodging
+    constraints: worker value props; PRIVACY untouched; type declarations unchanged
+    priority: MUST
+    tests:
+      - T-COPY-002a
+      - T-COPY-002b
+  R-ROOM-003:
+    actor: Deep-link consumer
+    capability: rename Le Refuge du Rider display name while keeping id/slug/code stable
+    constraints: slug=refuge-rider and code=RDR-04 must not change
+    priority: MUST
+    tests:
+      - T-ROOM-003a
+  R-ATTR-004:
+    actor: Site visitor (industrial worker)
+    capability: Aux alentours shows practical services, not trails/sports
+    constraints: keep Attraction type shape; heading Aux alentours renders
+    priority: MUST
+    tests:
+      - T-ATTR-004a
+  R-IMG-005:
+    actor: Site visitor
+    capability: real R2 images render with picsum fallback intact
+    constraints: keys lowercase; picsumSeed preserved; validateKey unchanged
+    priority: MUST
+    tests:
+      - T-IMG-005a
+      - T-IMG-005b
+  R-CLEAN-006:
+    actor: Maintainer
+    capability: dead legacy route files removed
+    constraints: no imports or tests reference them
+    priority: MUST
+    tests:
+      - T-CLEAN-006a
+  R-TEST-007:
+    actor: CI / verifier
+    capability: vitest suite green after copy/image changes
+    constraints: only page-accueil.test.ts literals change
+    priority: MUST
+    tests:
+      - T-TEST-007a
+  R-BUILD-008:
+    actor: CI / verifier
+    capability: typecheck and web build pass
+    constraints: no type-shape or config changes
+    priority: MUST
+    tests:
+      - T-BUILD-008a
+      - T-BUILD-008b
+
+E:
+  E-Room:
+    fields:
+      id: string
+      code: string
+      name: string
+      slug: string
+      blurb: string
+      description: string
+      specs: string[]
+      imgKey: string
+      picsumSeed: integer
+    invariants:
+      - INV-stable-room-ids
+      - INV-picsum-fallback
+  E-Content:
+    fields:
+      ROOMS: E-Room[]
+      AMENITIES: object[]
+      ATTRACTIONS: object[]
+      STATS: object[]
+      POLICIES: object[]
+      PRIVACY: object[]
+    invariants:
+      - INV-privacy-frozen
+      - INV-types-frozen
+      - INV-no-adventure-copy
+
+OP:
+  OP-Content.retarget:
+    input: { file: src/lib/content.ts }
+    auth: []
+    pre: []
+    err: []
+    out: { arrays: [ROOMS, AMENITIES, ATTRACTIONS, STATS, POLICIES] }
+  OP-Image.remap:
+    input: { mapping: approved-image-key-table }
+    auth: []
+    pre: []
+    err:
+      - ERR-BADKEY
+    out: { imgKeys: lowercase-r2-keys }
+
+ERR:
+  ERR-BADKEY:
+    code: 0
+    meaning: image key not lowercase or fails validateKey (build-time author error)
+
+AUTH: {}
+
+INV:
+  INV-stable-room-ids: room id, slug, and code never change across the rename
+  INV-picsum-fallback: every Room keeps a numeric picsumSeed and every ImagePanel passes it
+  INV-privacy-frozen: the PRIVACY array in content.ts is byte-for-byte unchanged
+  INV-types-frozen: exported TypeScript type declarations in content.ts are unchanged
+  INV-no-adventure-copy: no adventure/leisure vocabulary remains in shipped apps/web copy
+
+API: {}
+
+UI:
+  screen-accueil:
+    actions: [view-hero, view-stats, view-rooms, view-amenities, cta-reserver]
+    state: { static-prerendered }
+  screen-le-site:
+    actions: [view-chambres, view-attraits, view-lieu]
+    state: { static-prerendered }
+  screen-a-propos:
+    actions: [view-intro, view-histoire, view-valeurs, view-ancrage, cta]
+    state: { static-prerendered }
+
+DATA:
+  content.ts: ROOMS, AMENITIES, ATTRACTIONS, STATS, POLICIES (string/number literals only; no schema)
+
+TEST:
+  T-COPY-001a:
+    verifies: R-COPY-001
+    behaviour: "adventure-vocabulary grep over the four pages + content.ts returns no matches"
+    steps:
+      - grep -rniE "aventur|rider|VTT|single ?track|vélo|e-bike|peloton|cyclist|via ferrata|canyon|bras-du-nord|shannahan|sentier" src/lib/content.ts src/routes/+page.svelte src/routes/le-site/+page.svelte src/routes/a-propos/+page.svelte src/routes/contact/+page.svelte
+      - assert zero matches
+  T-COPY-002a:
+    verifies: R-COPY-002
+    behaviour: "politiques page renders every POLICIES section/item (dynamic iteration stays green)"
+    steps:
+      - run apps/web vitest page-politiques.test.ts
+      - assert pass
+  T-COPY-002b:
+    verifies: R-COPY-002
+    behaviour: "PRIVACY array unchanged"
+    steps:
+      - git diff apps/web/src/lib/content.ts
+      - assert no lines inside the PRIVACY array changed
+  T-ROOM-003a:
+    verifies: R-ROOM-003
+    behaviour: "refuge-rider room renamed but slug/code stable"
+    steps:
+      - assert content.ts has name "La Chambre de la Rivière"
+      - "assert `slug: \"refuge-rider\"` present exactly once"
+      - "assert `code: \"RDR-04\"` present exactly once"
+      - assert no "Le Refuge du Rider" remains
+  T-ATTR-004a:
+    verifies: R-ATTR-004
+    behaviour: "Aux alentours renders practical services, no sport entries; le-site test green"
+    steps:
+      - run apps/web vitest page-le-site.test.ts (iterates ATTRACTIONS by length + fields)
+      - assert pass and heading "Aux alentours" present
+  T-IMG-005a:
+    verifies: R-IMG-005
+    behaviour: "image keys match approved mapping and are lowercase"
+    steps:
+      - grep for le-site-1|le-site-2|oldbridge|bunkroom|shiftroom|riverroom|familyroom in shipped svelte/content.ts
+      - assert zero matches
+  T-IMG-005b:
+    verifies: R-IMG-005
+    behaviour: "picsum fallback intact"
+    steps:
+      - assert every Room has numeric picsumSeed
+      - assert every ImagePanel call passes picsumSeed
+  T-CLEAN-006a:
+    verifies: R-CLEAN-006
+    behaviour: "legacy route files removed"
+    steps:
+      - assert Home/About/Rooms/Attractions/Contact/Policy/NotFound .svelte absent under src/routes
+  T-TEST-007a:
+    verifies: R-TEST-007
+    behaviour: "page-accueil.test.ts updated literals pass with rest of suite"
+    steps:
+      - run apps/web vitest run
+      - assert 0 failures
+  T-BUILD-008a:
+    verifies: R-BUILD-008
+    behaviour: "typecheck passes"
+    steps:
+      - npm run typecheck
+      - assert exit 0
+  T-BUILD-008b:
+    verifies: R-BUILD-008
+    behaviour: "web build succeeds"
+    steps:
+      - npm run build:web
+      - assert exit 0
+
+NFR:
+  i18n: French (Québec) copy with correct accents
+  responsive: no grid-template-columns or media-query changes; layout preserved
+  security: no new inputs/endpoints/secrets; validateKey unchanged; SSR escaping unchanged
+  deployment: none (branch off main, do not deploy)
+
+FILE:
+  apps/web/src/lib/content.ts: TASK-content
+  apps/web/src/routes/+page.svelte: TASK-pages
+  apps/web/src/routes/le-site/+page.svelte: TASK-pages
+  apps/web/src/routes/a-propos/+page.svelte: TASK-pages
+  apps/web/src/routes/__tests__/page-accueil.test.ts: TASK-tests
+  apps/web/src/routes/Home.svelte: TASK-cleanup
+  apps/web/src/routes/About.svelte: TASK-cleanup
+  apps/web/src/routes/Rooms.svelte: TASK-cleanup
+  apps/web/src/routes/Attractions.svelte: TASK-cleanup
+  apps/web/src/routes/Contact.svelte: TASK-cleanup
+  apps/web/src/routes/Policy.svelte: TASK-cleanup
+  apps/web/src/routes/NotFound.svelte: TASK-cleanup
+
+TASK:
+  TASK-content:
+    scope:
+      - R-COPY-001
+      - R-COPY-002
+      - R-ROOM-003
+      - R-ATTR-004
+      - R-IMG-005
+      - OP-Content.retarget
+      - OP-Image.remap
+      - T-COPY-001a
+      - T-COPY-002b
+      - T-ROOM-003a
+      - T-ATTR-004a
+      - T-IMG-005a
+      - T-IMG-005b
+    files: [apps/web/src/lib/content.ts]
+    must_preserve:
+      - INV-stable-room-ids
+      - INV-picsum-fallback
+      - INV-privacy-frozen
+      - INV-types-frozen
+      - INV-no-adventure-copy
+    produce: [code]
+    verifies: [R-COPY-001, R-COPY-002, R-ROOM-003, R-ATTR-004, R-IMG-005]
+  TASK-pages:
+    scope:
+      - R-COPY-001
+      - R-IMG-005
+      - T-COPY-001a
+      - T-IMG-005a
+    files:
+      - apps/web/src/routes/+page.svelte
+      - apps/web/src/routes/le-site/+page.svelte
+      - apps/web/src/routes/a-propos/+page.svelte
+    must_preserve:
+      - INV-no-adventure-copy
+      - INV-picsum-fallback
+    produce: [code]
+    verifies: [R-COPY-001, R-IMG-005]
+  TASK-tests:
+    scope:
+      - R-TEST-007
+      - T-TEST-007a
+    files: [apps/web/src/routes/__tests__/page-accueil.test.ts]
+    must_preserve: []
+    produce: [code]
+    verifies: [R-TEST-007]
+  TASK-cleanup:
+    scope:
+      - R-CLEAN-006
+      - T-CLEAN-006a
+    files:
+      - apps/web/src/routes/Home.svelte
+      - apps/web/src/routes/About.svelte
+      - apps/web/src/routes/Rooms.svelte
+      - apps/web/src/routes/Attractions.svelte
+      - apps/web/src/routes/Contact.svelte
+      - apps/web/src/routes/Policy.svelte
+      - apps/web/src/routes/NotFound.svelte
+    must_preserve: []
+    produce: [deletions]
+    verifies: [R-CLEAN-006]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: Rename display name to "La Chambre de la Rivière"; keep slug refuge-rider / code RDR-04
+    rationale: preserves /contact?chambre= deep link and external references
+  ST-02:
+    status: locked
+    decision: Replace STATS[0] with a worker/proximity stat (e.g. 30 min / des principaux chantiers forestiers)
+    rationale: removes "de sentiers VTT à 2 km"; the two matching page-accueil.test.ts literals are re-pinned to the chosen value
+  ST-03:
+    status: locked
+    decision: Only page-accueil.test.ts needs literal edits; le-site/politiques/a-propos/RoomCard suites iterate dynamically or use self-contained mocks
+    rationale: verified by inspection — minimizes test churn
+  ST-04:
+    status: locked
+    decision: Contact page needs no copy edit (no adventure wording present)
+    rationale: file inspected; grep clean

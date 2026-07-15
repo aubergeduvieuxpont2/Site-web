@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>L'AUBERGE DU VIEUX PONT - Accueil</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#c8c6c5",
+                        "on-primary-container": "#fffbff",
+                        "on-secondary-container": "#656464",
+                        "secondary-fixed": "#e4e2e1",
+                        "tertiary": "#5b5c5c",
+                        "on-primary-fixed": "#3e0500",
+                        "primary-container": "#d73b1c",
+                        "inverse-primary": "#ffb4a4",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "surface-container-highest": "#e4e2e2",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-container": "#fcfcfc",
+                        "tertiary-container": "#737575",
+                        "surface": "#fbf9f8",
+                        "outline-variant": "#e4beb6",
+                        "secondary-container": "#e4e2e1",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#fbf9f8",
+                        "surface-variant": "#e4e2e2",
+                        "surface-container": "#efeded",
+                        "on-surface-variant": "#5b403b",
+                        "on-primary-fixed-variant": "#8d1600",
+                        "on-tertiary": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#eae8e7",
+                        "primary": "#b32002",
+                        "on-surface": "#1b1c1c",
+                        "on-secondary-fixed": "#1b1c1c",
+                        "primary-fixed": "#ffdad3",
+                        "surface-container-low": "#f5f3f3",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-secondary-fixed-variant": "#474746",
+                        "secondary": "#5f5e5e",
+                        "background": "#fbf9f8",
+                        "surface-dim": "#dbd9d9",
+                        "inverse-surface": "#303030",
+                        "inverse-on-surface": "#f2f0f0",
+                        "primary-fixed-dim": "#ffb4a4",
+                        "tertiary-fixed": "#e2e2e2",
+                        "outline": "#8f7069",
+                        "on-background": "#1b1c1c",
+                        "surface-tint": "#b72304"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-desktop": "40px",
+                        "unit": "8px",
+                        "margin-mobile": "16px",
+                        "container-max": "1440px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "code": ["monospace"],
+                        "display": ["IBM Plex Sans"],
+                        "label-lg": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "headline-lg-mobile": ["IBM Plex Sans"],
+                        "label-md": ["IBM Plex Sans"],
+                        "headline-lg": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "code": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "500" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'IBM Plex Sans', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .btn-primary {
+            @apply bg-primary text-on-primary font-label-lg text-label-lg px-6 py-3 border-2 border-primary hover:bg-primary-container hover:border-primary-container transition-colors duration-200 inline-flex items-center justify-center;
+        }
+        .btn-secondary {
+            @apply bg-transparent text-on-surface font-label-lg text-label-lg px-6 py-3 border-2 border-on-surface hover:bg-surface-variant transition-colors duration-200 inline-flex items-center justify-center;
+        }
+        .card-industrial {
+            @apply border border-secondary-fixed bg-surface p-6 hover:border-primary transition-colors duration-200 flex flex-col;
+        }
+        .industrial-border {
+            @apply border border-[#D1D1D1];
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-surface dark:bg-surface-dim font-body-md text-body-md uppercase tracking-wider fixed top-0 w-full z-50 border-b border-outline-variant dark:border-outline flat no shadows">
+<div class="flex justify-between items-center h-16 px-margin-desktop max-w-container-max mx-auto">
+<div class="flex items-center gap-4">
+<img alt="L'Auberge du Vieux Pont Logo" class="h-10 w-10 object-contain" src="https://lh3.googleusercontent.com/aida/AP1WRLuTjmbennIgOEzW6uQ8Sr2fkR4_yCrXQYLDbvNUYK3Cdywa3oesknZMp0CxyAi9AwQ--ff72I3xFup_9NWXNww5j4h09y9smB1_CCW7vD16iK-RNl04WysWDCNcfKZwGf1n8JFjokl4WiuwLrKfGMPt8sRQzt1QputheVGaqtHCChZJ6ykm2CvvptHTAyV1HCAQNvfi21CMp8P3aPDOi8XtA6OTxuqEHPqVszHCSHrbKvzygPMXUaPVIw"/>
+<span class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">L'AUBERGE DU VIEUX PONT</span>
+</div>
+<div class="hidden md:flex space-x-8">
+<a class="text-secondary hover:text-primary transition-colors duration-200 hover:text-primary-container transition-all active:scale-95 duration-150" href="#">Chambres</a>
+<a class="text-secondary hover:text-primary transition-colors duration-200 hover:text-primary-container transition-all active:scale-95 duration-150" href="#">Services</a>
+<a class="text-secondary hover:text-primary transition-colors duration-200 hover:text-primary-container transition-all active:scale-95 duration-150" href="#">Restauration</a>
+<a class="text-secondary hover:text-primary transition-colors duration-200 hover:text-primary-container transition-all active:scale-95 duration-150" href="#">Contact</a>
+</div>
+<button class="hidden md:flex btn-primary uppercase">
+                Réserver
+            </button>
+<button class="md:hidden text-on-surface">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-grow pt-24 pb-16 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto w-full">
+<!-- Hero Section -->
+<section class="mb-16 md:mb-24 industrial-border bg-surface p-8 md:p-16 flex flex-col md:flex-row gap-12 items-center">
+<div class="flex-1 space-y-6">
+<div class="inline-flex items-center gap-2 bg-surface-container px-3 py-1 border border-secondary-fixed">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="font-label-md text-label-md uppercase font-bold text-on-surface-variant">Saint-Raymond, QC</span>
+</div>
+<h1 class="font-display text-display uppercase text-on-surface">LE CŒUR VAILLANT DE SAINT-RAYMOND</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+                    L'utilité industrielle rencontre l'hospitalité rurale. Un endroit pour déposer votre équipement, faire le plein avec des repas copieux et vous reposer sans compromis.
+                </p>
+<div class="pt-4 flex flex-col sm:flex-row gap-4">
+<a class="btn-primary" href="#">VOIR LES DISPONIBILITÉS</a>
+<a class="btn-secondary" href="#">DÉCOUVRIR LES SERVICES</a>
+</div>
+</div>
+<div class="flex-1 w-full h-[400px] bg-surface-variant border border-secondary-fixed relative overflow-hidden group">
+<div class="absolute inset-0 bg-black/10 group-hover:bg-transparent transition-colors duration-300 z-10"></div>
+<img alt="Industrial style room" class="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 transition-all duration-500" data-alt="A modern industrial hotel room interior featuring raw concrete walls, exposed steel beams, and a simple, sturdy metal bed frame with crisp white linens. The lighting is functional and bright, creating a clean, high-contrast environment suitable for a professional light-mode design. Safety orange accents are visible on a small side table and industrial lamp. The overall aesthetic is utilitarian, clean, and highly organized." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbhfD5hmi8U9JqbSSBcg4oow7t7zEjvXxHikWcKjB4pMQAD9aFNa02OIlcOya5jGnbviBHaKbi9ttWyAO3pNkm6LGL7YQalOjunNSKlYOoGD6aUd5MTuTQqHBxhAU4_6d0qoRa_1nGgIMJuYdrjCStfUY1qMio5sq8udzhIvPBxqKWPYqyarYGco4ourfXt344pPjYmkmsdWBlaw8h2HVNblehP1DDghajP1Ba9XMc6sSmVar0ZJ1l"/>
+</div>
+</section>
+<!-- Feature Cards -->
+<section class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-16">
+<!-- Card 1 -->
+<div class="card-industrial group">
+<div class="h-[250px] w-full mb-6 border-b border-secondary-fixed overflow-hidden relative">
+<img alt="Worker resting" class="w-full h-full object-cover grayscale opacity-90 group-hover:scale-105 transition-transform duration-500" data-alt="A professional, high-density industrial environment showing a worker in a high-visibility orange vest resting in a clean, modern break area. The space features white walls, slate grey steel furniture, and strict geometric lines typical of technical facilities. Bright, clear lighting illuminates the scene, emphasizing cleanliness and order. The mood is functional and reliable, fitting a modern industrial UI design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0sHDJHUDT2oqQw0KE8mJV4NWPIyN1xTyUxNrqmvwd7EshZ41TjrPH-M4LSgT1LKzlx3pkZT_sup8hzHPxINt46hSu7GaUI4aNm4u69TESzRq727OejB3wF9zq_kz0mofz0ZQODy9XS7H4Gey2g5J2-UUKB-tu_QPyZhhJWBo6GYF8wpzWqwRzG2u9tbw6H-_CEs-BB1KCenTX9fQKvft_z_OizcOKRukYDCQaSTB2Vgp_izuCjuoB"/>
+<div class="absolute top-4 left-4 bg-surface border border-secondary-fixed px-2 py-1 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">engineering</span>
+<span class="font-label-md text-label-md font-bold uppercase">Logistique et repos</span>
+</div>
+</div>
+<h3 class="font-headline-md text-headline-md uppercase mb-4 text-on-surface">Bâti pour les travailleurs</h3>
+<ul class="space-y-3 font-body-md text-body-md text-on-surface-variant mb-6 flex-grow">
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Petits-déjeuners matinaux adaptés aux horaires de quart.</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Chambres insonorisées pour un repos réparateur garanti.</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Tarifs contractuels avantageux pour les entreprises.</span>
+</li>
+</ul>
+<a class="inline-flex items-center gap-2 font-label-lg text-label-lg text-on-surface hover:text-primary group-hover:underline underline-offset-4 decoration-2 decoration-primary transition-all" href="#">
+                    EN SAVOIR PLUS <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+<!-- Card 2 -->
+<div class="card-industrial group">
+<div class="h-[250px] w-full mb-6 border-b border-secondary-fixed overflow-hidden relative">
+<img alt="Mountain biking gear" class="w-full h-full object-cover grayscale opacity-90 group-hover:scale-105 transition-transform duration-500" data-alt="Close-up of high-end mountain biking gear and a sturdy e-bike secured in a modern, clean storage facility. The room has bright, even lighting, white walls, and slate grey flooring, reflecting a technical, industrial aesthetic. Safety orange straps and accents highlight the equipment. The scene conveys security, organization, and readiness for outdoor activity within a professional context." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC4LHuPyenyBZVn_waxbN8UoK_RPoJBcJxzJXp4po_k8yhLrq-lDVxkYTYseIK3OCvTzSKjurlHTfp8GQe3z8aDDw9lR6u9a8Cx27M4aJ6RP8gaKt-wqNU3fp-Yy1q_CVfskL3uS0zZDCUF-2ur4ZMWqmzTe6ynhhGjqFytgExqU7yE9MH42tIk_hyxG4eYSgrRRSNIlqi3srn9FnYSsnk1SQ3RSID2BbDt5DNnZ0gVhyzt01ckAtkr"/>
+<div class="absolute top-4 left-4 bg-surface border border-secondary-fixed px-2 py-1 flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-sm">pedal_bike</span>
+<span class="font-label-md text-label-md font-bold uppercase">Équipement et transport</span>
+</div>
+</div>
+<h3 class="font-headline-md text-headline-md uppercase mb-4 text-on-surface">Prêt pour le sentier</h3>
+<ul class="space-y-3 font-body-md text-body-md text-on-surface-variant mb-6 flex-grow">
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Stockage sécurisé pour vélos et équipements lourds.</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Stations de recharge dédiées pour vélos électriques.</span>
+</li>
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-0.5">check_box</span>
+<span>Accès direct et rapide aux sentiers régionaux.</span>
+</li>
+</ul>
+<a class="inline-flex items-center gap-2 font-label-lg text-label-lg text-on-surface hover:text-primary group-hover:underline underline-offset-4 decoration-2 decoration-primary transition-all" href="#">
+                    DÉCOUVRIR LES INSTALLATIONS <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</a>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-high dark:bg-surface-container-lowest text-on-surface-variant dark:text-on-surface font-label-md text-label-md w-full border-t border-outline-variant flat no shadows transition-opacity duration-200">
+<div class="flex flex-col md:flex-row justify-between items-center py-8 px-margin-desktop max-w-container-max mx-auto gap-6 md:gap-0">
+<div class="flex items-center gap-3">
+<img alt="L'Auberge du Vieux Pont Logo" class="h-8 w-8 object-contain grayscale" src="https://lh3.googleusercontent.com/aida/AP1WRLuTjmbennIgOEzW6uQ8Sr2fkR4_yCrXQYLDbvNUYK3Cdywa3oesknZMp0CxyAi9AwQ--ff72I3xFup_9NWXNww5j4h09y9smB1_CCW7vD16iK-RNl04WysWDCNcfKZwGf1n8JFjokl4WiuwLrKfGMPt8sRQzt1QputheVGaqtHCChZJ6ykm2CvvptHTAyV1HCAQNvfi21CMp8P3aPDOi8XtA6OTxuqEHPqVszHCSHrbKvzygPMXUaPVIw"/>
+<span class="font-headline-md text-headline-md text-primary font-bold uppercase tracking-wider">L'Auberge du Vieux Pont</span>
+</div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="text-on-secondary-container hover:text-primary transition-opacity duration-200 hover:text-primary" href="#">Mentions Légales</a>
+<a class="text-on-secondary-container hover:text-primary transition-opacity duration-200 hover:text-primary" href="#">Politique de Confidentialité</a>
+<a class="text-on-secondary-container hover:text-primary transition-opacity duration-200 hover:text-primary" href="#">Accès</a>
+</div>
+<div class="text-on-surface-variant">
+                © 2024 L'Auberge du Vieux Pont. Tous droits réservés.
+            </div>
+</div>
+</footer>
+</body></html>

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Nos Chambres - WorkerHostel Saint-Raymond</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e0e3e5",
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "on-secondary-fixed": "#341100",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#bec6e0",
+                        "on-secondary-fixed-variant": "#783200",
+                        "surface-variant": "#e0e3e5",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "secondary-fixed": "#ffdbca",
+                        "on-secondary": "#ffffff",
+                        "on-background": "#191c1e",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed": "#dae2fd",
+                        "primary-container": "#131b2e",
+                        "surface-container": "#eceef0",
+                        "on-secondary-container": "#5c2400",
+                        "background": "#f7f9fb",
+                        "tertiary-fixed": "#d5e3fd",
+                        "on-tertiary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#0d1c2f",
+                        "tertiary": "#000000",
+                        "surface-bright": "#f7f9fb",
+                        "on-primary": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "primary": "#000000",
+                        "on-surface": "#191c1e",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-tint": "#565e74",
+                        "inverse-surface": "#2d3133",
+                        "surface": "#f7f9fb",
+                        "on-tertiary-container": "#76859b",
+                        "secondary": "#9d4300",
+                        "outline": "#76777d",
+                        "surface-container-low": "#f2f4f6",
+                        "secondary-fixed-dim": "#ffb690",
+                        "surface-dim": "#d8dadc",
+                        "secondary-container": "#fd761a",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "error-container": "#ffdad6",
+                        "on-surface-variant": "#45464d",
+                        "primary-fixed-dim": "#bec6e0",
+                        "outline-variant": "#c6c6cd",
+                        "inverse-on-surface": "#eff1f3",
+                        "on-primary-fixed": "#131b2e",
+                        "on-tertiary-fixed": "#0d1c2f"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "margin-mobile": "16px",
+                        "unit": "4px",
+                        "margin-desktop": "48px",
+                        "container-max": "1200px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["IBM Plex Sans"],
+                        "headline-lg": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-sm": ["IBM Plex Sans"],
+                        "body-lg": ["IBM Plex Sans"],
+                        "headline-lg-mobile": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'IBM Plex Sans', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .zen-mask {
+            mask-image: linear-gradient(to right, black 80%, transparent 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-secondary selection:text-white">
+<!-- TopNavBar -->
+<header class="bg-surface border-b border-outline-variant fixed top-0 w-full z-50">
+<nav class="flex justify-between items-center w-full px-margin-desktop max-w-container-max mx-auto h-20">
+<div class="font-headline-md text-headline-md font-bold text-primary">WorkerHostel</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary font-bold border-b-2 border-primary pb-1 font-label-md text-label-md" href="#">Chambres</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#">Espaces Communs</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#">Services</a>
+</div>
+<button class="bg-primary text-white px-6 py-2 rounded-lg font-label-md text-label-md hover:opacity-90 active:scale-95 transition-all">
+                Réserver
+            </button>
+</nav>
+</header>
+<main class="pt-20">
+<!-- Hero Section -->
+<section class="relative h-[80vh] flex items-center overflow-hidden bg-surface-container-low">
+<div class="absolute inset-0 z-0">
+<div class="absolute inset-0 bg-gradient-to-r from-surface via-surface/80 to-transparent z-10"></div>
+<img alt="Espace de travail moderne et calme" class="w-full h-full object-cover grayscale-[20%]" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIp09yreAeX4AX45D1ToXkL9LNw9QsQ0jePRyPD__iZbwOMTJFe1KW_JLDRxfYZ0mJScBlFaU_66TZ3Pz3QVeeMbgT0k3FxHu8s0V3i-W2ZiEaSRu-mIUofspvuaKG3B0BIDQh3sd0JtthZNl1pfpYaPLw5XRdRtLSzxcGW6OL_Vn_m32DyVJ5E3ITAdFNRry3l9Z5jqILd8BhIA_Axa30_CuWLayQiYbRF8qdStG0rcloYroM-XABC31E5J7p4rpnfA"/>
+</div>
+<div class="relative z-20 px-margin-desktop max-w-container-max mx-auto w-full">
+<div class="max-w-2xl">
+<span class="inline-block px-3 py-1 bg-secondary text-white text-label-sm font-label-sm rounded-sm mb-6 uppercase tracking-widest">Confort &amp; Focus</span>
+<h1 class="font-headline-lg text-headline-lg mb-6 leading-tight tracking-tighter">VOTRE ESPACE PRIVÉ</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-8 max-w-lg">
+                        Conçu spécifiquement pour les professionnels en déplacement. Un environnement calme, propre et fonctionnel pour recharger vos batteries après une journée exigeante.
+                    </p>
+<div class="flex gap-4">
+<button class="bg-primary text-white px-8 py-4 rounded-sm font-label-md text-label-md hover:bg-on-primary-container transition-colors shadow-sm">
+                            Voir les disponibilités
+                        </button>
+</div>
+</div>
+</div>
+</section>
+<!-- Private Rooms Gallery (Bento-ish) -->
+<section class="py-24 px-margin-desktop max-w-container-max mx-auto">
+<div class="flex flex-col md:flex-row justify-between items-end mb-16 gap-gutter">
+<div class="max-w-xl">
+<h2 class="font-headline-md text-headline-md mb-4">Intimité &amp; Sérénité</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Nos chambres sont optimisées pour le repos des travailleurs. Chaque détail est pensé pour minimiser les distractions et maximiser le confort.</p>
+</div>
+<div class="flex gap-4 border-l border-outline-variant pl-gutter">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm">24/7</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Accès Sécurisé</span>
+</div>
+<div class="flex flex-col pl- gutter">
+<span class="font-headline-sm text-headline-sm">Calme</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Garanti</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<div class="md:col-span-8 group relative overflow-hidden rounded-lg border border-outline-variant">
+<div class="aspect-[16/9] overflow-hidden">
+<img alt="Chambre individuelle confortable" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKuf0Rm3MS5DpaSzbBFhE0BBUyq7M9acjrHPOCgRJnSZ8-EtvimZVm-lGxWN-o7HfSvvYnIVil6Vq4AO8nqOw1JSK3jNm1V08a3E-DKGjSYfz341gVJUvuXjzI0CWdiGRYc8ZwKWYnDMfLuEt87eiloFZ_FNQSAFN7nyRNlauBrD4Bu60BVEZoc6Ojw88xHf6IYrtEOnZ2f47YZni7T-wd_i8Wvw4flzivvfGiarYMO3q7MEOT_f4919DV8jIyLTeOHg"/>
+</div>
+<div class="p-8 bg-white">
+<h3 class="font-headline-sm text-headline-sm mb-4">Standard Travailleur</h3>
+<ul class="space-y-3 font-body-md text-body-md text-on-surface-variant">
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-[20px]">lock</span> Portes à verrouillage privé
+                            </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-[20px]">cleaning_services</span> Ménage hebdomadaire inclus
+                            </li>
+<li class="flex items-center gap-3">
+<span class="material-symbols-outlined text-secondary text-[20px]">quiet_time</span> Environnement strictement silencieux
+                            </li>
+</ul>
+</div>
+</div>
+<div class="md:col-span-4 flex flex-col gap-gutter">
+<div class="flex-1 rounded-lg border border-outline-variant overflow-hidden group">
+<img alt="Détail de la literie et rangement" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcBEPObH4Xx80HmN2humpuRD3U3XgDw5GV__5UoPUe-0nFgjTEEoNCPYzHba03s9rxF_ndI6akxsvGpOTARYIoXj-8IrX9uWqYhVtinG3oLHcaPO4qfGAvizXFjHVegnRUWo1Cq22jyT7nVVeCECKeSTzGilMZUEPLhIVe3j2W99XrXt2IgW99976eRoz9E_men5qCkxAo3uz3gejxpxw86KeN0zgdTIfwkrTdEV73UiKAKok2xZv9F1DQEQhpCugxVw"/>
+</div>
+<div class="p-6 bg-surface-container-low rounded-lg border border-outline-variant">
+<h4 class="font-label-md text-label-md mb-2 text-primary">INCLUS DANS CHAQUE CHAMBRE</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                            Literie de haute qualité, espace de rangement optimisé et Wi-Fi haute vitesse pour rester connecté avec vos proches.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Communal Spaces -->
+<section class="bg-surface-container py-24">
+<div class="px-margin-desktop max-w-container-max mx-auto">
+<div class="text-center mb-16">
+<h2 class="font-headline-md text-headline-md mb-4">Espaces Communs Fonctionnels</h2>
+<div class="w-16 h-1 bg-secondary mx-auto"></div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+<!-- Kitchen -->
+<div class="bg-white border border-outline-variant p-4 group">
+<div class="aspect-square mb-6 overflow-hidden">
+<img alt="Cuisine entièrement équipée" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDG0oNvSpEqEdE0zSEnnTmG8aAj9whYYFsJdBQeq9UtjLSaY41aQKG90oazQKZjf4zUNRO7XHN_D2dwFHPVjRczNGTkj3x9_P_RH3fN7cGqDMEmjh7n5mVhyOzDFeg5QnxxqX7LB70w0vF2ns4PXquS3vCbqnKZQu3ifpHjWs4OQcNeauvBq2u7cZeiQQ-cl6wtiYHedmeGZwB45FvqgnNTfzuefXWrfFaC3oEXeVyAlCnbvAxV6O8dsdJJojHpt2yy1g"/>
+</div>
+<h3 class="font-headline-sm text-headline-sm mb-2 px-2">Cuisine Équipée</h3>
+<p class="font-body-md text-body-md text-on-surface-variant px-2 pb-4">
+                            Tout ce qu'il faut pour préparer vos repas comme à la maison. Réfrigérateurs et rangements individuels.
+                        </p>
+</div>
+<!-- Dining -->
+<div class="bg-white border border-outline-variant p-4 group">
+<div class="aspect-square mb-6 overflow-hidden">
+<img alt="Salle à manger spacieuse" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBv3uYrIzWvGOh6rTJ8ZiyldaPzZL2Z6l6OwXQsX3Hgphoc5hwWWH4UPbJaMFrHbp_sOqD0q6LyG23__hfJa4r89zn4j7aYYBrktkG-Lb5w3cr-bkydwvBIzG8Kiypa9gLiDtmDfKIVZ7SWXK1vsqMcuxjWFKkZeKETrW5sGUFdXbl_Gl5as4gL4vlWjA3OrneIqxUKhYxnq1dvtHYAQ1O7MobpH3f546XFg6MmYr9AOPy0vO-z_uAlPqdeIUzgOaLeLg"/>
+</div>
+<h3 class="font-headline-sm text-headline-sm mb-2 px-2">Salle à Manger</h3>
+<p class="font-body-md text-body-md text-on-surface-variant px-2 pb-4">
+                            Un espace convivial et aéré pour vos repas, offrant une vue apaisante sur les environs.
+                        </p>
+</div>
+<!-- Laundry -->
+<div class="bg-white border border-outline-variant p-4 group">
+<div class="aspect-square mb-6 overflow-hidden">
+<img alt="Espace buanderie propre" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLaz94gZZVs0tVNdvbqQMo0iYcM0IDRtVyskHRmNK8OxeEfmVxUFDuR36nnIKlzHE-0gwilFoOMSotS0g3ssv-sT7jo217oTG_dZe7AwYDv2k1M2gL0ubDx68wH2Cx2yxPoEi7ILMaHmdTngQQSlWB618nX_Vvmu3d2qlQMcvzc5U-znqwfCP0X1DHDPbkI6fkRk0Ipw4emE4kDI0FT3j2M-bplEpH75gZKnGO37SzAHaEUApeqcXGzoa8xpSvumzirg"/>
+</div>
+<h3 class="font-headline-sm text-headline-sm mb-2 px-2">Buanderie</h3>
+<p class="font-body-md text-body-md text-on-surface-variant px-2 pb-4">
+                            Installations de lavage et séchage performantes disponibles gratuitement pour les résidents.
+                        </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Surrounding Area Saint-Raymond -->
+<section class="py-24 px-margin-desktop max-w-container-max mx-auto overflow-hidden">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+<div class="relative">
+<div class="grid grid-cols-2 gap-4">
+<div class="space-y-4 pt-12">
+<img alt="Le pont pittoresque de Saint-Raymond" class="w-full rounded-lg shadow-lg border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDja9sejZRy8-A_P0AAfZMkhge_FVF0oFCnn6XNzPbofkAuoF8hHgv7ajPgrPpyPmw-aXYZlAXW4dqm6elQoui98FTj1rzUFzQqbV9JoJ48giyEx7DbiBkNpAFuEGI_QQVEpc2p3ws4Iq3KAwFJpGjX8Gjw_MlPylcnsQRYmJKpQJnEU5J2BD2ny6mkR5uHVrHdlxms40XHh24w4GBD-W-QTJTGZPDrfkUTqOmJhGeO_SoYaccihqEEy46fz8SAO-fKRQ"/>
+</div>
+<div class="space-y-4">
+<img alt="Extérieur du WorkerHostel" class="w-full rounded-lg shadow-lg border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASjWZBHK2X_85xYwzJO5kfhHTnndh3YZQA6ko3s5g42-qi85CKMFWY5cZpHPxMeO0jF15eKPCTdS8yqbRT4vKdHtCsqz9xHP4q_1lwv9V7EHgi3UiJORtD3C-PFpLE0UdePIwjmUaweg9owFoxbzWBm8QkngkDvYFq7EGYWDEsRt2h-rBPn3T0099QlcW5QNuhcMA_IHVS4OcQ88e66QNubAXULJAwOzLH9Dbe_R9ythZEpnZwlO5giJO_iv5Xx3HqSA"/>
+</div>
+</div>
+<div class="absolute -top-6 -left-6 w-32 h-32 bg-secondary/10 -z-10"></div>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md mb-6">Le Calme de Saint-Raymond</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-8 leading-relaxed">
+                        Situé au cœur d'un environnement naturel paisible, le WorkerHostel offre la tranquillité nécessaire à une récupération optimale. Profitez du charme local et de la proximité des services de Saint-Raymond.
+                    </p>
+<div class="space-y-4 border-t border-outline-variant pt-8">
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary-fixed">
+<span class="material-symbols-outlined">nature</span>
+</div>
+<span class="font-label-md text-label-md">Accès direct aux espaces verts</span>
+</div>
+<div class="flex items-center gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary-fixed">
+<span class="material-symbols-outlined">local_shipping</span>
+</div>
+<span class="font-label-md text-label-md">Stationnement facile pour véhicules larges</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="bg-primary py-20">
+<div class="px-margin-desktop max-w-container-max mx-auto text-center">
+<h2 class="font-headline-lg text-headline-lg text-white mb-8">Prêt à réserver votre séjour ?</h2>
+<div class="flex flex-col md:flex-row justify-center gap-6">
+<button class="bg-secondary text-white px-10 py-4 rounded-sm font-label-md text-label-md hover:opacity-90 transition-all">
+                        Vérifier les prix
+                    </button>
+<button class="bg-transparent border border-white text-white px-10 py-4 rounded-sm font-label-md text-label-md hover:bg-white hover:text-primary transition-all">
+                        Nous contacter
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-low border-t border-outline-variant">
+<div class="w-full py-12 px-margin-desktop max-w-container-max mx-auto flex flex-col md:flex-row justify-between items-center gap-gutter">
+<div class="flex flex-col items-center md:items-start gap-4">
+<div class="font-headline-sm text-headline-sm font-bold text-primary">WorkerHostel</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">© 2024 WorkerHostel. Tous droits réservés.</p>
+</div>
+<div class="flex gap-8 items-center">
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-secondary transition-colors" href="#">Contact</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-secondary transition-colors" href="#">Mentions Légales</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant hover:text-secondary transition-colors" href="#">Politique de Confidentialité</a>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for scroll reveals
+        document.addEventListener('DOMContentLoaded', () => {
+            const observerOptions = {
+                threshold: 0.1
+            };
+            
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('opacity-100', 'translate-y-0');
+                        entry.target.classList.remove('opacity-0', 'translate-y-10');
+                    }
+                });
+            }, observerOptions);
+
+            // Simple reveal for cards
+            document.querySelectorAll('.group').forEach(el => {
+                el.classList.add('transition-all', 'duration-1000', 'opacity-0', 'translate-y-10');
+                observer.observe(el);
+            });
+        });
+    </script>
+</body></html>

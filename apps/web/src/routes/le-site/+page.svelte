@@ -141,7 +141,7 @@
           <p class="page-le-site__body">
             Depuis 1972, l'Auberge du Vieux Pont domine la rivière Sainte-Anne au cœur de
             Saint-Raymond. Pierre, bois, fer forgé — les matériaux parlent d'eux-mêmes.
-            À deux pas des sentiers de la Vallée Bras-du-Nord, à moins d'une heure de Québec.
+            À proximité des principaux chantiers forestiers et des lignes Hydro-Québec de Portneuf.
           </p>
           <p class="page-le-site__body">
             Un endroit calibré pour ceux qui partent tôt et rentrent tard, avec du béton qu'on
@@ -151,7 +151,7 @@
         </div>
         <div class="page-le-site__lieu-image" use:reveal={{ y: 16, delay: 0.12 }}>
           <ImagePanel
-            imgKey="le-site-1.jpg"
+            imgKey="auberge-exterior.jpg"
             picsumSeed={33}
             alt="Vue extérieure de l'Auberge du Vieux Pont sur la rivière Sainte-Anne"
             aspectRatio="3/2"
@@ -161,7 +161,7 @@
     </div>
     <div class="page-le-site__grounds-strip" aria-hidden="true">
       <ImagePanel
-        imgKey="le-site-2.jpg"
+        imgKey="village-river.jpg"
         picsumSeed={55}
         alt=""
         aspectRatio="16/5"

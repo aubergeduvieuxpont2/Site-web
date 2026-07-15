@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Contact - L'Auberge du Vieux Pont</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e0e3e5",
+                        "outline": "#76777d",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface": "#f7f9fb",
+                        "secondary-fixed": "#ffdbca",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed": "#341100",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "surface-dim": "#d8dadc",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "on-tertiary-container": "#76859b",
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#e0e3e5",
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "surface-container": "#eceef0",
+                        "on-primary-fixed": "#131b2e",
+                        "tertiary-container": "#0d1c2f",
+                        "primary-fixed": "#dae2fd",
+                        "tertiary-fixed": "#d5e3fd",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-low": "#f2f4f6",
+                        "secondary-container": "#fd761a",
+                        "on-background": "#191c1e",
+                        "on-surface-variant": "#45464d",
+                        "secondary-fixed-dim": "#ffb690",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "primary": "#000000",
+                        "on-surface": "#191c1e",
+                        "background": "#f7f9fb",
+                        "surface-bright": "#f7f9fb",
+                        "secondary": "#9d4300",
+                        "outline-variant": "#c6c6cd",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#bec6e0",
+                        "on-secondary-fixed-variant": "#783200",
+                        "on-tertiary-fixed": "#0d1c2f",
+                        "primary-container": "#131b2e",
+                        "on-secondary-container": "#5c2400",
+                        "surface-tint": "#565e74",
+                        "inverse-on-surface": "#eff1f3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "container-max": "1200px",
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["IBM Plex Sans"],
+                        "headline-lg": ["IBM Plex Sans"],
+                        "label-md": ["IBM Plex Sans"],
+                        "headline-sm": ["IBM Plex Sans"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "body-lg": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "fontWeight": "500" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "28px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col">
+<!-- Desktop Top Navigation -->
+<nav class="hidden md:flex bg-surface-container-lowest text-primary w-full sticky top-0 border-b border-outline-variant flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto z-50">
+<div class="font-headline-md text-headline-md font-bold text-tertiary">
+            L'Auberge du Vieux Pont
+        </div>
+<div class="flex items-center gap-8">
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">About Us</a>
+<a class="font-label-md text-label-md text-primary border-b-2 border-secondary font-semibold hover:text-secondary transition-colors duration-200" href="#">Contact</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">Corporate</a>
+<a class="font-label-md text-label-md text-on-surface-variant hover:text-secondary transition-colors duration-200" href="#">Amenities</a>
+<button class="bg-secondary-container text-on-secondary-container px-6 py-2 rounded font-label-md text-label-md scale-95 active:opacity-80 transition-all ml-4">Book Now</button>
+</div>
+</nav>
+<!-- Mobile Side/Bottom Navigation Placeholder (Not implemented for brevity in this focused output, adhering strictly to 'Contact' page canvas priority where possible) -->
+<div class="md:hidden bg-surface-container-lowest text-primary w-full sticky top-0 border-b border-outline-variant flex justify-between items-center h-16 px-margin-mobile z-50">
+<div class="font-headline-sm text-headline-sm font-bold text-tertiary">
+            L'Auberge
+        </div>
+<button class="bg-secondary-container text-on-secondary-container px-4 py-1.5 rounded font-label-sm text-label-sm scale-95 active:opacity-80 transition-all">Book Now</button>
+</div>
+<main class="flex-grow w-full max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop py-12 md:py-24">
+<header class="mb-12 md:mb-16 max-w-3xl">
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-primary mb-4">Contactez-Nous</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Prêt à organiser votre séjour professionnel ou à demander des tarifs corporatifs ? Notre équipe est disponible pour simplifier votre logistique.</p>
+</header>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-gutter">
+<!-- Contact Form Section -->
+<section class="lg:col-span-7 bg-surface-container-lowest border border-outline-variant rounded p-6 md:p-8">
+<h2 class="font-headline-sm text-headline-sm mb-6 pb-4 border-b border-outline-variant">Demande de Renseignements</h2>
+<form class="space-y-6">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="firstName">Prénom</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="firstName" name="firstName" required="" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="lastName">Nom</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="lastName" name="lastName" required="" type="text"/>
+</div>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="company">Entreprise <span class="text-on-surface-variant font-normal">(Optionnel)</span></label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="company" name="company" type="text"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="email">Courriel</label>
+<input class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="email" name="email" required="" type="email"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="inquiryType">Type de demande</label>
+<select class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="inquiryType" name="inquiryType">
+<option>Tarifs Corporatifs / Long Séjour</option>
+<option>Réservation Individuelle</option>
+<option>Information Logistique (Stationnement, Accès)</option>
+<option>Autre</option>
+</select>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface mb-1" for="message">Message</label>
+<textarea class="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-body-md focus:outline-none focus:border-2 focus:border-primary transition-all" id="message" name="message" required="" rows="4"></textarea>
+</div>
+<button class="w-full md:w-auto bg-primary text-on-primary px-8 py-3 rounded font-label-md text-label-md hover:bg-inverse-surface transition-colors" type="submit">
+                        Envoyer la demande
+                    </button>
+</form>
+</section>
+<!-- Direct Contact & Info Section -->
+<section class="lg:col-span-5 flex flex-col gap-6">
+<!-- Information Card -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-6">
+<h2 class="font-headline-sm text-headline-sm mb-6 pb-4 border-b border-outline-variant">Coordonnées</h2>
+<ul class="space-y-6">
+<li class="flex items-start gap-4">
+<span class="material-symbols-outlined text-outline">location_on</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Adresse</p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">123 Rue Principale<br/>Saint-Raymond, QC G3L 1W5</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<span class="material-symbols-outlined text-outline">phone</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Téléphone</p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">+1 (418) 555-0198</p>
+</div>
+</li>
+<li class="flex items-start gap-4">
+<span class="material-symbols-outlined text-outline">mail</span>
+<div>
+<p class="font-label-md text-label-md text-on-surface">Courriel</p>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">info@aubergevieuxpont.ca</p>
+</div>
+</li>
+</ul>
+</div>
+<!-- Logistics Card -->
+<div class="bg-surface-container-low border border-outline-variant rounded p-6">
+<div class="flex items-center gap-3 mb-4">
+<span class="material-symbols-outlined text-secondary-container">local_shipping</span>
+<h3 class="font-headline-sm text-headline-sm">Accès Facile &amp; Logistique</h3>
+</div>
+<ul class="space-y-3 font-body-md text-body-md text-on-surface-variant">
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[16px]">check_circle</span>
+                            Grand stationnement pour machinerie lourde et camions.
+                        </li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[16px]">check_circle</span>
+                            Entrée autonome 24/7 par code d'accès numérique.
+                        </li>
+<li class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[16px]">check_circle</span>
+                            Situé à 5 minutes des principaux axes forestiers.
+                        </li>
+</ul>
+</div>
+<!-- Visual Landmark -->
+<div class="rounded border border-outline-variant overflow-hidden h-64 relative">
+<img alt="Le Vieux Pont de Saint-Raymond - Point de repère" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQG4W6-FzKxC-ZUhEf16unb4_-colrM-JyRb80hccQvd_YgOojcRL9Gc1aGaztG3HzKVFeJm3ipwALzCier7zIof8Nol-HWewxKwvOZm7vkUlESvfxF_4hTMBTR5pLTBIuRe4WLmllDIWjxDv3XqwuFC2G3T409Tr3hBwO5C4eBnVo6f5DyKTA9lPjfJQKBk6I76OhaLG2V2varJJwMDz_7g11SZfg3ZmQGtK-3cmn10GkFkJ94MP5qr8ESxJ3ccn4JQ"/>
+<div class="absolute bottom-0 left-0 w-full bg-gradient-to-t from-black/80 to-transparent p-4">
+<p class="font-label-sm text-label-sm text-on-primary">Repère Visuel: Le Vieux Pont</p>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-highest text-on-surface w-full mt-auto border-t border-outline-variant flex flex-col md:flex-row justify-between items-center py-12 px-margin-desktop max-w-container-max mx-auto gap-8">
+<div class="font-headline-sm text-headline-sm font-black text-on-background">
+            L'Auberge du Vieux Pont
+        </div>
+<div class="flex flex-wrap justify-center gap-6 font-label-sm text-label-sm">
+<a class="text-on-surface-variant hover:text-primary underline decoration-secondary-container opacity-90 hover:opacity-100 transition-opacity" href="#">Privacy Policy</a>
+<a class="text-on-surface-variant hover:text-primary underline decoration-secondary-container opacity-90 hover:opacity-100 transition-opacity" href="#">Terms of Service</a>
+<a class="text-on-surface-variant hover:text-primary underline decoration-secondary-container opacity-90 hover:opacity-100 transition-opacity" href="#">Corporate Booking</a>
+<a class="text-on-surface-variant hover:text-primary underline decoration-secondary-container opacity-90 hover:opacity-100 transition-opacity" href="#">Saint-Raymond Guide</a>
+</div>
+<div class="font-body-md text-body-md text-on-surface-variant text-center md:text-right">
+            © 2024 L'Auberge du Vieux Pont. Specialized lodging for industry professionals.
+        </div>
+</footer>
+</body></html>

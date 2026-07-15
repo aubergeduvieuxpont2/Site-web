@@ -1,0 +1,462 @@
+<!DOCTYPE html><html class="scroll-smooth" lang="fr"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>L'Auberge du Vieux Pont | Le Repos de l'Artisan</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#000000",
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "tertiary-fixed": "#d5e3fd",
+                        "on-secondary-fixed": "#341100",
+                        "tertiary": "#000000",
+                        "on-primary-container": "#7c839b",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-highest": "#e0e3e5",
+                        "error-container": "#ffdad6",
+                        "on-tertiary": "#ffffff",
+                        "primary-fixed": "#dae2fd",
+                        "on-background": "#191c1e",
+                        "on-secondary-container": "#5c2400",
+                        "inverse-on-surface": "#eff1f3",
+                        "surface-variant": "#e0e3e5",
+                        "background": "#f7f9fb",
+                        "on-tertiary-fixed": "#0d1c2f",
+                        "secondary-fixed": "#ffdbca",
+                        "surface-container": "#eceef0",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-surface": "#191c1e",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary-container": "#76859b",
+                        "surface": "#f7f9fb",
+                        "surface-container-low": "#f2f4f6",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#ffb690",
+                        "inverse-primary": "#bec6e0",
+                        "on-primary": "#ffffff",
+                        "surface-tint": "#565e74",
+                        "on-secondary": "#ffffff",
+                        "secondary": "#9d4300",
+                        "outline-variant": "#c6c6cd",
+                        "primary-container": "#131b2e",
+                        "outline": "#76777d",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "secondary-container": "#fd761a",
+                        "on-surface-variant": "#45464d",
+                        "tertiary-container": "#0d1c2f",
+                        "surface-dim": "#d8dadc",
+                        "on-secondary-fixed-variant": "#783200",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "on-primary-fixed": "#131b2e",
+                        "on-error-container": "#93000a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-desktop": "48px",
+                        "container-max": "1200px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["IBM Plex Sans"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-lg": ["IBM Plex Sans"],
+                        "headline-sm": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "label-md": ["IBM Plex Sans"],
+                        "headline-lg-mobile": ["IBM Plex Sans"],
+                        "body-lg": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .reveal { opacity: 0; transform: translateY(20px); transition: all 0.8s ease-out; }
+        .reveal.active { opacity: 1; transform: translateY(0); }
+        .sturdy-border { border: 1px solid #e2e8f0; }
+        .glass-panel { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md overflow-x-hidden selection:bg-secondary-container selection:text-white">
+<!-- Hero Background Animation Layer -->
+<div class="fixed inset-0 -z-10 opacity-30">
+<!-- STITCH_SHADER_START:ANIMATION_22 class="absolute inset-0 w-full h-full" -->
+<div class="absolute inset-0 w-full h-full" style="display:block;">
+<canvas id="shader-canvas-ANIMATION_22" style="display:block;width:100%;height:100%" width="1280" height="4204"></canvas>
+<script>
+(function() {
+  const canvas = document.getElementById('shader-canvas-ANIMATION_22');
+
+  // Sync the WebGL drawing-buffer size with the CSS-driven layout size.
+  // This fires on initial layout and whenever the element is resized.
+  function syncSize() {
+    const w = canvas.clientWidth  || 1280;
+    const h = canvas.clientHeight || 720;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+  }
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(syncSize).observe(canvas);
+  }
+  syncSize();
+
+  const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+  if (!gl) return;
+  const vs = `attribute vec2 a_position;
+varying vec2 v_texCoord;
+void main() {
+  v_texCoord = a_position * 0.5 + 0.5;
+  gl_Position = vec4(a_position, 0.0, 1.0);
+}`;
+  const fs = `<webgl-shader>
+precision highp float;
+uniform float u_time;
+uniform vec2 u_resolution;
+
+varying vec2 v_texCoord;
+
+void main() {
+    vec2 uv = v_texCoord;
+    
+    // Slow, very subtle movement for an 'airy' feel
+    float noise = sin(uv.x * 2.0 + u_time * 0.2) * cos(uv.y * 2.0 + u_time * 0.1);
+    
+    // Industrial Zen colors: Very light grays and off-whites
+    vec3 color1 = vec3(0.97, 0.98, 0.98); // surface
+    vec3 color2 = vec3(0.95, 0.96, 0.96); // surface-container
+    
+    vec3 finalColor = mix(color1, color2, noise * 0.5 + 0.5);
+    
+    gl_FragColor = vec4(finalColor, 1.0);
+}
+</webgl-shader>`;
+  function cs(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, cs(gl.VERTEX_SHADER, vs));
+  gl.attachShader(prog, cs(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(prog);
+  gl.useProgram(prog);
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  const pos = gl.getAttribLocation(prog, 'a_position');
+  gl.enableVertexAttribArray(pos);
+  gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+  const uTime = gl.getUniformLocation(prog, 'u_time');
+  const uRes = gl.getUniformLocation(prog, 'u_resolution');
+  const uMouse = gl.getUniformLocation(prog, 'u_mouse');
+
+  // u_mouse is in pixel coordinates matching u_resolution (ShaderToy convention).
+  // Shaders that need normalized coords should use: u_mouse / u_resolution.
+  let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+  window.addEventListener('mousemove', (event) => {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width && rect.height) {
+      const nx = (event.clientX - rect.left) / rect.width;
+      const ny = 1.0 - (event.clientY - rect.top) / rect.height;
+      mouse.x = nx * canvas.width;
+      mouse.y = ny * canvas.height;
+    }
+  });
+
+  function render(t) {
+    if (typeof ResizeObserver === 'undefined') syncSize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (uTime) gl.uniform1f(uTime, t * 0.001);
+    if (uRes) gl.uniform2f(uRes, canvas.width, canvas.height);
+    if (uMouse) gl.uniform2f(uMouse, mouse.x, mouse.y);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    requestAnimationFrame(render);
+  }
+  render(0);
+})();
+</script>
+</div>
+<!-- STITCH_SHADER_END:ANIMATION_22 -->
+</div>
+<!-- Navigation -->
+<nav class="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="flex justify-between items-center w-full px-margin-desktop max-w-container-max mx-auto h-20">
+<span class="font-headline-md text-headline-md font-bold text-primary">WorkerHostel</span>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#chambres">Chambres</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#espaces">Espaces Communs</a>
+<a class="text-on-surface-variant hover:text-primary transition-colors font-label-md text-label-md" href="#services">Services</a>
+<button class="bg-primary text-on-primary px-6 py-2 font-label-md text-label-md hover:scale-95 transition-all duration-150">Réserver</button>
+</div>
+<!-- Mobile Menu Toggle (Icon only) -->
+<button class="md:hidden text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+</nav>
+<main class="pt-20">
+<!-- Hero Section -->
+<section class="relative min-h-[90vh] flex items-center overflow-hidden px-margin-mobile md:px-margin-desktop">
+<div class="max-w-container-max mx-auto w-full grid grid-cols-1 lg:grid-cols-12 gap-gutter items-center">
+<div class="lg:col-span-6 z-10 space-y-6 reveal active">
+<div class="inline-flex items-center gap-2 px-3 py-1 bg-secondary-container text-on-secondary-container rounded-sm">
+<span class="material-symbols-outlined text-[18px]">verified</span>
+<span class="font-label-md text-label-md uppercase tracking-widest">L'Auberge du Vieux Pont</span>
+</div>
+<h1 class="font-headline-lg text-[48px] md:text-[64px] leading-tight text-primary">Le Repos de l'Artisan.</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+                        Simple. Propre. Privé. L'endroit idéal pour les travailleurs de terrain à Saint-Raymond. Un sanctuaire de calme après une journée de labeur exigeante.
+                    </p>
+<div class="flex flex-wrap gap-4 pt-4">
+<button class="bg-primary text-on-primary px-8 py-4 font-label-md text-label-md uppercase tracking-wider flex items-center gap-2 hover:bg-on-surface-variant transition-all">
+                            Voir les tarifs <span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<button class="border border-outline px-8 py-4 font-label-md text-label-md uppercase tracking-wider hover:bg-surface-container transition-all">
+                            Nous Contacter
+                        </button>
+</div>
+</div>
+<div class="lg:col-span-6 relative reveal active" style="transition-delay: 200ms;">
+<div class="aspect-[4/5] md:aspect-square sturdy-border overflow-hidden relative group">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A clean, bright, and airy private bedroom for a professional worker featuring a neatly made bed with geometric patterned linens, light wood flooring, and minimalist white walls. The room is flooded with soft natural daylight from a window with neutral-toned curtains. The overall aesthetic is industrial zen, focusing on simplicity and organizational clarity for a calm environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7vqooKFH3lVxZqanevWzaLGrz9hLhEjWBqjz14vUig5GDWKlUNlgTipnoanSSYA_dRxZwXrQAFLmG0I4TFJI5wJ82AjH0SDYHBamzAMZTW7NEM0VH-kZzmKEXVvYpQNYrOf4ZH8vg7Tw_TOni1xFL_7PILt0cQM6Jq4-g7fO3Qq5vV4O-RMx4zyjpmsbOZ6uQRFj5IJ8WJ23GNb3V2xBSz8_FFIBRTUTkEwJ5KPsQ7RTnWngnfFFXOFfBSGyTzTyKBQ">
+<div class="absolute bottom-6 right-6 bg-white/90 p-4 backdrop-blur-sm border border-outline-variant">
+<p class="font-label-md text-label-md text-primary">Saint-Raymond, QC</p>
+</div>
+</div>
+<!-- Decorative Element -->
+<div class="absolute -bottom-10 -left-10 w-40 h-40 border border-outline-variant -z-10 hidden md:block"></div>
+</div>
+</div>
+</section>
+<!-- Core Philosophy: Minimalist Breadcrumb/Tagline -->
+<section class="py-12 border-y border-outline-variant bg-white">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop flex flex-wrap justify-between gap-8 text-on-surface-variant">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">check_circle</span>
+<span class="font-label-md text-label-md">LOGEMENT PROFESSIONNEL</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">wifi</span>
+<span class="font-label-md text-label-md">CONNECTIVITÉ HAUTE VITESSE</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">local_laundry_service</span>
+<span class="font-label-md text-label-md">SERVICES COMPLETS</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined">lock</span>
+<span class="font-label-md text-label-md">ACCÈS PRIVÉ SÉCURISÉ</span>
+</div>
+</div>
+</section>
+<!-- Service Bento Grid -->
+<section class="py-24 px-margin-mobile md:px-margin-desktop bg-surface-container-low" id="chambres">
+<div class="max-w-container-max mx-auto">
+<div class="mb-16 reveal active">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-4">Conçu pour votre efficacité.</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl">Parce que votre travail est physique et intense, nous avons créé un environnement qui minimise la friction logistique.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-12 gap-gutter">
+<!-- Chambers - Large Feature -->
+<div class="md:col-span-8 group sturdy-border bg-white overflow-hidden reveal active">
+<div class="aspect-[16/9] overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A modern communal kitchen area in a professional hostel setting featuring sage green cabinetry and dark wood countertops. The space is equipped with professional-grade stainless steel appliances, a microwave, and several small appliances like coffee makers. The lighting is crisp and even, highlighting the clean white vertical planked walls and natural light from a window. The atmosphere is functional yet inviting, perfect for team preparation." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCz24Ppkm4DdughNRuVn1e_OmHSIOnO30FmYaIq6Gl_rtq7edrZzM7TQUmU2EDPfxTydJ0FWX0i9nD1fuNN_e_1wGZc9GR4kNaOVm6DreTjqQ6SHMpEmIklQXitDhawq0s6ob65zNdCREZYnZ1DQmO_bp8uXEDVocOqINHf3_b0Ktk8ifDfC5cKuDN6LLkFFeZfnQJdemoidVc0oIyqAZw3WvuF6ToSWOmcLGpMdBBY6PpfroLW2gikCpcHIoTyF3hoPA">
+</div>
+<div class="p-8">
+<div class="flex items-start justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-primary mb-2">Chambres Privées</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Intimité totale avec portes verrouillables et mobilier ergonomique pour un repos sans interruption.</p>
+</div>
+<span class="bg-surface-container-high px-3 py-1 rounded-sm text-label-sm font-label-sm uppercase">Essentiel</span>
+</div>
+</div>
+</div>
+<!-- Side Card - Weekly Cleaning -->
+<div class="md:col-span-4 sturdy-border bg-primary text-on-primary p-8 flex flex-col justify-between reveal active" style="transition-delay: 100ms;">
+<div>
+<span class="material-symbols-outlined text-[40px] mb-6">sanitizer</span>
+<h3 class="font-headline-sm text-headline-sm mb-4">Entretien Hebdomadaire</h3>
+<p class="font-body-md text-body-md opacity-80">Concentrez-vous sur vos contrats. Nous nous occupons du ménage complet une fois par semaine, incluant le changement de literie.</p>
+</div>
+<div class="mt-8 pt-8 border-t border-white/20">
+<span class="font-label-md text-label-md italic">Standard de propreté hôtelier</span>
+</div>
+</div>
+<!-- Shared Logistics - Kitchen -->
+<div class="md:col-span-6 group sturdy-border bg-white overflow-hidden reveal active" id="espaces" style="transition-delay: 200ms;">
+<div class="aspect-video overflow-hidden">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="A spacious dining room area with a large dark wood communal table and matching sturdy chairs, leading towards a sliding glass door that opens to an outdoor deck. The room is painted in soft eggshell white with minimalist window treatments. A subtle industrial fluorescent light fixture provides ample overhead illumination. The mood is peaceful and communal, providing a balanced space for workers to eat and relax together." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCEoYX-J5MuAshd4DlCerGi4zkZBg9tmhY6bOuOopkQhBap13eFkU2TaYyYglcxknM__jI-QMwwyYD-YV1BcvD7WT3yB8-FhsKfthSj3aeQUBgNqOYrAdETwhcBQqJVH1Q_nLNJg-BlnbF2Os0A_vdicqGVD7ar7vz2NJZa0tiL4Opm6LfvUs_THO1A6Qye3VMWeKiL8DA9sGHvdxZf-J2qhl7TRxCB3jMFDN6URc3CYG_8LygctWoiY8wA5JrOJyRywQ">
+</div>
+<div class="p-8">
+<h3 class="font-headline-sm text-headline-sm text-primary mb-2">Cuisine &amp; Logistique</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Une cuisine spacieuse équipée de tout le nécessaire et des installations de buanderie haute performance.</p>
+</div>
+</div>
+<!-- Lasting Value - Zen Environment -->
+<div class="md:col-span-6 bg-surface-container-highest sturdy-border p-8 flex items-center reveal active" style="transition-delay: 300ms;">
+<div class="space-y-6">
+<div class="p-4 bg-white sturdy-border inline-block">
+<span class="material-symbols-outlined text-secondary text-[32px]">self_improvement</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-primary">Simplicité "Industrial Zen"</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">
+                                Pour les travailleurs forestiers, hydroélectriques ou miniers, l'Auberge est une bouffée d'air frais. Pas de désordre, pas de bruit inutile. Juste la précision d'un espace bien organisé.
+                            </p>
+<ul class="space-y-3">
+<li class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Acoustique isolée
+                                </li>
+<li class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Stationnement pour camions lourds
+                                </li>
+<li class="flex items-center gap-3 font-label-md text-label-md text-on-surface-variant">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Espaces de rangement pour équipement
+                                </li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Services Detailed -->
+<section class="py-24 px-margin-mobile md:px-margin-desktop bg-white" id="services">
+<div class="max-w-container-max mx-auto grid grid-cols-1 lg:grid-cols-12 gap-gutter items-center">
+<div class="lg:col-span-5 reveal active">
+<h2 class="font-headline-lg text-headline-lg text-primary mb-6">Prêt pour le prochain quart de travail.</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-8">Nous comprenons les réalités des chantiers et des contrats saisonniers. Notre structure flexible s'adapte à vos horaires.</p>
+<div class="space-y-8">
+<div class="flex gap-6 items-start">
+<div class="bg-surface-container p-3">
+<span class="material-symbols-outlined text-primary">calendar_today</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-primary mb-1">Locations Flexibles</h4>
+<p class="text-on-surface-variant">À la semaine ou au mois, sans engagement à long terme contraignant.</p>
+</div>
+</div>
+<div class="flex gap-6 items-start">
+<div class="bg-surface-container p-3">
+<span class="material-symbols-outlined text-primary">key</span>
+</div>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-primary mb-1">Entrée Autonome</h4>
+<p class="text-on-surface-variant">Codes d'accès personnalisés pour des arrivées et départs à toute heure.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="lg:col-span-7 grid grid-cols-2 gap-4 reveal active" style="transition-delay: 200ms;">
+<div class="aspect-square bg-surface-container-low sturdy-border flex flex-col items-center justify-center p-8 text-center group hover:bg-primary hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined text-[48px] mb-4 group-hover:scale-110 transition-transform">forest</span>
+<span class="font-label-md text-label-md uppercase tracking-widest">Secteur Forestier</span>
+</div>
+<div class="aspect-square bg-surface-container-low sturdy-border flex flex-col items-center justify-center p-8 text-center group hover:bg-primary hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined text-[48px] mb-4 group-hover:scale-110 transition-transform">bolt</span>
+<span class="font-label-md text-label-md uppercase tracking-widest">Énergie &amp; Hydro</span>
+</div>
+<div class="aspect-square bg-surface-container-low sturdy-border flex flex-col items-center justify-center p-8 text-center group hover:bg-primary hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined text-[48px] mb-4 group-hover:scale-110 transition-transform">dining</span>
+<span class="font-label-md text-label-md uppercase tracking-widest">Mines &amp; Carrières</span>
+</div>
+<div class="aspect-square bg-surface-container-low sturdy-border flex flex-col items-center justify-center p-8 text-center group hover:bg-primary hover:text-on-primary transition-all duration-300">
+<span class="material-symbols-outlined text-[48px] mb-4 group-hover:scale-110 transition-transform">construction</span>
+<span class="font-label-md text-label-md uppercase tracking-widest">Génie Civil</span>
+</div>
+</div>
+</div>
+</section>
+<!-- CTA Section -->
+<section class="py-24 px-margin-mobile md:px-margin-desktop bg-surface">
+<div class="max-w-container-max mx-auto glass-panel p-12 md:p-20 sturdy-border text-center reveal active">
+<h2 class="font-headline-lg text-[40px] text-primary mb-6">Réservez votre place aujourd'hui.</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mb-10 max-w-xl mx-auto">Disponibilité limitée pour les contrats de saison. Assurez-vous d'un repos de qualité pour votre équipe.</p>
+<div class="flex flex-col md:flex-row justify-center gap-4">
+<a class="bg-primary text-on-primary px-10 py-5 font-label-md text-label-md uppercase tracking-widest hover:scale-95 transition-transform" href="tel:+14181234567">
+                        Appeler l'Auberge
+                    </a>
+<button class="border border-outline px-10 py-5 font-label-md text-label-md uppercase tracking-widest hover:bg-surface-container transition-all">
+                        Demande en ligne
+                    </button>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-low dark:bg-surface-container-lowest border-t border-outline-variant">
+<div class="w-full py-12 px-margin-desktop max-w-container-max mx-auto flex flex-col md:flex-row justify-between items-center gap-gutter">
+<div class="flex flex-col gap-2">
+<span class="font-headline-sm text-headline-sm font-bold text-primary">WorkerHostel</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant max-w-xs">Solution d'hébergement premium pour les corps de métiers spécialisés à Saint-Raymond.</p>
+</div>
+<div class="flex gap-8 items-center">
+<a class="text-on-surface-variant hover:text-secondary transition-colors font-label-sm text-label-sm" href="#">Contact</a>
+<a class="text-on-surface-variant hover:text-secondary transition-colors font-label-sm text-label-sm" href="#">Mentions Légales</a>
+<a class="text-on-surface-variant hover:text-secondary transition-colors font-label-sm text-label-sm" href="#">Politique de Confidentialité</a>
+</div>
+<div class="text-on-surface-variant font-body-md text-label-sm">
+                © 2024 WorkerHostel. Tous droits réservés.
+            </div>
+</div>
+</footer>
+<script>
+        // Reveal animations on scroll
+        function reveal() {
+            var reveals = document.querySelectorAll(".reveal");
+            for (var i = 0; i < reveals.length; i++) {
+                var windowHeight = window.innerHeight;
+                var elementTop = reveals[i].getBoundingClientRect().top;
+                var elementVisible = 150;
+                if (elementTop < windowHeight - elementVisible) {
+                    reveals[i].classList.add("active");
+                }
+            }
+        }
+
+        window.addEventListener("scroll", reveal);
+        // Initial check
+        reveal();
+
+        // Smooth scroll implementation for nav links
+        document.querySelectorAll('nav a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                document.querySelector(this.getAttribute('href')).scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+
+
+</body></html>
