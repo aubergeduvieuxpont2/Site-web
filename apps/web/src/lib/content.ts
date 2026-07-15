@@ -27,10 +27,9 @@ export type NavLink = { label: string; href: string; code: string };
 
 export const NAV: NavLink[] = [
   { label: "Accueil", href: "/", code: "00" },
-  { label: "Chambres", href: "/chambres", code: "01" },
-  { label: "Attraits", href: "/attraits", code: "02" },
-  { label: "À propos", href: "/a-propos", code: "03" },
-  { label: "Contact", href: "/contact", code: "04" },
+  { label: "Le site", href: "/le-site", code: "01" },
+  { label: "À propos", href: "/a-propos", code: "02" },
+  { label: "Contact", href: "/contact", code: "03" },
 ];
 
 export type Room = {
@@ -44,7 +43,13 @@ export type Room = {
   priceFrom: number;
   blurb: string;
   specs: string[];
-  seed: string; // image seed for the duotone panel
+  seed: string;
+  // RoomCard spec fields
+  slug: string;
+  description: string;
+  pricePerNight: number;
+  imgKey: string;
+  picsumSeed: number;
 };
 
 export const ROOMS: Room[] = [
@@ -66,6 +71,12 @@ export const ROOMS: Room[] = [
       "Salle de bain commune attenante",
     ],
     seed: "bunkroom",
+    slug: "dortoir-equipe",
+    description:
+      "Pour les crews et les pelotons. Six couchettes robustes, casiers cadenassables, et un plancher qui se lave à grande eau après une journée dans la boue.",
+    pricePerNight: 39,
+    imgKey: "bunkroom",
+    picsumSeed: 42,
   },
   {
     id: "chambre-quart",
@@ -85,6 +96,12 @@ export const ROOMS: Room[] = [
       "Bureau de travail + WiFi dédié",
     ],
     seed: "shiftroom",
+    slug: "chambre-quart",
+    description:
+      "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
+    pricePerNight: 89,
+    imgKey: "shiftroom",
+    picsumSeed: 17,
   },
   {
     id: "refuge-rider",
@@ -104,6 +121,12 @@ export const ROOMS: Room[] = [
       "Réfrigérateur + cafetière",
     ],
     seed: "riverroom",
+    slug: "refuge-rider",
+    description:
+      "Terrasse privée sur la rivière Sainte-Anne, support à vélo dans la chambre et accès direct au lave-vélo. Roulez, rincez, reposez.",
+    pricePerNight: 109,
+    imgKey: "riverroom",
+    picsumSeed: 85,
   },
   {
     id: "gite-familial",
@@ -123,6 +146,12 @@ export const ROOMS: Room[] = [
       "Salle de bain privée",
     ],
     seed: "familyroom",
+    slug: "gite-familial",
+    description:
+      "De l'espace pour la tribu. Kitchenette complète, coin repas et rangement pour tout l'attirail de la fin de semaine.",
+    pricePerNight: 149,
+    imgKey: "familyroom",
+    picsumSeed: 63,
   },
 ];
 

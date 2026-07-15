@@ -5,6 +5,8 @@ import { executeDealCreate } from "../src/ops/deal";
 import { executeNoteCreate } from "../src/ops/note";
 import { executeListAdd, executeListRemove } from "../src/ops/list";
 import { executeTimelineEvent } from "../src/ops/timeline";
+import { executeContactGet } from "../src/ops/contactGet";
+import { executeDealListByContact } from "../src/ops/dealList";
 import type { Env } from "../src/env";
 
 const mockEnv: Env = {
@@ -728,6 +730,137 @@ describe("Operations", () => {
           expect(err.ok).toBe(false);
           expect(err.status).toBe(500);
           expect(err.message).toContain("HubSpot API error");
+        }
+      });
+    });
+
+    describe("contact.get", () => {
+      it("returns contact data when contact is found", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              results: [{ id: "contact-abc", properties: { email: "test@example.com", firstname: "Test" } }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+
+        const result = await executeContactGet(mockEnv, { email: "test@example.com" });
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.hubspotId).toBe("contact-abc");
+          expect(result.data).toEqual({ email: "test@example.com", firstname: "Test" });
+        }
+      });
+
+      it("returns normalized 404 when contact is not found", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ results: [] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+
+        const result = await executeContactGet(mockEnv, { email: "missing@example.com" });
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+          expect(result.status).toBe(404);
+        }
+      });
+    });
+
+    describe("deal.listByContact", () => {
+      it("returns deals array when contact has deals", async () => {
+        const mockFetch = global.fetch as any;
+        let callCount = 0;
+
+        mockFetch.mockImplementation((url: string) => {
+          callCount++;
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [{ id: "contact-xyz" }] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          if (url.includes("/crm/v4/objects/contacts/contact-xyz/associations/deals")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [{ toObjectId: "deal-1" }, { toObjectId: "deal-2" }] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          if (url.includes("/crm/v3/objects/deals/batch/read")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [{ id: "deal-1", properties: { dealname: "Stay A" } }, { id: "deal-2", properties: { dealname: "Stay B" } }] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        const result = await executeDealListByContact(mockEnv, { email: "test@example.com" });
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(Array.isArray(result.data)).toBe(true);
+          expect((result.data as any[]).length).toBe(2);
+        }
+      });
+
+      it("returns empty array when contact has no deals", async () => {
+        const mockFetch = global.fetch as any;
+
+        mockFetch.mockImplementation((url: string) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [{ id: "contact-xyz" }] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          if (url.includes("/crm/v4/objects/contacts/contact-xyz/associations/deals")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        const result = await executeDealListByContact(mockEnv, { email: "nodeals@example.com" });
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.data).toEqual([]);
+        }
+      });
+
+      it("returns empty array when contact is not found", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({ results: [] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+
+        const result = await executeDealListByContact(mockEnv, { email: "nobody@example.com" });
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.data).toEqual([]);
         }
       });
     });

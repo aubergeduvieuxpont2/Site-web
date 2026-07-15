@@ -270,7 +270,7 @@
       <div use:reveal={{ y: 22, delay: 0.1 }} class="lg:col-span-2">
         <div class="flex flex-col gap-8">
           <div>
-            <SectionLabel code="INFO" label="Coordonnées" />
+            <SectionLabel text="Coordonnées" />
 
             <div class="mt-6 flex flex-col gap-6">
               <div>
@@ -339,7 +339,7 @@
 
           <!-- ============ STYLIZED MAP PLACEHOLDER ============ -->
           <div>
-            <SectionLabel code="GEO" label="Repère" />
+            <SectionLabel text="Repère" />
             <div
               class="relative mt-5 aspect-[4/3] overflow-hidden rounded-[var(--radius-blueprint)] border border-hairline-2 bg-surface-2"
             >

@@ -1,22 +1,33 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { path, link } from "../router";
+  import { page } from "$app/stores";
   import { NAV, SITE } from "../content";
   import Wordmark from "./Wordmark.svelte";
 
   let scrolled = $state(false);
   let open = $state(false);
+  let user = $state(null as any | null);
 
   onMount(() => {
     const onScroll = () => (scrolled = window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
+
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((res) => {
+        if (res.ok) return res.json();
+      })
+      .then((data) => {
+        if (data?.user) user = data.user;
+      })
+      .catch(() => {});
+
     return () => window.removeEventListener("scroll", onScroll);
   });
 
   // Close the mobile menu whenever the route changes.
   $effect(() => {
-    void $path;
+    void $page.url.pathname;
     open = false;
   });
 
@@ -33,7 +44,7 @@
   <div
     class="mx-auto flex max-w-[1280px] items-center justify-between px-5 py-3.5 md:px-10"
   >
-    <a href="/" use:link class="flex items-center gap-3" aria-label={SITE.name}>
+    <a href="/" class="flex items-center gap-3" aria-label={SITE.name}>
       <Wordmark class="h-9 w-9 text-terracotta" />
       <span class="hidden leading-none sm:block">
         <span
@@ -50,21 +61,20 @@
       {#each NAV as item (item.href)}
         <a
           href={item.href}
-          use:link
           class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
         >
           <span
-            class="font-mono text-[0.6rem] {isActive(item.href, $path)
+            class="font-mono text-[0.6rem] {isActive(item.href, $page.url.pathname)
               ? 'text-terracotta'
               : 'text-ink-mute'}">{item.code}</span
           >
           <span
-            class="text-sm font-medium {isActive(item.href, $path)
+            class="text-sm font-medium {isActive(item.href, $page.url.pathname)
               ? 'text-terracotta'
               : 'text-ink hover:text-terracotta'} transition-colors"
             >{item.label}</span
           >
-          {#if isActive(item.href, $path)}
+          {#if isActive(item.href, $page.url.pathname)}
             <span
               class="absolute inset-x-3 -bottom-px h-[3px] bg-terracotta"
               aria-hidden="true"
@@ -72,6 +82,33 @@
           {/if}
         </a>
       {/each}
+      <a
+        href="/connexion"
+        class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
+      >
+        <span class="text-sm font-medium text-ink hover:text-terracotta transition-colors"
+          >Connexion</span
+        >
+      </a>
+      {#if user}
+        <a
+          href="/profil"
+          class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
+        >
+          <span
+            class="text-sm font-medium {isActive("/profil", $page.url.pathname)
+              ? 'text-terracotta'
+              : 'text-ink hover:text-terracotta'} transition-colors"
+            >Profil</span
+          >
+          {#if isActive("/profil", $page.url.pathname)}
+            <span
+              class="absolute inset-x-3 -bottom-px h-[3px] bg-terracotta"
+              aria-hidden="true"
+            ></span>
+          {/if}
+        </a>
+      {/if}
     </nav>
 
     <div class="flex items-center gap-3">
@@ -82,13 +119,12 @@
       >
       <a
         href="/contact"
-        use:link
         class="hidden rounded-[var(--radius-blueprint)] bg-terracotta px-5 py-2.5 font-mono text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white transition-all duration-300 hover:-translate-y-0.5 hover:bg-terracotta-bright md:inline-flex"
         >Réserver</a
       >
 
       <button
-        class="flex h-10 w-10 flex-col items-center justify-center gap-[5px] lg:hidden"
+        class="flex h-11 w-11 flex-col items-center justify-center gap-[5px] lg:hidden"
         aria-label={open ? "Fermer le menu" : "Ouvrir le menu"}
         aria-expanded={open}
         onclick={() => (open = !open)}
@@ -122,13 +158,12 @@
       {#each NAV as item (item.href)}
         <a
           href={item.href}
-          use:link
           class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
         >
           <span class="flex items-center gap-3">
             <span class="font-mono text-[0.65rem] text-terracotta">{item.code}</span>
             <span
-              class="text-lg font-medium {isActive(item.href, $path)
+              class="text-lg font-medium {isActive(item.href, $page.url.pathname)
                 ? 'text-terracotta'
                 : 'text-ink'}">{item.label}</span
             >
@@ -137,8 +172,28 @@
         </a>
       {/each}
       <a
+        href="/connexion"
+        class="flex items-center justify-between border-b border-hairline-2 py-4"
+      >
+        <span class="text-lg font-medium text-ink">Connexion</span>
+        <span class="text-ink-mute">→</span>
+      </a>
+      {#if user}
+        <a
+          href="/profil"
+          class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
+        >
+          <span
+            class="text-lg font-medium {isActive("/profil", $page.url.pathname)
+              ? 'text-terracotta'
+              : 'text-ink'}"
+            >Profil</span
+          >
+          <span class="text-ink-mute">→</span>
+        </a>
+      {/if}
+      <a
         href="/contact"
-        use:link
         class="mt-4 rounded-[var(--radius-blueprint)] bg-terracotta px-5 py-3.5 text-center font-mono text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-white"
         >Réserver une chambre</a
       >

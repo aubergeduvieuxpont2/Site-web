@@ -5,10 +5,12 @@ import { DealCreateSchema, executeDealCreate } from "./deal";
 import { NoteCreateSchema, executeNoteCreate } from "./note";
 import { ListAddSchema, ListRemoveSchema, executeListAdd, executeListRemove } from "./list";
 import { TimelineEventSchema, executeTimelineEvent } from "./timeline";
+import { ContactGetSchema, executeContactGet } from "./contactGet";
+import { DealListByContactSchema, executeDealListByContact } from "./dealList";
 import type { NormalizedError } from "../hubspotClient";
 
 export type OpEnvelope = {
-  kind: "contact.upsert" | "deal.create" | "note.create" | "list.add" | "list.remove" | "timeline.event";
+  kind: "contact.upsert" | "deal.create" | "note.create" | "list.add" | "list.remove" | "timeline.event" | "contact.get" | "deal.listByContact";
   payload: unknown;
   dedupeKey?: string;
 };
@@ -18,14 +20,14 @@ export type ParseResult =
   | { success: false; error: NormalizedError };
 
 export const EnvelopeSchema = z.object({
-  kind: z.enum(["contact.upsert", "deal.create", "note.create", "list.add", "list.remove", "timeline.event"]),
+  kind: z.enum(["contact.upsert", "deal.create", "note.create", "list.add", "list.remove", "timeline.event", "contact.get", "deal.listByContact"]),
   payload: z.unknown(),
   dedupeKey: z.string().optional(),
 });
 
 type OpHandler = {
   payloadSchema: z.ZodType<unknown>;
-  execute: (env: Env, payload: unknown, dedupeKey?: string) => Promise<{ ok: true; hubspotId?: string } | NormalizedError>;
+  execute: (env: Env, payload: unknown, dedupeKey?: string) => Promise<{ ok: true; hubspotId?: string; data?: unknown } | NormalizedError>;
 };
 
 const registry: Record<string, OpHandler> = {
@@ -52,6 +54,14 @@ const registry: Record<string, OpHandler> = {
   "timeline.event": {
     payloadSchema: TimelineEventSchema,
     execute: (env, payload, dedupeKey) => executeTimelineEvent(env, payload as any, dedupeKey),
+  },
+  "contact.get": {
+    payloadSchema: ContactGetSchema,
+    execute: (env, payload) => executeContactGet(env, payload as any),
+  },
+  "deal.listByContact": {
+    payloadSchema: DealListByContactSchema,
+    execute: (env, payload) => executeDealListByContact(env, payload as any),
   },
 };
 
@@ -98,7 +108,7 @@ export function parseEnvelope(body: unknown): ParseResult {
 export async function executeOp(
   env: Env,
   envelope: OpEnvelope
-): Promise<{ ok: true; hubspotId?: string } | NormalizedError> {
+): Promise<{ ok: true; hubspotId?: string; data?: unknown } | NormalizedError> {
   try {
     const handler = registry[envelope.kind];
     if (!handler) {
