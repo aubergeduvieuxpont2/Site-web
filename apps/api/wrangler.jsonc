@@ -33,7 +33,7 @@
   // ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
   // Set to the real admin address in production; leave blank to skip seeding.
   "vars": {
-    "ADMIN_EMAIL": ""
+    "ADMIN_EMAIL": "ychasse01@gmail.com"
   },
 
   // Internal service binding to the HubSpot gateway Worker.

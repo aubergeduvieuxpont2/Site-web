@@ -56,10 +56,15 @@ async function main() {
     return;
   }
 
+  // The 0006 admin seed uses a :ADMIN_EMAIL placeholder; substitute it from the
+  // environment (single quotes doubled for SQL). Without ADMIN_EMAIL set the
+  // literal placeholder matches no row and the statement is a harmless no-op.
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().replace(/'/g, "''");
+
   for (const file of files) {
-    const statements = splitStatements(
-      readFileSync(join(migrationsDir, file), "utf8"),
-    );
+    let contents = readFileSync(join(migrationsDir, file), "utf8");
+    if (adminEmail) contents = contents.replaceAll(":ADMIN_EMAIL", adminEmail);
+    const statements = splitStatements(contents);
     for (const statement of statements) {
       // Ordinary (non-tagged) call form: sql(queryString, params?).
       await sql(statement);
