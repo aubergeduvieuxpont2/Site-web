@@ -197,6 +197,12 @@ describe('countUp', () => {
     expect(element.textContent).toBe(`${formatted} m`);
   });
 
+  it('skips locale formatting when localize is false (e.g. years)', () => {
+    mockMatchMedia(true);
+    countUp(element, { to: 1972, from: 0, localize: false });
+    expect(element.textContent).toBe('1972');
+  });
+
   it('formats number with French locale', () => {
     mockMatchMedia(true);
     countUp(element, { to: 1234, from: 0 });

@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { render } from "svelte/server";
 import Footer from "../Footer.svelte";
+import { SITE } from "$lib/content";
 
 function renderFooter() {
   const result = render(Footer);
@@ -35,6 +36,12 @@ describe("Footer (SSR)", () => {
     it("renders address element with testid", () => {
       const { html } = renderFooter();
       expect(html).toContain('data-testid="footer-address"');
+    });
+
+    it("displays the site tagline", () => {
+      const { html } = renderFooter();
+      expect(html).toContain('data-testid="footer-tagline"');
+      expect(html).toContain(SITE.tagline);
     });
   });
 

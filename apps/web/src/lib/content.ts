@@ -249,7 +249,7 @@ export const ATTRACTIONS: Attraction[] = [
   },
 ];
 
-export type Stat = { value: number; suffix: string; label: string };
+export type Stat = { value: number; suffix: string; label: string; localize?: boolean };
 
 export const STATS: Stat[] = [
   { value: 30, suffix: " min", label: "des principaux chantiers forestiers" },

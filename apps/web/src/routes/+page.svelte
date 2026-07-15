@@ -11,13 +11,15 @@
 
   const featuredRooms = ROOMS.slice(0, 3);
 
-  // Build stats with the rooms count from settings
-  const renderedStats = [
+  // Build stats with the rooms count from settings. $derived (not a plain
+  // const) because loadSettings() resolves after mount; the year keeps its
+  // digits unlocalized so countUp doesn't render "1 972".
+  const renderedStats = $derived([
     STATS[0],
-    STATS[1],
+    { ...STATS[1], localize: false },
     { ...STATS[2], value: settings.marketingRoomCount },
     STATS[3],
-  ];
+  ]);
 </script>
 
 <div class="page-accueil" data-testid="page-accueil">
@@ -61,7 +63,7 @@
     data-testid="stats-section"
   >
     <div class="page-accueil__stats-inner">
-      {#each renderedStats as stat, i}
+      {#each renderedStats as stat, i (`${stat.label}-${stat.value}`)}
         <div
           class="page-accueil__stat"
           data-testid="stat-item"
@@ -75,7 +77,7 @@
               class="page-accueil__stat-number"
               data-testid="stat-number"
               aria-hidden="true"
-              use:countUp={{ to: stat.value }}
+              use:countUp={{ to: stat.value, localize: stat.localize ?? true }}
             >{stat.value}</span>
             <span class="page-accueil__stat-suffix" aria-hidden="true">{stat.suffix}</span>
           </div>

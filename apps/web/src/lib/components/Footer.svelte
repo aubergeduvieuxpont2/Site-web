@@ -43,6 +43,9 @@
     <!-- Left column: brand + contact -->
     <div class="footer__brand" data-testid="footer-brand">
       <Wordmark size="sm" variant="dark" />
+      <p class="footer__tagline" data-testid="footer-tagline">
+        {SITE.tagline}
+      </p>
       <address class="footer__address" data-testid="footer-address">
         <p class="footer__address-line" data-testid="footer-address-street">
           {SITE.address.street}
@@ -140,6 +143,17 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-lg);
+  }
+
+  /* ── Tagline ── */
+  .footer__tagline {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    font-style: italic;
+    color: var(--color-ink-variant);
+    margin: 0;
   }
 
   /* ── Address ── */
