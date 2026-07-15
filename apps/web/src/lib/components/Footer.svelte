@@ -1,133 +1,286 @@
 <script lang="ts">
-  import { link } from "../router";
-  import { NAV, SITE } from "../content";
+  import { SITE } from "$lib/content";
   import Wordmark from "./Wordmark.svelte";
-  import Contour from "./Contour.svelte";
 
-  const marquee = ["ROULER", "TRAVAILLER", "DORMIR", "RECOMMENCER"];
-  const year = 2026;
+  let footerEl: HTMLElement | undefined = $state();
 
-  const legal = [
-    { label: "Mentions légales", href: "/politique#mentions" },
-    { label: "Politique de confidentialité", href: "/politique#confidentialite" },
-    { label: "Conditions de séjour", href: "/politique" },
-  ];
+  $effect(() => {
+    if (!footerEl) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      footerEl.classList.add("footer--visible");
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            footerEl!.classList.add("footer--visible");
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(footerEl);
+
+    return () => observer.disconnect();
+  });
+
+  const phoneRaw = SITE.phoneHref.replace("tel:", "");
 </script>
 
-<!-- Marquee strip -->
-<div class="overflow-hidden border-y border-charcoal-2 bg-terracotta">
-  <div class="flex animate-[marquee_28s_linear_infinite] whitespace-nowrap py-3">
-    {#each Array(3) as _, g (g)}
-      <div class="flex shrink-0 items-center">
-        {#each marquee as word (word + g)}
-          <span
-            class="mx-6 font-mono text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white"
-            >{word}</span
-          >
-          <span class="text-ember/70">✕</span>
-        {/each}
-      </div>
-    {/each}
-  </div>
-</div>
-
 <footer
-  class="relative overflow-hidden bg-charcoal text-on-charcoal"
+  bind:this={footerEl}
+  class="footer"
+  data-testid="footer"
+  aria-label="Pied de page"
 >
-  <Contour
-    class="pointer-events-none absolute -left-20 bottom-0 h-[30rem] w-[30rem] text-on-charcoal/[0.06]"
-  />
-
-  <div class="relative mx-auto max-w-[1280px] px-5 py-16 md:px-10 md:py-20">
-    <div class="grid gap-12 md:grid-cols-12">
-      <div class="md:col-span-5">
-        <div class="flex items-center gap-3">
-          <Wordmark class="h-11 w-11 text-ember" />
-          <div>
-            <p class="font-sans text-lg font-semibold tracking-[-0.01em]">
-              L'Auberge du Vieux Pont
-            </p>
-            <p class="tech-label text-on-charcoal-soft">
-              EST. {SITE.established}
-            </p>
-          </div>
-        </div>
-        <p class="mt-6 max-w-sm text-[0.95rem] leading-relaxed text-on-charcoal-soft">
-          {SITE.tagline} Un point d'ancrage pour les travailleurs et les riders, au pied de la Vallée Bras-du-Nord.
+  <div class="footer__inner">
+    <!-- Left column: brand + contact -->
+    <div class="footer__brand" data-testid="footer-brand">
+      <Wordmark size="sm" variant="dark" />
+      <address class="footer__address" data-testid="footer-address">
+        <p class="footer__address-line" data-testid="footer-address-street">
+          {SITE.address.street}
         </p>
-      </div>
-
-      <div class="md:col-span-3">
-        <p class="tech-label text-ember">Navigation</p>
-        <ul class="mt-5 space-y-3">
-          {#each NAV as item (item.href)}
-            <li>
-              <a
-                href={item.href}
-                use:link
-                class="group inline-flex items-center gap-2 text-on-charcoal transition-colors hover:text-ember"
-              >
-                <span class="font-mono text-[0.6rem] text-on-charcoal-soft"
-                  >{item.code}</span
-                >
-                {item.label}
-              </a>
-            </li>
-          {/each}
-        </ul>
-      </div>
-
-      <div class="md:col-span-4">
-        <p class="tech-label text-ember">Coordonnées</p>
-        <address class="mt-5 space-y-4 not-italic">
-          <p class="text-on-charcoal-soft">
-            {SITE.address.street}<br />
-            {SITE.address.city}, {SITE.address.province} {SITE.address.postal}<br
-            />
-            {SITE.address.country}
-          </p>
-          <p class="flex flex-col gap-1">
-            <a
-              href={SITE.phoneHref}
-              class="font-mono text-lg text-on-charcoal transition-colors hover:text-ember"
-              >{SITE.phone}</a
-            >
-            <a
-              href={"mailto:" + SITE.email}
-              class="text-sm text-on-charcoal-soft transition-colors hover:text-ember"
-              >{SITE.email}</a
-            >
-          </p>
-        </address>
-      </div>
+        <p class="footer__address-line" data-testid="footer-address-city">
+          {SITE.address.city}
+        </p>
+        <a
+          href="tel:{phoneRaw}"
+          class="footer__phone"
+          data-testid="footer-phone"
+          aria-label="Téléphone: {SITE.phone}"
+        >
+          {SITE.phone}
+        </a>
+      </address>
     </div>
 
-    <div
-      class="mt-14 flex flex-col gap-4 border-t border-charcoal-2 pt-6 text-sm md:flex-row md:items-center md:justify-between"
+    <!-- Right column: footer-only nav -->
+    <nav
+      class="footer__nav"
+      aria-label="Navigation secondaire"
+      data-testid="footer-nav"
     >
-      <p class="text-on-charcoal-soft">
-        © {year} {SITE.name}. Tous droits réservés.
-      </p>
-      <ul class="flex flex-wrap gap-x-6 gap-y-2">
-        {#each legal as item (item.href)}
-          <li>
-            <a
-              href={item.href}
-              use:link
-              class="text-on-charcoal-soft underline decoration-charcoal-2 underline-offset-4 transition-colors hover:text-ember hover:decoration-ember"
-              >{item.label}</a
-            >
-          </li>
-        {/each}
-      </ul>
-    </div>
+      <a
+        href="/politiques"
+        class="footer__link"
+        data-testid="footer-link-politiques"
+      >
+        Politiques de l'établissement
+      </a>
+      <a
+        href="/confidentialite"
+        class="footer__link"
+        data-testid="footer-link-confidentialite"
+      >
+        Politique de confidentialité
+      </a>
+    </nav>
+  </div>
+
+  <!-- Bottom strip: copyright -->
+  <div class="footer__copy" data-testid="footer-copy">
+    <span class="footer__copy-text" data-testid="footer-copy-text">
+      © {new Date().getFullYear()} {SITE.name}. Tous droits réservés.
+    </span>
   </div>
 </footer>
 
 <style>
-  @keyframes marquee {
-    to {
-      transform: translateX(-33.333%);
+  .footer {
+    border-top: 1px solid var(--color-outline-variant);
+    background-color: var(--color-surface);
+    padding: var(--space-2xl) var(--space-xl);
+
+    opacity: 0;
+    transition: opacity 600ms cubic-bezier(0.33, 1, 0.68, 1);
+  }
+
+  /* svelte-ignore css_unused_selector */
+  .footer.footer--visible {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .footer {
+      opacity: 1;
+      transition: none;
     }
+  }
+
+  /* ── Inner grid ── */
+  .footer__inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2xl);
+    align-items: start;
+    margin-bottom: var(--space-xl);
+  }
+
+  @media (max-width: 767px) {
+    .footer__inner {
+      grid-template-columns: 1fr;
+      gap: var(--space-xl);
+    }
+  }
+
+  /* ── Brand column ── */
+  .footer__brand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  /* ── Address ── */
+  .footer__address {
+    font-style: normal;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .footer__address-line {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-variant);
+    margin: 0;
+  }
+
+  .footer__phone {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-variant);
+    text-decoration: none;
+    display: inline-block;
+    margin-top: var(--space-xs);
+
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1px;
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    transition: background-size 240ms ease, color 200ms ease;
+  }
+
+  .footer__phone:hover {
+    color: var(--color-ink);
+    background-size: 100% 1px;
+  }
+
+  .footer__phone:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .footer__phone {
+      transition: none;
+      background-image: none;
+      text-decoration: underline;
+    }
+  }
+
+  /* ── Footer nav ── */
+  .footer__nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    padding-top: var(--space-xs);
+  }
+
+  @media (min-width: 768px) {
+    .footer__nav {
+      align-items: flex-end;
+      text-align: right;
+    }
+  }
+
+  .footer__link {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-ink-variant);
+    text-decoration: none;
+    display: inline-block;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+
+    position: relative;
+  }
+
+  .footer__link::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--color-ink-variant);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 240ms ease;
+  }
+
+  @media (min-width: 768px) {
+    .footer__link::after {
+      transform-origin: right center;
+    }
+  }
+
+  .footer__link:hover {
+    color: var(--color-ink);
+  }
+
+  .footer__link:hover::after {
+    transform: scaleX(1);
+  }
+
+  .footer__link:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+    border-radius: var(--radius-sm);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .footer__link::after {
+      transition: none;
+      transform: none;
+    }
+    .footer__link:hover::after,
+    .footer__link:focus-visible::after {
+      transform: scaleX(1);
+    }
+  }
+
+  /* ── Copyright strip ── */
+  .footer__copy {
+    max-width: 1280px;
+    margin: 0 auto;
+    border-top: 1px solid var(--color-outline-variant);
+    padding-top: var(--space-lg);
+  }
+
+  .footer__copy-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-variant);
+    display: block;
   }
 </style>

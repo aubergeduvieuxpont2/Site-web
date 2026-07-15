@@ -80,7 +80,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="flex flex-col justify-between gap-6 md:flex-row md:items-end">
       <div class="max-w-2xl">
-        <SectionLabel code="ROOMS" label="4 formules" />
+        <SectionLabel text="4 formules" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -106,7 +106,7 @@
 <section class="border-y border-hairline-2 bg-surface-2">
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="max-w-2xl">
-      <SectionLabel code="STD" label="Inclus partout" />
+      <SectionLabel text="Inclus partout" />
       <h2
         use:reveal={{ y: 20, delay: 0.05 }}
         class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -150,7 +150,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="flex flex-col justify-between gap-6 md:flex-row md:items-end">
       <div class="max-w-2xl">
-        <SectionLabel code="BOOK" label="Comment réserver" />
+        <SectionLabel text="Comment réserver" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"

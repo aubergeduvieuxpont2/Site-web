@@ -3,12 +3,25 @@ import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon } from "@neondatabase/serverless";
+import { hashPassword, verifyPassword } from "./auth/password";
+import {
+  createSession,
+  validateSession,
+  deleteSession,
+  getSessionCookieHeader,
+  getClearSessionCookieHeader,
+  type User,
+} from "./auth/session";
+import { authRateLimiter } from "./auth/middleware";
 
 type Bindings = {
   // Neon Postgres connection string. In dev it is loaded from the repo-root
   // `.dev.env` (via `wrangler dev --env-file`); in production set it with
   // `wrangler secret put DB_CONN`.
   DB_CONN: string;
+  // Internal service binding to the HubSpot gateway Worker.
+  HUBSPOT: Fetcher;
+  ADMIN_EMAIL: string;
 };
 
 type MessageRow = {
@@ -34,16 +47,92 @@ const MessageRequestSchema = z.object({
   body: z.string().min(1, "body must be non-empty"),
 });
 
+const trimToNull = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const t = (v ?? "").trim();
+    return t.length > 0 ? t : null;
+  });
+
 const ReservationRequestSchema = z.object({
-  name: z.string().min(1, "name is required"),
-  email: z.string().min(1, "email is required"),
-  phone: z.string().optional().default(""),
-  room: z.string().optional().default(""),
-  arrive: z.string().optional().default(""),
-  depart: z.string().optional().default(""),
-  people: z.coerce.number().int().min(1).optional().default(1),
-  message: z.string().optional().default(""),
+  name: z.string().trim().min(1, "name is required"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "email is required")
+    .email("valid email is required"),
+  phone: trimToNull,
+  room: trimToNull,
+  arrive: trimToNull,
+  depart: trimToNull,
+  message: trimToNull,
+  people: z.coerce.number().int().min(1).catch(1),
 });
+
+const reservationHook = (result: any, c: any) =>
+  result.success
+    ? undefined
+    : c.json(
+        {
+          error:
+            result.error.issues[0]?.message ?? "Invalid request",
+        },
+        400
+      );
+
+const RegisterSchema = z.object({
+  email: z.string().trim().email("email invalide"),
+  password: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+  name: trimToNull,
+});
+
+const LoginSchema = z.object({
+  email: z.string().trim().min(1, "email requis"),
+  password: z.string().min(1, "mot de passe requis"),
+});
+
+const authHook = (result: any, c: any) =>
+  result.success
+    ? undefined
+    : c.json(
+        {
+          error:
+            result.error.issues[0]?.message ?? "Invalid request",
+        },
+        400
+      );
+
+type OutboxRow = {
+  id: number;
+  kind: string;
+  status: string;
+  attempts: number;
+  dedupe_key: string | null;
+  last_error: string | null;
+  hubspot_id: string | null;
+  next_attempt_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function getSessionToken(cookieHeader: string): string | null {
+  for (const part of cookieHeader.split(";")) {
+    const eq = part.trim().indexOf("=");
+    if (eq === -1) continue;
+    const k = part.trim().slice(0, eq);
+    const v = part.trim().slice(eq + 1);
+    if (k === "session" && v) return v;
+  }
+  return null;
+}
+
+async function getAuthUser(c: Context<{ Bindings: Bindings }>): Promise<User | null> {
+  const token = getSessionToken(c.req.header("Cookie") || "");
+  if (!token) return null;
+  const sql = neon(c.env.DB_CONN);
+  return validateSession(sql, token);
+}
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -132,53 +221,14 @@ app.post(
 app.post(
   "/api/reservations",
   rateLimitMiddleware,
+  zValidator("json", ReservationRequestSchema, reservationHook),
   async (c) => {
-    let data: any;
-    try {
-      data = await c.req.json();
-    } catch {
-      return c.json({ error: "Invalid JSON body" }, 400);
-    }
-
-    // Defensive read and trim required fields
-    const nameRaw = typeof data.name === "string" ? data.name : "";
-    const emailRaw = typeof data.email === "string" ? data.email : "";
-    const name = nameRaw.trim();
-    const email = emailRaw.trim();
-
-    if (!name || !email) {
-      return c.json({ error: "name and email are required" }, 400);
-    }
-
-    // Normalize optional string fields: trim, convert empty to null
-    const normalizeString = (val: any): string | null => {
-      if (typeof val !== "string") return null;
-      const trimmed = val.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    };
-
-    const phone = normalizeString(data.phone);
-    const room = normalizeString(data.room);
-    const arrive = normalizeString(data.arrive);
-    const depart = normalizeString(data.depart);
-    const message = normalizeString(data.message);
-
-    // Coerce people to positive integer, default to 1 if invalid
-    let people = 1;
-    if (typeof data.people === "number") {
-      if (Number.isFinite(data.people)) {
-        const num = Math.floor(data.people);
-        if (num >= 1) people = num;
-      }
-    } else if (typeof data.people === "string") {
-      const num = parseInt(data.people, 10);
-      if (Number.isFinite(num) && num >= 1) people = num;
-    }
+    const data = c.req.valid("json");
 
     const sql = neon(c.env.DB_CONN);
     const rows = (await sql`
       INSERT INTO reservations (name, email, phone, room, arrive, depart, people, message)
-      VALUES (${name}, ${email}, ${phone}, ${room}, ${arrive}, ${depart}, ${people}, ${message})
+      VALUES (${data.name}, ${data.email}, ${data.phone}, ${data.room}, ${data.arrive}, ${data.depart}, ${data.people}, ${data.message})
       RETURNING id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
     `) as ReservationRow[];
 
@@ -187,9 +237,263 @@ app.post(
       return c.json({ error: "Failed to create reservation" }, 500);
     }
 
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          await c.env.HUBSPOT.fetch(
+            new Request("http://hubspot/ops/enqueue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kind: "contact.upsert",
+                payload: { email: data.email, name: data.name },
+              }),
+            })
+          );
+
+          await c.env.HUBSPOT.fetch(
+            new Request("http://hubspot/ops/enqueue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kind: "deal.create",
+                payload: {
+                  contactEmail: data.email,
+                  dealname: `Reservation #${created.id}`,
+                  arrive: data.arrive || undefined,
+                  depart: data.depart || undefined,
+                  room: data.room || undefined,
+                  people: data.people || undefined,
+                  description: data.message || undefined,
+                },
+                dedupeKey: `reservation-${created.id}`,
+              }),
+            })
+          );
+        } catch {
+        }
+      })()
+    );
+
     return c.json({ reservation: created }, 201);
   }
 );
+
+// Auth routes
+app.post(
+  "/api/auth/register",
+  authRateLimiter,
+  zValidator("json", RegisterSchema, authHook),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    try {
+      const passwordHash = await hashPassword(data.password);
+      const rows = (await sql`
+        INSERT INTO users (email, password_hash, name, role)
+        VALUES (${data.email}, ${passwordHash}, ${data.name}, 'guest')
+        RETURNING id, email, name, role
+      `) as User[];
+
+      const user = rows[0];
+      if (!user) {
+        return c.json({ error: "Failed to create user" }, 500);
+      }
+
+      const token = await createSession(sql, user.id);
+      return c.json({ user }, 201, {
+        "Set-Cookie": getSessionCookieHeader(token),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      if (message.includes("duplicate") || message.includes("UNIQUE")) {
+        return c.json({ error: "Un compte existe déjà" }, 409);
+      }
+      return c.json({ error: "Internal server error" }, 500);
+    }
+  }
+);
+
+app.post(
+  "/api/auth/login",
+  authRateLimiter,
+  zValidator("json", LoginSchema, authHook),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      SELECT id, email, password_hash, name, role
+      FROM users
+      WHERE lower(email) = lower(${data.email})
+    `) as (User & { password_hash: string })[];
+
+    const user = rows[0];
+    if (!user || !(await verifyPassword(data.password, user.password_hash))) {
+      return c.json({ error: "Identifiants invalides" }, 401);
+    }
+
+    const token = await createSession(sql, user.id);
+    const { password_hash, ...safeUser } = user;
+    return c.json({ user: safeUser }, 200, {
+      "Set-Cookie": getSessionCookieHeader(token),
+    });
+  }
+);
+
+app.get("/api/auth/me", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return c.json({ user });
+});
+
+app.post("/api/auth/logout", async (c) => {
+  const token = getSessionToken(c.req.header("Cookie") || "");
+  if (token) {
+    const sql = neon(c.env.DB_CONN);
+    await deleteSession(sql, token);
+  }
+  return c.json({ ok: true }, 200, {
+    "Set-Cookie": getClearSessionCookieHeader(),
+  });
+});
+
+// Profile route (requires auth, enriched with HubSpot data)
+app.get("/api/profile", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const reservations = (await sql`
+    SELECT id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
+    FROM reservations
+    WHERE lower(email) = lower(${user.email})
+    ORDER BY created_at DESC
+  `) as ReservationRow[];
+
+  let hubspot: { contact: unknown; deals: unknown[] } = { contact: null, deals: [] };
+  try {
+    const contactRes = await c.env.HUBSPOT.fetch(
+      new Request("http://hubspot/ops/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "contact.get",
+          payload: { email: user.email },
+        }),
+      })
+    );
+    const contactData = (await contactRes.json()) as any;
+    if (contactData.ok && contactData.data) {
+      hubspot.contact = contactData.data;
+    }
+
+    const dealsRes = await c.env.HUBSPOT.fetch(
+      new Request("http://hubspot/ops/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "deal.listByContact",
+          payload: { email: user.email },
+        }),
+      })
+    );
+    const dealsData = (await dealsRes.json()) as any;
+    if (dealsData.ok && Array.isArray(dealsData.data)) {
+      hubspot.deals = dealsData.data;
+    }
+  } catch {
+    // Degrade gracefully if HubSpot is unreachable
+  }
+
+  return c.json({ user, reservations, hubspot });
+});
+
+// Admin routes (require admin role)
+app.get("/api/admin/reservations", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const q = c.req.query("q") || "";
+  const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
+
+  const reservations = (await sql`
+    SELECT id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
+    FROM reservations
+    WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `) as ReservationRow[];
+
+  return c.json({ reservations });
+});
+
+app.get("/api/admin/outbox", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const status = c.req.query("status") || "all";
+
+  let rows: OutboxRow[];
+  if (status === "all") {
+    rows = (await sql`SELECT * FROM outbox ORDER BY updated_at DESC`) as OutboxRow[];
+  } else {
+    rows = (await sql`SELECT * FROM outbox WHERE status = ${status} ORDER BY updated_at DESC`) as OutboxRow[];
+  }
+
+  return c.json({ rows });
+});
+
+app.post("/api/admin/outbox/:id/requeue", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const id = c.req.param("id");
+
+  const rows = (await sql`
+    SELECT * FROM outbox WHERE id = ${id} AND status = 'failed'
+  `) as OutboxRow[];
+
+  if (rows.length === 0) {
+    const existing = (await sql`SELECT * FROM outbox WHERE id = ${id}`) as OutboxRow[];
+    if (existing.length === 0) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    return c.json({ row: existing[0] }, 200);
+  }
+
+  const updated = (await sql`
+    UPDATE outbox
+    SET status = 'pending', attempts = 0, last_error = NULL, next_attempt_at = now()
+    WHERE id = ${id}
+    RETURNING *
+  `) as OutboxRow[];
+
+  return c.json({ row: updated[0] }, 200);
+});
 
 // JSON 404 for unmatched routes.
 app.notFound((c) => {

@@ -109,10 +109,10 @@
     <div use:reveal={{ x: 30, y: 0, delay: 0.2, duration: 1 }} class="lg:col-span-5">
       <div class="group relative">
         <ImagePanel
-          seed="hero-bridge"
-          ratio="4 / 5"
-          code="SITE · 00"
-          label="Le vieux pont · Rivière Sainte-Anne"
+          imgKey="hero-bridge"
+          picsumSeed="hero-bridge"
+          aspectRatio="4 / 5"
+          caption="Le vieux pont · Rivière Sainte-Anne"
           alt="Le vieux pont sur la rivière Sainte-Anne à Saint-Raymond"
         />
         <div
@@ -198,7 +198,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="flex flex-col justify-between gap-6 md:flex-row md:items-end">
       <div class="max-w-2xl">
-        <SectionLabel code="SVC" label="Services & installations" />
+        <SectionLabel text="Services & installations" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -240,7 +240,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="flex flex-col justify-between gap-6 md:flex-row md:items-end">
       <div class="max-w-2xl">
-        <SectionLabel code="ROOMS" label="Hébergement" />
+        <SectionLabel text="Hébergement" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -268,15 +268,15 @@
     <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
       <div use:reveal={{ x: -24, y: 0 }} class="group order-2 lg:order-1">
         <ImagePanel
-          seed={trail.seed}
-          ratio="3 / 2"
-          code={trail.code}
-          label={trail.category}
+          imgKey={trail.seed}
+          picsumSeed={trail.seed}
+          aspectRatio="3 / 2"
+          caption={trail.category}
           alt={trail.name}
         />
       </div>
       <div class="order-1 lg:order-2">
-        <SectionLabel code="TRAIL" label="Le terrain de jeu" />
+        <SectionLabel text="Le terrain de jeu" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.04] tracking-[-0.02em] text-ink md:text-[3.4rem]"

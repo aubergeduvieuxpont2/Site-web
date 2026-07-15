@@ -1,48 +1,51 @@
 <script lang="ts">
-  /** Topographic contour field — the brand's recurring trail motif. */
   let {
+    number,
+    width = "full",
     class: klass = "",
-    stroke = "currentColor",
-    rings = 11,
-    opacity = 1,
   }: {
+    number?: string;
+    width?: "full" | "contained";
     class?: string;
-    stroke?: string;
-    rings?: number;
-    opacity?: number;
   } = $props();
-
-  const items = $derived(Array.from({ length: rings }, (_, i) => i));
 </script>
 
-<svg
-  class={klass}
-  viewBox="0 0 480 480"
-  fill="none"
-  aria-hidden="true"
-  preserveAspectRatio="xMidYMid slice"
-  style="opacity:{opacity}"
->
-  {#each items as i (i)}
-    <ellipse
-      cx="248"
-      cy="238"
-      rx={26 + i * 19}
-      ry={18 + i * 13.5}
-      {stroke}
-      stroke-width="1"
-      transform="rotate({i * 3 - 8} 248 238)"
-    />
-  {/each}
-  {#each items.slice(0, 6) as i (`b${i}`)}
-    <ellipse
-      cx="92"
-      cy="402"
-      rx={14 + i * 16}
-      ry={10 + i * 11}
-      {stroke}
-      stroke-width="1"
-      transform="rotate({-i * 4} 92 402)"
-    />
-  {/each}
-</svg>
+<div class="contour contour--{width} {klass}" data-testid="contour">
+  {#if number}
+    <span class="contour__number" aria-hidden="true" data-testid="contour-number">{number}</span>
+  {/if}
+  <div class="contour__rule" aria-hidden="true" data-testid="contour-rule"></div>
+</div>
+
+<style>
+  .contour {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md, 16px);
+    width: 100%;
+  }
+
+  .contour--contained {
+    max-width: 1100px;
+    margin-inline: auto;
+  }
+
+  .contour__number {
+    font-family: var(--font-mono, "IBM Plex Mono", "Fira Code", ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-variant, #45464d);
+    flex-shrink: 0;
+    user-select: none;
+    position: relative;
+    top: -0.5px;
+  }
+
+  .contour__rule {
+    flex: 1 1 0%;
+    height: 1px;
+    background-color: var(--color-outline-variant, #c6c6cd);
+  }
+</style>

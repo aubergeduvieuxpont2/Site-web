@@ -44,16 +44,16 @@
     <div class="grid items-start gap-12 lg:grid-cols-12 lg:gap-16">
       <div use:reveal={{ x: -24, y: 0 }} class="lg:col-span-5">
         <ImagePanel
-          seed="oldbridge"
-          ratio="4 / 5"
-          code="EST · 1972"
-          label="Le Pont Tessier"
+          imgKey="oldbridge"
+          picsumSeed="oldbridge"
+          aspectRatio="4 / 5"
+          caption="Le Pont Tessier"
           alt="Le vieux pont Tessier sur la rivière Sainte-Anne"
         />
       </div>
 
       <div class="lg:col-span-7">
-        <SectionLabel code="ORIG" label="D'où l'on vient" />
+        <SectionLabel text="D'où l'on vient" />
 
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
@@ -104,7 +104,7 @@
 <section class="border-y border-hairline-2 bg-surface-2">
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="max-w-2xl">
-      <SectionLabel code="ADN" label="Nos principes" />
+      <SectionLabel text="Nos principes" />
       <h2
         use:reveal={{ y: 20, delay: 0.05 }}
         class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.05] tracking-[-0.02em] text-ink md:text-[3.2rem]"
@@ -162,7 +162,7 @@
   <div class="mx-auto max-w-[1280px] px-5 py-20 md:px-10 md:py-28">
     <div class="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
       <div class="order-1">
-        <SectionLabel code="ICI" label="Ce qu'on défend" />
+        <SectionLabel text="Ce qu'on défend" />
         <h2
           use:reveal={{ y: 20, delay: 0.05 }}
           class="mt-5 font-sans text-[2.2rem] font-semibold leading-[1.04] tracking-[-0.02em] text-ink md:text-[3.4rem]"
@@ -195,10 +195,10 @@
 
       <div use:reveal={{ x: 24, y: 0 }} class="order-2">
         <ImagePanel
-          seed="village"
-          ratio="3 / 2"
-          code="LOC · 03"
-          label="Saint-Raymond · Portneuf"
+          imgKey="village"
+          picsumSeed="village"
+          aspectRatio="3 / 2"
+          caption="Saint-Raymond · Portneuf"
           alt="Le village de Saint-Raymond le long de la rivière Sainte-Anne"
         />
       </div>

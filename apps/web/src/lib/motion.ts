@@ -4,7 +4,7 @@ const prefersReduced =
   typeof window !== "undefined" &&
   window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-const EASE = [0.16, 1, 0.3, 1] as const;
+const EASE = [0.33, 1, 0.68, 1] as const;
 
 type RevealParams = {
   y?: number;
@@ -19,7 +19,7 @@ type RevealParams = {
  * Usage: <div use:reveal={{ y: 28, delay: 0.1 }}>
  */
 export function reveal(node: HTMLElement, params: RevealParams = {}) {
-  const { y = 24, x = 0, delay = 0, duration = 0.8, amount = 0.1 } = params;
+  const { y = 16, x = 0, delay = 0, duration = 0.6, amount = 0.1 } = params;
 
   if (prefersReduced) {
     node.style.opacity = "1";
@@ -56,8 +56,8 @@ type StaggerParams = {
  */
 export function revealStagger(node: HTMLElement, params: StaggerParams = {}) {
   const {
-    y = 22,
-    duration = 0.7,
+    y = 16,
+    duration = 0.6,
     each = 0.08,
     amount = 0.1,
     selector = ":scope > *",

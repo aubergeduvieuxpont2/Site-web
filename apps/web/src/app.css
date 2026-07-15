@@ -1,44 +1,76 @@
 @import "tailwindcss";
 
 /* ============================================================
-   L'Auberge du Vieux Pont — "Industrial Hospitality"
-   Technical-manual precision meets a warm rural refuge.
-   Palette + type from the project's Industrial Light system.
+   L'Auberge du Vieux Pont — "Industrial Zen"
+   Technical-manual precision, cool zen surfaces.
+   Palette + type from design/Design_2/industrial_zen/DESIGN.md.
    ============================================================ */
 
 @theme {
-  /* Warm cream canvas */
-  --color-surface: #fbf9f8;
-  --color-surface-2: #f5f3f3;
-  --color-surface-3: #efeded;
-  --color-surface-4: #e9e6e4;
+  /* Industrial Zen — cool light surfaces
+     (authoritative: design/Design_2/industrial_zen/DESIGN.md) */
+  --color-surface: #f7f9fb;
+  --color-surface-2: #f2f4f6;
+  --color-surface-3: #eceef0;
+  --color-surface-4: #e6e8ea;
 
   /* Ink */
-  --color-ink: #1b1c1c;
-  --color-ink-soft: #5b403b; /* warm brown */
-  --color-ink-mute: #8a807c;
+  --color-ink: #191c1e;
+  --color-ink-soft: #45464d;
+  --color-ink-mute: #76777d;
+  --color-ink-variant: #45464d;
 
-  /* Terracotta / "safety orange" accent */
-  --color-terracotta: #b32002;
-  --color-terracotta-bright: #d73b1c;
-  --color-ember: #ffb4a4;
-  --color-ember-pale: #ffdad3;
+  /* Zen orange accent (legacy names kept for existing utilities) */
+  --color-terracotta: #9d4300;
+  --color-terracotta-bright: #fd761a;
+  --color-ember: #ffb690;
+  --color-ember-pale: #ffdbca;
 
   /* Structure */
-  --color-outline: #8f7069;
-  --color-hairline: #e4beb6;
-  --color-hairline-2: #ddd6d2;
+  --color-outline: #76777d;
+  --color-outline-variant: #c6c6cd;
+  --color-hairline: #c6c6cd;
+  --color-hairline-2: #e0e3e5;
 
-  /* Dark mode surfaces (charcoal sections) */
-  --color-charcoal: #211f1e;
-  --color-charcoal-2: #2c2927;
-  --color-on-charcoal: #f2efed;
-  --color-on-charcoal-soft: #c7b8b2;
+  /* Dark sections */
+  --color-charcoal: #2d3133;
+  --color-charcoal-2: #363b3d;
+  --color-on-charcoal: #eff1f3;
+  --color-on-charcoal-soft: #c6c6cd;
+
+  /* Material-style Zen tokens referenced by page/component styles */
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-secondary: #9d4300;
+  --color-secondary-container: #fd761a;
+  --color-on-secondary-container: #5c2400;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f2f4f6;
+  --color-surface-container: #eceef0;
+  --color-surface-container-high: #e6e8ea;
+  --color-surface-container-highest: #e0e3e5;
+  --color-inverse-surface: #2d3133;
+  --color-inverse-on-surface: #eff1f3;
+  --color-error: #ba1a1a;
 
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
   --font-serif: "IBM Plex Serif", ui-serif, Georgia, serif;
 
+  /* Spacing scale (referenced widely as var(--space-*)) */
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1.25rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4.5rem;
+  --space-3xl: 6rem;
+  --space-4xl: 8rem;
+
+  /* Radii */
+  --radius: 0.25rem;
+  --radius-sm: 0.125rem;
+  --radius-lg: 0.5rem;
   --radius-blueprint: 0.25rem;
 
   --ease-industrial: cubic-bezier(0.16, 1, 0.3, 1);

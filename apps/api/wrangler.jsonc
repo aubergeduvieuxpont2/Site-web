@@ -29,4 +29,16 @@
   //     (the `dev` script passes `--env-file ../../.dev.env`).
   //   - Production: set it as a secret with `wrangler secret put DB_CONN`.
   // No binding block is needed — DB_CONN is a plain var/secret on `c.env`.
+
+  // ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
+  // Set to the real admin address in production; leave blank to skip seeding.
+  "vars": {
+    "ADMIN_EMAIL": "ychasse01@gmail.com"
+  },
+
+  // Internal service binding to the HubSpot gateway Worker.
+  // The gateway has no public route; the API reaches it exclusively via this binding.
+  "services": [
+    { "binding": "HUBSPOT", "service": "site-web-hubspot" }
+  ]
 }

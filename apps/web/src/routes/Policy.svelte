@@ -66,7 +66,7 @@
 
         <!-- ===== A · Conditions de séjour ===== -->
         <div id="sejour" class="scroll-mt-28 mt-10">
-          <SectionLabel code="A" label="Conditions de séjour" />
+          <SectionLabel text="Conditions de séjour" />
           <h2
             use:reveal={{ y: 20, delay: 0.05 }}
             class="mt-5 max-w-[65ch] font-sans text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.02em] text-ink md:text-[2.6rem]"
@@ -114,7 +114,7 @@
 
         <!-- ===== B · Mentions légales ===== -->
         <div id="mentions" class="scroll-mt-28 mt-16 border-t border-hairline-2 pt-16">
-          <SectionLabel code="B" label="Mentions légales" />
+          <SectionLabel text="Mentions légales" />
           <h2
             use:reveal={{ y: 20, delay: 0.05 }}
             class="mt-5 max-w-[65ch] font-sans text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.02em] text-ink md:text-[2.6rem]"
@@ -168,7 +168,7 @@
           id="confidentialite"
           class="scroll-mt-28 mt-16 border-t border-hairline-2 pt-16"
         >
-          <SectionLabel code="C" label="Politique de confidentialité" />
+          <SectionLabel text="Politique de confidentialité" />
           <h2
             use:reveal={{ y: 20, delay: 0.05 }}
             class="mt-5 max-w-[65ch] font-sans text-[1.9rem] font-semibold leading-[1.08] tracking-[-0.02em] text-ink md:text-[2.6rem]"

@@ -1,37 +1,84 @@
 <script lang="ts">
-  /** Brand glyph: a stylized old stone bridge (le vieux pont) arch + river. */
-  let { class: klass = "" }: { class?: string } = $props();
+  type Size = 'sm' | 'md' | 'lg';
+  type Variant = 'dark' | 'light';
+
+  let {
+    size = 'md',
+    variant = 'dark',
+    class: klass = '',
+  }: {
+    size?: Size;
+    variant?: Variant;
+    class?: string;
+  } = $props();
+
+  const wordmarkClasses = $derived(`wordmark wordmark--${size} wordmark--${variant} ${klass}`.trim());
 </script>
 
 <svg
-  class={klass}
-  viewBox="0 0 48 48"
-  fill="none"
-  aria-hidden="true"
+  class={wordmarkClasses}
+  viewBox="0 0 200 50"
   xmlns="http://www.w3.org/2000/svg"
+  role="img"
+  aria-label="Auberge du Vieux Pont"
+  data-testid="wordmark"
+  fill="currentColor"
 >
-  <rect
-    x="1.5"
-    y="1.5"
-    width="45"
-    height="45"
-    rx="4"
-    stroke="currentColor"
-    stroke-width="1.5"
-    opacity="0.25"
-  />
-  <!-- deck -->
-  <path d="M6 19h36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-  <!-- main arch -->
-  <path
-    d="M9 30a15 9 0 0 1 30 0"
-    stroke="currentColor"
-    stroke-width="2.5"
-    stroke-linecap="round"
-  />
-  <!-- piers -->
-  <path d="M9 19v11M39 19v11M24 19v4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-  <!-- water lines -->
-  <path d="M7 37h12M21 37h6M29 37h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.55" />
-  <path d="M7 41h8M19 41h10M33 41h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3" />
+  <!-- Line 1: industrial stamp — SemiBold tracked caps -->
+  <text
+    x="0"
+    y="21"
+    font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif"
+    font-weight="600"
+    font-size="18"
+    letter-spacing="0.12em"
+    fill="currentColor"
+  >AUBERGE</text>
+
+  <!-- Blueprint hairline separator -->
+  <rect x="0" y="28" width="200" height="0.75" fill="currentColor" opacity="0.3" />
+
+  <!-- Line 2: zen breath — Light weight, subtitle cadence -->
+  <text
+    x="0"
+    y="45"
+    font-family="'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif"
+    font-weight="300"
+    font-size="13"
+    letter-spacing="0.10em"
+    fill="currentColor"
+  >DU VIEUX PONT</text>
 </svg>
+
+<style>
+  :global(.wordmark) {
+    display: block;
+    flex-shrink: 0;
+    color: var(--color-primary);
+  }
+
+  :global(.wordmark--light) {
+    color: var(--color-on-primary);
+  }
+
+  :global(.wordmark--dark) {
+    color: var(--color-primary);
+  }
+
+  :global(.wordmark--sm) {
+    width: 112px;
+  }
+
+  :global(.wordmark--md) {
+    width: 148px;
+  }
+
+  :global(.wordmark--lg) {
+    width: 200px;
+  }
+
+  :global(.wordmark text) {
+    dominant-baseline: auto;
+    text-rendering: optimizeLegibility;
+  }
+</style>
