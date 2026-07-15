@@ -221,7 +221,7 @@ export type Attraction = {
 export const ATTRACTIONS: Attraction[] = [
   {
     code: "T-01",
-    name: "Épicerie & dépanneur",
+    name: "Épicerie et dépanneur",
     category: "Services",
     distance: "5 min à pied",
     grade: "Services",
@@ -248,7 +248,7 @@ export const ATTRACTIONS: Attraction[] = [
   },
   {
     code: "T-04",
-    name: "Restaurants & casse-croûte",
+    name: "Restaurants et casse-croûte",
     category: "Services",
     distance: "Divers",
     grade: "Services",
@@ -257,7 +257,7 @@ export const ATTRACTIONS: Attraction[] = [
   },
   {
     code: "T-05",
-    name: "Clinique & pharmacie",
+    name: "Clinique et pharmacie",
     category: "Services",
     distance: "10 min",
     grade: "Services",
