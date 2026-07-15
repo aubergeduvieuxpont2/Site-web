@@ -28,7 +28,7 @@ export async function executeNoteCreate(
 
   if (payload.dealDedupeKey) {
     try {
-      const dedupeProperty = "hs_dedup_reservation";
+      const dedupeProperty = "dedupe_key";
       const dealSearchResult = (await hubspotFetch(
         env,
         `/crm/v3/objects/deals/search`,
