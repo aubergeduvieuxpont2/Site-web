@@ -6,6 +6,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    environmentOptions: {
+      jsdom: {
+        resources: "usable",
+      },
+    },
+    setupFiles: ["./vitest.setup.ts"],
     testTimeout: 10000,
+  },
+  resolve: {
+    conditions: ["browser"],
   },
 });

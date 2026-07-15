@@ -8,7 +8,7 @@
   const values = [
     { code: '01', title: 'Honnête', text: "On dit les choses comme elles sont. Pas de promesses gonflées, pas de frais cachés. Le prix affiché, c'est le prix payé." },
     { code: '02', title: 'Robuste', text: "Bâti pour durer. Planchers de béton, casiers d'acier, murs qui encaissent les bottes pleines de boue sans broncher." },
-    { code: '03', title: 'Accessible', text: "Du dortoir à 39 $ à la chambre privée, il y a une place pour chaque budget. Le repos n'est pas un luxe réservé." },
+    { code: '03', title: 'Accessible', text: "Un tarif unique pour tous. Confort et repos pour chaque travailleur, peu importe le budget. Le repos n'est pas un luxe réservé." },
     { code: '04', title: 'Ancré', text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les chantiers et le monde qui y travaille." },
   ];
 </script>
@@ -81,7 +81,7 @@
             </p>
             <p use:reveal={{ y: 18, delay: 0.20 }}>
               Avec les années, le monde a changé de bottes. La foresterie s'est mécanisée et
-              Hydro-Québec a développé ses chantiers partout en Portneuf. On a ajouté un séchage
+              les chantiers du secteur hydroélectrique se sont développés partout en Portneuf. On a ajouté un séchage
               pour vêtements de travail, des bornes de recharge pour outils et radios, un local
               sécurisé renforcé. Mais l'esprit, lui, n'a pas bougé d'un pouce.
             </p>
@@ -203,7 +203,7 @@
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
               On n'est pas une chaîne. On est une auberge de Portneuf, tenue par du monde
-              d'ici, à deux pas des chantiers forestiers et des lignes Hydro-Québec. La rivière
+              d'ici, à deux pas des chantiers forestiers et des lignes du réseau hydroélectrique. La rivière
               Sainte-Anne coule sous nos fenêtres&nbsp;; les principaux sites de travail sont
               à moins de 30 minutes.
             </p>

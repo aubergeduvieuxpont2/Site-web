@@ -1,13 +1,11 @@
 <script lang="ts">
-  import { page } from "$app/stores";
   import { reveal } from "$lib/motion";
   import { createReservation, isError } from "$lib/api";
   import { SITE } from "$lib/content";
+  import { settings } from "$lib/settings.svelte";
+  import { DEFAULTS } from "$lib/content";
   import Button from "$lib/components/Button.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
-
-  // Pre-fill the chambre from a `?chambre=` query param (linked from RoomCard).
-  const chambreParam = $derived($page.url.searchParams.get("chambre") ?? "");
 
   let form = $state({
     name: "",
@@ -16,16 +14,6 @@
     checkOut: "",
     guests: 1,
     message: "",
-  });
-
-  // Seed the message with the requested room slug when arriving from a card.
-  // Guarded so it never clobbers what the visitor has already typed.
-  let seeded = $state(false);
-  $effect(() => {
-    if (chambreParam && !seeded && !form.message) {
-      form.message = `Chambre souhaitée : ${chambreParam}`;
-      seeded = true;
-    }
   });
 
   type Status = "idle" | "sending" | "sent" | "error";
@@ -236,7 +224,7 @@
                   id="field-message"
                   rows="4"
                   data-testid="input-message"
-                  placeholder="Demandes spéciales, chambre souhaitée, horaire…"
+                  placeholder="Demandes spéciales, horaires, besoins particuliers…"
                   bind:value={form.message}
                 ></textarea>
               </div>
@@ -295,7 +283,7 @@
 
         <div class="page-contact__info-section">
           <span class="page-contact__tech-label">Courriel</span>
-          <a class="page-contact__email-link" href="mailto:{SITE.email}">{SITE.email}</a>
+          <a class="page-contact__email-link" href="mailto:{settings.contactEmail || DEFAULTS.contactEmail}">{settings.contactEmail || DEFAULTS.contactEmail}</a>
         </div>
 
         <hr class="page-contact__divider" aria-hidden="true" />

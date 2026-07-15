@@ -13,6 +13,12 @@ import {
   type User,
 } from "./auth/session";
 import { authRateLimiter } from "./auth/middleware";
+import {
+  SettingsUpdateSchema,
+  settingsHook,
+  rowsToAdminSettings,
+  toPublicSettings,
+} from "./settings";
 
 type Bindings = {
   // Neon Postgres connection string. In dev it is loaded from the repo-root
@@ -113,6 +119,12 @@ type OutboxRow = {
   hubspot_id: string | null;
   next_attempt_at: string;
   created_at: string;
+  updated_at: string;
+};
+
+type SettingsRow = {
+  key: string;
+  value: string;
   updated_at: string;
 };
 
@@ -494,6 +506,65 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
 
   return c.json({ row: updated[0] }, 200);
 });
+
+// Public settings endpoint
+app.get("/api/settings", async (c) => {
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+
+  const adminSettings = rowsToAdminSettings(rows);
+  const publicSettings = toPublicSettings(adminSettings);
+
+  return c.json(publicSettings);
+});
+
+// Admin settings read endpoint
+app.get("/api/admin/settings", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+
+  const adminSettings = rowsToAdminSettings(rows);
+
+  return c.json(adminSettings);
+});
+
+// Admin settings update endpoint
+app.post(
+  "/api/admin/settings",
+  zValidator("json", SettingsUpdateSchema, settingsHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    await Promise.all([
+      sql`INSERT INTO settings (key, value) VALUES ('nightly_price', ${data.nightlyPrice.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('contact_email', ${data.contactEmail}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('marketing_room_count', ${data.marketingRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${data.assignableRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    ]);
+
+    const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+    const adminSettings = rowsToAdminSettings(rows);
+
+    return c.json(adminSettings);
+  }
+);
 
 // JSON 404 for unmatched routes.
 app.notFound((c) => {

@@ -89,6 +89,9 @@
     <span class="footer__copy-text" data-testid="footer-copy-text">
       © {new Date().getFullYear()} {SITE.name}. Tous droits réservés.
     </span>
+    <span class="footer__citq" data-testid="footer-citq">
+      CITQ #{SITE.citq}
+    </span>
   </div>
 </footer>
 
@@ -275,6 +278,16 @@
   }
 
   .footer__copy-text {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-variant);
+    display: block;
+  }
+
+  .footer__citq {
     font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 400;

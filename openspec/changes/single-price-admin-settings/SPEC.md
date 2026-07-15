@@ -321,3 +321,186 @@ the 89 $ default (so the next contributor knows where these business facts live)
     (web + api) all pass.
 16. **Idempotent migration:** applying `0007_settings.sql` twice succeeds with no error
     and leaves exactly one row per settings key.
+
+## Frontend Design
+
+### Components
+
+#### `RoomCard.svelte`
+**Props (after change):**
+```ts
+room: {
+  name: string;
+  description: string;
+  imgKey: string;
+  picsumSeed: number;
+  // slug and pricePerNight removed
+}
+```
+- `contactHref` is the compile-time constant `"/contact"` — no derived value, no `?chambre=` query, no slug dependency.
+- `priceLabel` is derived from the shared settings store: `` `${settings.nightlyPrice} $/nuit` `` — not from the room prop.
+- All existing `data-testid` attributes are preserved: `room-card`, `room-card-price`, `room-card-name`, `room-card-description`, `room-card-cta`.
+- The `<Button variant="secondary" href="/contact">Réserver</Button>` CTA does not carry any query string.
+- The price element `<span class="room-card__price" data-testid="room-card-price">` continues to use `font-family: var(--font-mono)`, 11px, uppercase, `var(--color-ink-variant)`.
+
+#### `Footer.svelte`
+- Adds a `<span class="footer__citq" data-testid="footer-citq">` element inside the existing `.footer__copy` div, alongside the copyright text.
+- Content: the static string `CITQ #304542` — not reactive, not settings-driven.
+- Reads `SITE.citq` from `content.ts` to compose the label: `CITQ #{SITE.citq}`.
+- Styled to match `.footer__copy-text`: `font-family: var(--font-mono)`, `font-size: 11px`, `letter-spacing: 0.12em`, `text-transform: uppercase`, `color: var(--color-ink-variant)`.
+- Separator between copyright and CITQ may be `·` inline or a line-break — either is acceptable provided both are visible without scrolling.
+- No interactive element; `data-testid="footer-citq"` on the containing `<span>`.
+
+#### `settings.svelte.ts` (new reactive store)
+- Exports `settings` as a `$state` object: `{ nightlyPrice: number, contactEmail: string, marketingRoomCount: number }`.
+- Seeded from `DEFAULTS` in `content.ts` so the store is never empty even before the API responds.
+- `mergeSettings(current, incoming)` is a pure reducer (no side effects, unit-testable without DOM).
+- `loadSettings()` is async, called once in `+layout.svelte` inside `onMount`. Network errors leave the store unchanged (defaults stay).
+
+#### Admin "Paramètres" tab panel (`admin/+page.svelte`)
+New tab added to the existing ARIA tabs widget:
+- **Tab button**: `role="tab"`, `id="tab-settings"`, `aria-controls="panel-settings"`, `data-testid="tab-settings"`, label `Paramètres`. `tabindex` roving: 0 when active, -1 otherwise.
+- **Tab panel**: `role="tabpanel"`, `id="panel-settings"`, `aria-labelledby="tab-settings"`, `data-testid="panel-settings"`, `hidden` when not active.
+- Lazy-loaded on first activation: calls `adminGetSettings()` and populates four inputs. Shows a loading spinner (matching `.page-admin__spinner`) while fetching; renders `.page-admin__error-banner` on failure.
+- Four labelled inputs (each label uses `.page-admin__field-label` styling — font-mono, 11px, uppercase):
+
+  | `data-testid` | `type` | Label text | Validation |
+  |---|---|---|---|
+  | `input-nightly-price` | `number` | `Prix par nuit ($)` | positive integer > 0 |
+  | `input-contact-email` | `email` | `Courriel de contact` | valid email pattern |
+  | `input-marketing-rooms` | `number` | `Chambres affichées (marketing)` | positive integer > 0 |
+  | `input-assignable-rooms` | `number` | `Capacité assignable (opérations)` | positive integer > 0 |
+
+- Input styling reuses `.page-admin__search-input` tokens: `height: 44px`, `font-size: 14px`, `border: 1px solid var(--color-outline-variant)`, `border-radius: var(--radius)`, focus ring `border-color: var(--color-primary)` + `box-shadow: 0 0 0 1px var(--color-primary)`.
+- Save button `data-testid="settings-save-btn"`: reuses `.page-admin__requeue-btn` appearance (`.page-admin__requeue-btn` base class or equivalent). Disabled while saving; shows `…` while in-flight.
+- On success: inputs reflect persisted values; a success notice is shown inline (e.g. `role="status"`, text "Paramètres enregistrés." using `var(--color-ink-variant)`, mono 11px).
+- On API error: renders `.page-admin__error-banner` with `role="alert"`.
+- Client-side guard fires on save; field-level errors surfaced via `role="alert"` spans beneath each invalid input (matching the contact-page pattern).
+- The tab keyboard order array extends to `["reservations", "outbox", "settings"]`; `ArrowLeft`/`ArrowRight`/`Home`/`End` cycle through all three.
+
+#### `contact/+page.svelte` (modifications)
+- Removes `chambreParam`, `seeded`, and the `$effect` that seeds the message field.
+- Textarea placeholder changes from `"Demandes spéciales, chambre souhaitée, horaire…"` to `"Demandes spéciales, horaires, besoins particuliers…"` (no "chambre souhaitée").
+- The info column's email anchor reads `settings.contactEmail` for both the visible text and the `href="mailto:…"` attribute. Falls back to `DEFAULTS.contactEmail` when the store has not been populated.
+- Existing `data-testid`s (`contact-form`, `input-message`, etc.) are unchanged.
+
+#### `+page.svelte` — Accueil (modifications)
+- Hero sub-heading: `"foresterie et Hydro-Québec"` → `"foresterie et secteur hydroélectrique"` (or equivalent generic phrasing — no "Hydro-Québec").
+- Stats strip: the rooms-count stat renders `settings.marketingRoomCount` as its numeric value (default `12`) with suffix `" chambres"`. The surrounding `data-testid="stat-item"` structure is unchanged; four `stat-item`s total.
+- Storage stat label reworded to remove "stockage surveillé" — e.g. `"stockage sécurisé"`.
+
+#### `le-site/+page.svelte` (modifications)
+- Section heading: `"Nos chambres et dortoirs"` → `"Nos chambres"`.
+- Intro paragraph reworked to remove dortoir/couchette references; reflects that rooms are assigned at arrival.
+- `"lignes Hydro-Québec de Portneuf"` → `"lignes du réseau hydroélectrique de Portneuf"`.
+
+#### `a-propos/+page.svelte` (modifications)
+- "Accessible" value card: removes `"Du dortoir à 39 $…"` text; replaces with copy emphasizing single flat rate and comfort-for-every-worker.
+- Both "Hydro-Québec" mentions in body paragraphs replaced with generic equivalents (`"le secteur hydroélectrique"`, `"des lignes du réseau hydroélectrique"`).
+
+### Layout
+
+#### Global shell (`+layout.svelte`)
+- Unchanged: fixed `<Nav>` at top, `<slot />`, `<Footer>` at bottom.
+- `onMount` calls `loadSettings()` once — silent failure, defaults intact.
+
+#### Stats strip (`+page.svelte` Accueil)
+- 4-column grid at ≥ 1280 px, 2-column at ≤ 680 px, 1-column at ≤ 400 px.
+- Structure unchanged; only the rooms stat value source changes.
+
+#### Admin tab panel layout
+- Settings panel inner: `max-width: 1280px`, `margin-inline: auto`, `padding: var(--space-xl) var(--space-md) var(--space-3xl)`, `display: flex; flex-direction: column; gap: var(--space-lg)`.
+- Inputs laid out in a stacked column (single-column form). On ≥ 768 px, the four inputs may use a 2-column grid `grid-template-columns: 1fr 1fr` for the numeric fields, with email spanning full width.
+- Save button is below the last field, left-aligned (matches the contact form submit area pattern).
+
+#### Footer CITQ placement
+- Within `.footer__copy` — the existing copyright strip at the bottom of the footer.
+- CITQ text follows the copyright text, separated by a `·` spacer or by placing them on separate lines when the viewport is narrow (≤ 480 px).
+- `.footer__copy` is `max-width: 1280px; margin: 0 auto; border-top: 1px solid var(--color-outline-variant); padding-top: var(--space-lg)`.
+
+### Visual Style
+
+#### Colour palette (all via existing CSS custom properties)
+| Token | Approximate hex | Usage |
+|---|---|---|
+| `--color-ink` | `#191c1e` | Primary text, headings, active tab, stat numbers |
+| `--color-ink-variant` | `#45464d` | Secondary text, labels, addresses, CITQ line |
+| `--color-surface` | `#ffffff` | Page background, admin panel background |
+| `--color-surface-container-lowest` | `#ffffff` (slightly off) | Form card background, input backgrounds |
+| `--color-surface-container-low` | near `#f4f4f7` | Table header, success CTA block |
+| `--color-outline-variant` | `#c6c6cd` | Borders on cards, inputs, table rows, footer rule |
+| `--color-outline` | `#76777d` | Input placeholder, hover border |
+| `--color-primary` | (blue-ish) | Focus ring, active input border |
+| `--color-secondary` | (teal-ish) | Required-field asterisk, amenity code labels |
+| `--color-secondary-container` | (muted teal) | Active tab underline, save button background |
+| `--color-on-secondary-container` | (dark) | Save button text |
+| `--color-error` | (red) | Error banners, field error text |
+| `--color-inverse-surface` | `#2e3133` | CTA strip background, closing CTA panel |
+| `--color-inverse-on-surface` | `#f0f0f4` | Text on dark CTA strip |
+
+No new hex values are introduced; all colour decisions reference existing CSS custom properties.
+
+#### Typography
+| Scale | Family | Size | Weight | Usage |
+|---|---|---|---|---|
+| Hero heading | `var(--font-sans)` | `clamp(48px, 8vw, 80px)` | 300 | Page hero H1 |
+| Section heading | `var(--font-sans)` | `clamp(30px, 4vw, 48px)` | 300 | H2 sections |
+| Admin title | `var(--font-sans)` | `clamp(32px, 5vw, 48px)` | 300 | Admin page H1 |
+| Body | `var(--font-sans)` | 16px | 400 | Paragraph copy, input values |
+| Small body | `var(--font-sans)` | 14px | 400 | Table cells, form descriptions |
+| Mono label | `var(--font-mono)` | 11px | 400 | Uppercase labels, CITQ line, copyright |
+| Mono nav/tab | `var(--font-sans)` | 13px | 600 | Tab button labels |
+| Price label | `var(--font-mono)` | 11px | 400 | `room-card-price` (flat 89 $/nuit) |
+| Admin input | `var(--font-sans)` | 14px | 400 | Settings inputs |
+
+- `--font-sans`: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif
+- `--font-mono`: "IBM Plex Mono", "Fira Code", ui-monospace, monospace
+
+#### Spacing scale
+`--space-xs` 4 px · `--space-sm` 8 px · `--space-md` 16 px · `--space-lg` 24 px · `--space-xl` 32 px · `--space-2xl` 48 px · `--space-3xl` 64 px
+
+#### Motion
+- Card hover: `transform: translateY(-4px)` + `box-shadow` at 320 ms `cubic-bezier(0.33, 1, 0.68, 1)`.
+- Input focus: border + box-shadow at 150–160 ms ease.
+- Tab underline: `scaleX` at 200 ms `cubic-bezier(0.33, 1, 0.68, 1)`.
+- Spinner: 700 ms linear rotation.
+- `@media (prefers-reduced-motion: reduce)`: all transitions removed; spinners become static opacity-reduced indicators.
+
+### Accessibility
+
+#### Keyboard navigation
+- **ARIA tabs** (admin panel): `role="tablist"` on the container; each tab is `role="tab"` with `aria-selected` and `aria-controls`; each panel is `role="tabpanel"` with `aria-labelledby`. Arrow keys (`ArrowLeft`/`ArrowRight`/`Home`/`End`) cycle focus among tabs (roving `tabindex`). Focus is programmatically moved to the activated tab button.
+- **Minimum touch target**: all interactive elements have `min-height: 44px` (inputs, buttons, footer links).
+- **Focus ring**: every interactive element uses `focus-visible` with `outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: var(--radius-sm)`. Never suppressed with `outline: none` without a visible replacement.
+- **Live regions**: loading counts use `aria-live="polite"`; error banners use `role="alert"` (assertive).
+- **Labelling**: every form input has an associated `<label for="…">`. Hidden columns use `<span class="sr-only">`. Address elements use `<address>` with `font-style: normal`.
+- **Screen reader**: `data-testid` attributes are on semantic elements (not divs when a more meaningful element is available). `aria-hidden="true"` on decorative spans (suffixes, code badges, scroll indicator).
+
+#### ARIA roles used by new/changed elements
+| Element | Role | Notes |
+|---|---|---|
+| Admin tab button | `role="tab"` | `aria-selected`, `aria-controls` |
+| Admin panel div | `role="tabpanel"` | `aria-labelledby` |
+| Settings error | `role="alert"` | Injected on save failure |
+| Settings success | `role="status"` | `aria-live="polite"` inline confirmation |
+| CITQ `<span>` | (implicit `generic`) | `data-testid="footer-citq"` |
+| Admin table region | `role="region"` | `aria-label`, focusable (`tabindex="0"`) for keyboard scroll |
+
+#### Contrast
+- All text must meet **WCAG 2.1 AA**: ≥ 4.5 : 1 for normal text, ≥ 3 : 1 for large text (≥ 18 pt or ≥ 14 pt bold).
+- `--color-ink-variant` (#45464d) on `--color-surface` (#fff) → ≈ 7.9 : 1 — passes.
+- Error text (`--color-error`) on white surface → must remain ≥ 4.5 : 1 (existing colours already satisfy this).
+- White text on `--color-error` badge background → must remain ≥ 4.5 : 1.
+- CITQ line uses `--color-ink-variant` on `--color-surface` — same pass as above.
+
+### Security Constraints
+
+- **Never use `element.innerHTML`** to render any user-supplied or API-supplied text in Svelte templates. All dynamic values (email address, room count, nightly price) must flow through Svelte's template `{expression}` syntax, which auto-escapes HTML entities.
+- The contact email rendered in the info column (`settings.contactEmail`) is user-controlled server-side data. It must be rendered as `textContent` (Svelte `{settings.contactEmail}`) and the `mailto:` href must be constructed as `` `mailto:${settings.contactEmail}` `` — never via `innerHTML` or `document.write`.
+- The `mailto:` href must not be constructed by concatenating unsanitised input directly into anchor `href` if the value could include `javascript:`. In Svelte, binding `` href="mailto:{settings.contactEmail}" `` is safe because Svelte's attribute binding does not permit protocol injection for `mailto:` schemes; the email is validated server-side as a valid email (Zod `.email()`) before it can be stored.
+- Settings form inputs (`input-nightly-price`, `input-contact-email`, etc.) are bound with Svelte's `bind:value` — never read back via `innerHTML`.
+- Admin panel error messages from the API are rendered via `{errorMessage}` (textContent), not injected as HTML.
+- No `eval()`, `new Function()`, or `setTimeout(string)` patterns anywhere in the settings or admin flows.
+- The `SITE.citq` value is a compile-time constant from `content.ts`; it is not configurable and carries no XSS risk, but it must still be rendered via Svelte's template syntax.
+
+<!-- end frontend design -->
