@@ -536,11 +536,12 @@ app.get("/api/admin/settings", async (c) => {
   return c.json(adminSettings);
 });
 
-// Admin settings update endpoint
+// Admin settings update endpoint.
+// Auth runs BEFORE body validation so unauthenticated callers get a 401
+// instead of schema details in a 400.
 app.post(
   "/api/admin/settings",
-  zValidator("json", SettingsUpdateSchema, settingsHook),
-  async (c) => {
+  async (c, next) => {
     const user = await getAuthUser(c);
     if (!user) {
       return c.json({ error: "Unauthorized" }, 401);
@@ -548,7 +549,10 @@ app.post(
     if (user.role !== "admin") {
       return c.json({ error: "Forbidden" }, 403);
     }
-
+    await next();
+  },
+  zValidator("json", SettingsUpdateSchema, settingsHook),
+  async (c) => {
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 

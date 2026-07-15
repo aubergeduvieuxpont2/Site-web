@@ -3,8 +3,10 @@ import { render } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import Button from "../Button.svelte";
 
-// @ts-ignore - testing-library/svelte type mismatch with Svelte 5 snippets
-const textSnippet = (text: string) => createRawSnippet(() => text);
+// createRawSnippet expects the factory to return { render: () => html },
+// where the html has a single root element (same pattern as layout-shell.test.ts).
+const textSnippet = (text: string) =>
+  createRawSnippet(() => ({ render: () => `<span>${text}</span>` }));
 
 describe("Button", () => {
   describe("rendering as button element", () => {
@@ -249,11 +251,31 @@ describe("Button", () => {
   });
 
   describe("touch target size", () => {
-    it("has minimum height of 44px (from CSS custom properties)", () => {
-      const { container } = render(Button, { props: { children: textSnippet("Test") } });
-      const button = container.querySelector("button");
-      const styles = window.getComputedStyle(button!);
-      expect(styles.minHeight).toBe("44px");
+    it("has minimum height of 44px (from CSS custom properties)", async () => {
+      // vitest/jsdom never receives the component's compiled <style> sheet,
+      // and jsdom's getComputedStyle does not substitute var() references.
+      // To keep asserting the real behavior (min-height of 44px sourced from
+      // the CSS custom property), inject the component's own base `.button`
+      // rules into the document and assert through jsdom's actual cascade:
+      // the custom property computes to 44px and min-height is bound to it.
+      const componentSource: string = (await import("../Button.svelte?raw")).default;
+      const baseButtonRules = [...componentSource.matchAll(/:global\(\.button\)\s*\{([^}]*)\}/g)]
+        .map((m) => `.button { ${m[1]} }`)
+        .join("\n");
+      expect(baseButtonRules).not.toBe("");
+      const styleEl = document.createElement("style");
+      styleEl.textContent = baseButtonRules;
+      document.head.appendChild(styleEl);
+
+      try {
+        const { container } = render(Button, { props: { children: textSnippet("Test") } });
+        const button = container.querySelector("button");
+        const styles = window.getComputedStyle(button!);
+        expect(styles.getPropertyValue("--btn-height")).toBe("44px");
+        expect(styles.minHeight).toBe("var(--btn-height)");
+      } finally {
+        styleEl.remove();
+      }
     });
   });
 });

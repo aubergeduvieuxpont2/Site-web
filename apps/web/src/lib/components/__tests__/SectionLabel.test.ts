@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/svelte";
 import SectionLabel from "../SectionLabel.svelte";
+// jsdom never receives the component's compiled <style> sheet (vitest does not
+// process or inject Svelte component CSS), so getComputedStyle only reflects
+// UA defaults. To test layout intent, we assert the root carries the styled
+// class and that the component stylesheet declares the flex-column layout.
+import componentSource from "../SectionLabel.svelte?raw";
+const styleBlock = componentSource.match(/<style>([\s\S]*)<\/style>/)?.[1] ?? "";
+// First `.section-label { ... }` rule; longer selectors (.section-label__text,
+// .section-label:not(...)) don't match because `{` must follow immediately.
+const sectionLabelRule = styleBlock.match(/\.section-label\s*\{([^}]*)\}/)?.[1] ?? "";
 
 describe("SectionLabel", () => {
   describe("rendering", () => {
@@ -203,15 +212,15 @@ describe("SectionLabel", () => {
     it("root has display: flex for layout", () => {
       const { container } = render(SectionLabel, { props: { text: "Test" } });
       const root = container.querySelector(".section-label");
-      const styles = window.getComputedStyle(root!);
-      expect(styles.display).toBe("flex");
+      expect(root).toBeTruthy();
+      expect(sectionLabelRule).toMatch(/display:\s*flex\b/);
     });
 
     it("root has flex-direction: column", () => {
       const { container } = render(SectionLabel, { props: { text: "Test" } });
       const root = container.querySelector(".section-label");
-      const styles = window.getComputedStyle(root!);
-      expect(styles.flexDirection).toBe("column");
+      expect(root).toBeTruthy();
+      expect(sectionLabelRule).toMatch(/flex-direction:\s*column\b/);
     });
   });
 });
