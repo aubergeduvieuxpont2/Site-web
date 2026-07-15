@@ -70,7 +70,7 @@ export const ROOMS: Room[] = [
       "Plancher de béton scellé, lavable",
       "Salle de bain commune attenante",
     ],
-    seed: "bunkroom",
+    seed: "team-dormitory",
     slug: "dortoir-equipe",
     description:
       "Pour les équipes et les crews. Six couchettes robustes, casiers cadenassables, et un plancher solide conçu pour le travail quotidien.",
@@ -95,7 +95,7 @@ export const ROOMS: Room[] = [
       "Réfrigérateur + cafetière",
       "Bureau de travail + WiFi dédié",
     ],
-    seed: "shiftroom",
+    seed: "shift-quarters",
     slug: "chambre-quart",
     description:
       "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
@@ -120,7 +120,7 @@ export const ROOMS: Room[] = [
       "Recharge outils et radios",
       "Réfrigérateur + cafetière",
     ],
-    seed: "riverroom",
+    seed: "riverside-suite",
     slug: "refuge-rider",
     description:
       "Terrasse privée sur la rivière Sainte-Anne avec accès direct. Séchoir à vêtements de travail, recharge pour outils et radios, refuge idéal entre deux quarts.",
@@ -145,7 +145,7 @@ export const ROOMS: Room[] = [
       "Grand rangement à équipement",
       "Salle de bain privée",
     ],
-    seed: "familyroom",
+    seed: "group-lodge",
     slug: "gite-familial",
     description:
       "De l'espace pour la tribu. Kitchenette complète, coin repas et rangement pour tout l'équipement de la semaine.",
