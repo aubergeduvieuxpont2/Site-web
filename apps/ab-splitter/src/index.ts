@@ -1,19 +1,25 @@
 // A/B traffic-splitter for the concept-testing surface (dev.aubergeduvieuxpont.ca).
 //
 // Sticky-assigns each visitor to variant A or B by weight, then forwards the
-// request (by fetch) to that variant's Worker and returns the response. The URL
-// stays on `dev`, so the SPA's relative `/api/*` calls hit the shared API
-// same-origin. `/api/*` never reaches this Worker — a more-specific
-// `dev.aubergeduvieuxpont.ca/api/*` route sends it straight to the API Worker.
+// request to that variant's Worker via a SERVICE BINDING and returns the
+// response. The URL stays on `dev`, so the SPA's relative `/api/*` calls hit
+// the shared API same-origin. `/api/*` never reaches this Worker — a more-
+// specific `dev.aubergeduvieuxpont.ca/api/*` route sends it to the API Worker.
+//
+// Service bindings (not fetch-by-hostname) are used because a same-zone Worker
+// subrequest to a variant's custom-domain route is not reliably intercepted by
+// that route (it falls through to the placeholder origin → HTTP 522). A binding
+// invokes the variant Worker directly. NOTE: this couples deploy order — the
+// variant Workers (site-web-web-a / -b) must exist before the splitter deploys.
 
 type Variant = "a" | "b";
 
 interface Env {
   // Percentage of *new* visitors routed to variant A (0–100). Default 50.
   WEIGHT_A?: string;
-  // Variant origins (overridable per environment); defaults to the subdomains.
-  VARIANT_A_URL?: string;
-  VARIANT_B_URL?: string;
+  // Service bindings to the variant Workers.
+  VARIANT_A: Fetcher;
+  VARIANT_B: Fetcher;
 }
 
 const COOKIE = "ab_variant";
@@ -37,12 +43,6 @@ function clampWeight(raw: string | undefined): number {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    const url = new URL(request.url);
-    const origins: Record<Variant, string> = {
-      a: env.VARIANT_A_URL ?? "https://a.aubergeduvieuxpont.ca",
-      b: env.VARIANT_B_URL ?? "https://b.aubergeduvieuxpont.ca",
-    };
-
     const existing = readCookie(request.headers.get("Cookie"), COOKIE);
     let variant: Variant;
     let assigned = false;
@@ -53,12 +53,11 @@ export default {
       assigned = true;
     }
 
-    const target = origins[variant] + url.pathname + url.search;
+    const upstream = variant === "a" ? env.VARIANT_A : env.VARIANT_B;
 
-    let upstream: Response;
+    let response: Response;
     try {
-      // Reuse method/headers/body from the original request.
-      upstream = await fetch(new Request(target, request));
+      response = await upstream.fetch(request);
     } catch {
       return new Response(`A/B upstream unavailable (variant ${variant}).`, {
         status: 502,
@@ -67,7 +66,7 @@ export default {
     }
 
     // Clone so headers are mutable.
-    const resp = new Response(upstream.body, upstream);
+    const resp = new Response(response.body, response);
     resp.headers.set("X-AB-Variant", variant);
     if (assigned) {
       resp.headers.append(

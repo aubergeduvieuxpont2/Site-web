@@ -1,0 +1,6 @@
+schema: spec-driven
+
+context: |
+  Project managed by the orchestrator agent pipeline.
+  Specs live in openspec/changes/<slug>/SPEC.md.
+  Completed changes are archived to openspec/changes/archive/<date>-<slug>/.
