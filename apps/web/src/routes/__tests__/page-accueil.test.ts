@@ -86,12 +86,12 @@ describe('+page.svelte (page-accueil SSR)', () => {
       const html = renderPage();
       expect(html).toContain('data-testid="stat-number"');
       // Verify the aria-label is on the parent for AT to read
-      expect(html).toContain('aria-label="80 km"');
+      expect(html).toContain('aria-label="30 min"');
     });
 
     it('renders stat labels from STATS content', () => {
       const html = renderPage();
-      expect(html).toContain('de sentiers VTT à 2 km');
+      expect(html).toContain('des principaux chantiers forestiers');
       expect(html).toContain('année de fondation');
     });
   });
@@ -158,7 +158,7 @@ describe('+page.svelte (page-accueil SSR)', () => {
     });
 
     it('renders image panel for amenities', () => {
-      expect(renderPage()).toContain('le-site-1.jpg');
+      expect(renderPage()).toContain('living-dining.jpg');
     });
   });
 

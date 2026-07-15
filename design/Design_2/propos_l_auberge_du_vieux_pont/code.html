@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>À Propos - L'Auberge du Vieux Pont</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-highest": "#e0e3e5",
+                        "outline": "#76777d",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#2d3133",
+                        "surface": "#f7f9fb",
+                        "secondary-fixed": "#ffdbca",
+                        "tertiary": "#000000",
+                        "on-secondary-fixed": "#341100",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#7c839b",
+                        "surface-dim": "#d8dadc",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3a485c",
+                        "on-tertiary-container": "#76859b",
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#e0e3e5",
+                        "tertiary-fixed-dim": "#b9c7e0",
+                        "surface-container": "#eceef0",
+                        "on-primary-fixed": "#131b2e",
+                        "tertiary-container": "#0d1c2f",
+                        "primary-fixed": "#dae2fd",
+                        "tertiary-fixed": "#d5e3fd",
+                        "surface-container-high": "#e6e8ea",
+                        "surface-container-low": "#f2f4f6",
+                        "secondary-container": "#fd761a",
+                        "on-background": "#191c1e",
+                        "on-surface-variant": "#45464d",
+                        "secondary-fixed-dim": "#ffb690",
+                        "error-container": "#ffdad6",
+                        "surface-container-lowest": "#ffffff",
+                        "primary-fixed-dim": "#bec6e0",
+                        "primary": "#000000",
+                        "on-surface": "#191c1e",
+                        "background": "#f7f9fb",
+                        "surface-bright": "#f7f9fb",
+                        "secondary": "#9d4300",
+                        "outline-variant": "#c6c6cd",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#bec6e0",
+                        "on-secondary-fixed-variant": "#783200",
+                        "on-tertiary-fixed": "#0d1c2f",
+                        "primary-container": "#131b2e",
+                        "on-secondary-container": "#5c2400",
+                        "surface-tint": "#565e74",
+                        "inverse-on-surface": "#eff1f3"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "container-max": "1200px",
+                        "unit": "4px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "48px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["IBM Plex Sans"],
+                        "headline-lg": ["IBM Plex Sans"],
+                        "label-md": ["IBM Plex Sans"],
+                        "headline-sm": ["IBM Plex Sans"],
+                        "label-sm": ["IBM Plex Sans"],
+                        "headline-md": ["IBM Plex Sans"],
+                        "body-md": ["IBM Plex Sans"],
+                        "body-lg": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "body-lg": ["18px", {"lineHeight": "28px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'IBM Plex Sans', sans-serif; background-color: #f7f9fb; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .fill-icon { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex flex-col">
+<!-- TopNavBar -->
+<nav class="bg-surface-container-lowest w-full sticky top-0 border-b border-outline-variant z-50">
+<div class="flex justify-between items-center h-20 px-margin-desktop max-w-container-max mx-auto">
+<div class="flex items-center gap-4">
+<span class="font-headline-md text-headline-md font-bold text-tertiary">L'Auberge du Vieux Pont</span>
+</div>
+<div class="hidden md:flex items-center gap-8">
+<a class="text-primary border-b-2 border-secondary font-semibold font-body-md text-body-md hover:text-secondary transition-colors duration-200" href="#">About Us</a>
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-secondary transition-colors duration-200" href="#">Contact</a>
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-secondary transition-colors duration-200" href="#">Corporate</a>
+<a class="text-on-surface-variant font-body-md text-body-md hover:text-secondary transition-colors duration-200" href="#">Amenities</a>
+</div>
+<div class="hidden md:block">
+<button class="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-6 py-2 rounded scale-95 active:opacity-80 transition-all hover:bg-secondary hover:text-white">Book Now</button>
+</div>
+<div class="md:hidden">
+<span class="material-symbols-outlined text-tertiary cursor-pointer" data-icon="menu">menu</span>
+</div>
+</div>
+</nav>
+<!-- SideNavBar (Mobile Bottom Nav Fallback) -->
+<nav class="md:hidden fixed bottom-0 w-full bg-surface-container-lowest border-t border-outline-variant z-40 pb-safe">
+<div class="flex justify-around items-center h-16">
+<a class="flex flex-col items-center justify-center w-full text-on-surface-variant hover:bg-surface-container-high h-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-sm text-label-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full bg-secondary-fixed text-on-secondary-fixed h-full font-bold" href="#">
+<span class="material-symbols-outlined fill-icon" data-icon="info" data-weight="fill">info</span>
+<span class="font-label-sm text-label-sm mt-1">About Us</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full text-on-surface-variant hover:bg-surface-container-high h-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="contact_support">contact_support</span>
+<span class="font-label-sm text-label-sm mt-1">Contact</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full text-on-surface-variant hover:bg-surface-container-high h-full transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="font-label-sm text-label-sm mt-1">Book Now</span>
+</a>
+</div>
+</nav>
+<main class="flex-grow pb-24 md:pb-0">
+<!-- Hero Section -->
+<section class="relative w-full h-[60vh] min-h-[400px] border-b border-outline-variant bg-surface">
+<img alt="View of Saint-Raymond area showing the river, bridge and church spire" class="absolute inset-0 w-full h-full object-cover opacity-90" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBF8fg5dajeZVv64Ad9M5Zh4GNPXVsPu-my5KkfrI06bllHW539ONNH9ljMJnX65R0kixaGl-xtoK1JnpXVHPi8gZQcKyHrwJ0qeUHVn9X2gAFj3Pw0GNd65C0ng2AboeBtb-LMDqASZmO0iXRToVCkc8VrLqwwJ5-ROTPaZ-8hU4WNuc6np1mCiYwQKxpIVrqBFIyL8oKy02nLa_TahsyVuucyCGqtMD6-IHWmRSdje3xS65FNApghH4gThRCeaAR5ng"/>
+<div class="absolute inset-0 bg-black/40"></div>
+<div class="absolute inset-0 flex flex-col justify-center items-start px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<span class="bg-secondary-container text-on-secondary-container font-label-md text-label-md px-3 py-1 rounded-sm mb-4 border border-secondary">NOTRE HISTOIRE</span>
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-white mb-4 max-w-2xl leading-tight">Un Sanctuaire pour les Bâtisseurs du Québec</h1>
+<p class="font-body-lg text-body-lg text-surface-container-lowest max-w-xl">L'Auberge du Vieux Pont à Saint-Raymond offre un repos mérité, propre et sans compromis pour les professionnels de la forêt, de l'hydroélectricité et des mines.</p>
+</div>
+</section>
+<!-- Mission Section (Bento Grid) -->
+<section class="py-16 md:py-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<div class="mb-12">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-2 border-b-2 border-primary inline-block pb-1">Notre Mission</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-3xl mt-4">Nous croyons que le travail ardu mérite un repos de qualité. Pas de fioritures inutiles, juste l'essentiel, parfaitement exécuté. Une literie impeccable, un silence respecté, et des installations robustes conçues pour ceux qui portent des bottes à cap d'acier.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-6 flex flex-col h-full hover:shadow-sm transition-shadow">
+<div class="w-12 h-12 bg-surface-container flex items-center justify-center rounded-sm mb-6 border border-outline-variant">
+<span class="material-symbols-outlined text-primary" data-icon="bed">bed</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-3">Repos Intransigeant</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex-grow">Des matelas orthopédiques fermes, des rideaux opaques et une insonorisation optimisée pour garantir un sommeil réparateur, peu importe votre quart de travail.</p>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-6 flex flex-col h-full hover:shadow-sm transition-shadow">
+<div class="w-12 h-12 bg-surface-container flex items-center justify-center rounded-sm mb-6 border border-outline-variant">
+<span class="material-symbols-outlined text-primary" data-icon="local_laundry_service">local_laundry_service</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-3">Commodités Utilitaires</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex-grow">Des vestiaires chauffés pour l'équipement de travail, des buanderies industrielles et des espaces de stationnement surdimensionnés pour les véhicules de flotte.</p>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant rounded p-6 flex flex-col h-full hover:shadow-sm transition-shadow">
+<div class="w-12 h-12 bg-surface-container flex items-center justify-center rounded-sm mb-6 border border-outline-variant">
+<span class="material-symbols-outlined text-primary" data-icon="restaurant">restaurant</span>
+</div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-3">Alimentation Robuste</h3>
+<p class="font-body-md text-body-md text-on-surface-variant flex-grow">Des cuisines communes vastes et équipées de qualité commerciale, permettant la préparation de repas consistants à toute heure du jour ou de la nuit.</p>
+</div>
+</div>
+</section>
+<!-- L'Esprit du Vieux Pont (Asymmetric Layout) -->
+<section class="bg-surface-container-low py-16 md:py-24 border-y border-outline-variant">
+<div class="max-w-container-max mx-auto px-margin-mobile md:px-margin-desktop">
+<div class="flex flex-col md:flex-row gap-12 items-center">
+<div class="w-full md:w-1/2">
+<div class="relative w-full aspect-square md:aspect-[4/3] bg-surface-container-lowest border border-outline-variant p-2 rounded">
+<img alt="Exterior view of the light blue building with a porch and green trees on a sunny day" class="w-full h-full object-cover rounded-sm border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBzi7YOCKrQQHIBvmpmIUjbbJzA0FkkBxtJDpH-G3XugDBUvoSthmS_GOsEc7ZBK5P1jbQQwk_BgNcw6J9SkopwbDUo9aISedUC62AAGNvamtm4FL6xgouK10kInPU2dGdsnnKTe4s002spy7GobiM89eRe_lbd-3kY8_EuE9_80XuJylS-23-Lx943pxkS9LxuB66uMi4xkBITW7EOoVe-NHs-ccvsHmZ--9dn3_jAMVNJUDS863DMQfWN4cNqjl7hw"/>
+<div class="absolute -bottom-6 -right-6 w-32 h-32 bg-secondary-container border border-secondary flex items-center justify-center rounded p-4 shadow-sm hidden md:flex flex-col text-center">
+<span class="material-symbols-outlined text-on-secondary-container mb-1" data-icon="forest">forest</span>
+<span class="font-label-sm text-label-sm text-on-secondary-container">Ancré dans la nature</span>
+</div>
+</div>
+</div>
+<div class="w-full md:w-1/2 flex flex-col justify-center">
+<span class="font-label-md text-label-md text-secondary tracking-widest uppercase mb-2">Philosophie</span>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-6">L'Esprit du Vieux Pont</h2>
+<div class="w-12 h-1 bg-primary mb-6"></div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-6">Notre esthétique s'inspire directement des environnements dans lesquels nos clients opèrent : la forêt, les barrages, les mines. C'est ce que nous appelons le "Zen Industriel".</p>
+<p class="font-body-md text-body-md text-on-surface-variant mb-8">Nous avons éliminé le superflu visuel pour créer un espace mentalement apaisant. Les lignes sont nettes, les matériaux sont authentiques (acier, bois brut, béton), et la propreté est clinique. L'Auberge n'est pas seulement un lieu pour dormir, c'est une zone de décompression entre des quarts de travail exigeants.</p>
+<div class="flex flex-col space-y-4">
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle">check_circle</span>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Simplicité Efficace</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Chaque élément a une fonction claire.</p>
+</div>
+</div>
+<div class="w-full border-t border-outline-variant"></div>
+<div class="flex items-start gap-3">
+<span class="material-symbols-outlined text-primary mt-1" data-icon="check_circle">check_circle</span>
+<div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Robustesse Fiable</h4>
+<p class="font-body-md text-body-md text-on-surface-variant text-sm">Construit pour résister à l'usage intensif.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- History Timeline -->
+<section class="py-16 md:py-24 px-margin-mobile md:px-margin-desktop max-w-container-max mx-auto">
+<div class="text-center mb-16">
+<h2 class="font-headline-md text-headline-md text-on-surface mb-4">Notre Histoire</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-2xl mx-auto">Un pilier de la communauté de Saint-Raymond, évoluant avec les industries qui ont bâti la région.</p>
+</div>
+<div class="relative border-l border-outline-variant ml-4 md:ml-12 space-y-12 pb-8">
+<!-- Timeline Item 1 -->
+<div class="relative pl-8 md:pl-16">
+<div class="absolute w-4 h-4 bg-primary rounded-full -left-[8.5px] top-1.5 border-4 border-surface"></div>
+<span class="font-label-md text-label-md text-secondary mb-1 block">1950s</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2">Les Origines Forestières</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Construit initialement comme pension pour les cadres des scieries locales, le bâtiment a établi sa réputation de havre de paix près de la rivière Sainte-Anne.</p>
+</div>
+<!-- Timeline Item 2 -->
+<div class="relative pl-8 md:pl-16">
+<div class="absolute w-4 h-4 bg-primary rounded-full -left-[8.5px] top-1.5 border-4 border-surface"></div>
+<span class="font-label-md text-label-md text-secondary mb-1 block">1980s</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2">L'Ère Hydroélectrique</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Avec l'expansion des projets hydroélectriques régionaux, l'auberge a été rénovée pour accueillir des ingénieurs et techniciens pour de longs séjours, introduisant les premières commodités industrielles.</p>
+</div>
+<!-- Timeline Item 3 -->
+<div class="relative pl-8 md:pl-16">
+<div class="absolute w-4 h-4 bg-primary rounded-full -left-[8.5px] top-1.5 border-4 border-surface"></div>
+<span class="font-label-md text-label-md text-secondary mb-1 block">Aujourd'hui</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-2">Le Renouveau Industriel</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Récemment modernisée, l'Auberge du Vieux Pont fusionne son héritage avec les standards modernes d'hébergement corporatif, servant avec fierté les travailleurs de toute la province.</p>
+</div>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-highest w-full mt-auto border-t border-outline-variant text-on-surface">
+<div class="flex flex-col md:flex-row justify-between items-center py-12 px-margin-desktop max-w-container-max mx-auto gap-8">
+<div class="font-headline-sm text-headline-sm font-black text-on-background">
+                L'Auberge du Vieux Pont
+            </div>
+<div class="flex flex-wrap justify-center gap-6">
+<a class="font-label-sm text-label-sm text-on-surface-variant opacity-90 hover:opacity-100 hover:text-primary underline decoration-secondary-container transition-opacity" href="#">Privacy Policy</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant opacity-90 hover:opacity-100 hover:text-primary underline decoration-secondary-container transition-opacity" href="#">Terms of Service</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant opacity-90 hover:opacity-100 hover:text-primary underline decoration-secondary-container transition-opacity" href="#">Corporate Booking</a>
+<a class="font-label-sm text-label-sm text-on-surface-variant opacity-90 hover:opacity-100 hover:text-primary underline decoration-secondary-container transition-opacity" href="#">Saint-Raymond Guide</a>
+</div>
+<div class="font-body-md text-body-md text-center md:text-right text-on-surface-variant max-w-xs">
+                © 2024 L'Auberge du Vieux Pont. Specialized lodging for industry professionals.
+            </div>
+</div>
+</footer>
+</body></html>

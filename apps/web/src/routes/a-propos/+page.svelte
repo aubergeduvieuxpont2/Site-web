@@ -9,7 +9,7 @@
     { code: '01', title: 'Honnête', text: "On dit les choses comme elles sont. Pas de promesses gonflées, pas de frais cachés. Le prix affiché, c'est le prix payé." },
     { code: '02', title: 'Robuste', text: "Bâti pour durer. Planchers de béton, casiers d'acier, murs qui encaissent les bottes pleines de boue sans broncher." },
     { code: '03', title: 'Accessible', text: "Du dortoir à 39 $ à la chambre privée, il y a une place pour chaque budget. Le repos n'est pas un luxe réservé." },
-    { code: '04', title: 'Ancré', text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les sentiers et le monde qui les fréquente." },
+    { code: '04', title: 'Ancré', text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les chantiers et le monde qui y travaille." },
   ];
 </script>
 
@@ -37,7 +37,7 @@
         data-testid="a-propos-lead"
       >
         Depuis un demi-siècle, l'Auberge du Vieux Pont loge les travailleurs, les pêcheurs
-        et, aujourd'hui, les riders. Même promesse&nbsp;: un repos honnête, sans flafla.
+        et les équipes de terrain d'aujourd'hui. Même promesse&nbsp;: un repos honnête, sans flafla.
       </p>
     </div>
   </section>
@@ -80,10 +80,10 @@
               depuis.
             </p>
             <p use:reveal={{ y: 18, delay: 0.20 }}>
-              Avec les années, le monde a changé de bottes. La Vallée Bras-du-Nord a tracé ses
-              80&nbsp;km de sentiers et les riders ont remplacé une partie des équipes de
-              chantier. On a ajouté des casiers à vélos, une station de lavage, des bornes de
-              recharge. Mais l'esprit, lui, n'a pas bougé d'un pouce.
+              Avec les années, le monde a changé de bottes. La foresterie s'est mécanisée et
+              Hydro-Québec a développé ses chantiers partout en Portneuf. On a ajouté un séchage
+              pour vêtements de travail, des bornes de recharge pour outils et radios, un local
+              sécurisé renforcé. Mais l'esprit, lui, n'a pas bougé d'un pouce.
             </p>
           </div>
           <figure
@@ -106,7 +106,7 @@
           use:reveal={{ y: 0, x: 24, delay: 0.08 }}
         >
           <ImagePanel
-            imgKey="oldbridge"
+            imgKey="bridge.jpg"
             picsumSeed={88}
             aspectRatio="4/5"
             caption="Le Pont Tessier, Saint-Raymond"
@@ -181,7 +181,7 @@
           use:reveal={{ y: 0, x: -24, delay: 0.08 }}
         >
           <ImagePanel
-            imgKey="village"
+            imgKey="village-river.jpg"
             picsumSeed={33}
             aspectRatio="3/2"
             caption="Saint-Raymond · Portneuf"
@@ -203,14 +203,14 @@
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
               On n'est pas une chaîne. On est une auberge de Portneuf, tenue par du monde
-              d'ici, à deux pas des sentiers et de l'eau. La rivière Sainte-Anne coule sous
-              nos fenêtres&nbsp;; le réseau de la Vallée Bras-du-Nord commence presque dans
-              la cour.
+              d'ici, à deux pas des chantiers forestiers et des lignes Hydro-Québec. La rivière
+              Sainte-Anne coule sous nos fenêtres&nbsp;; les principaux sites de travail sont
+              à moins de 30 minutes.
             </p>
             <p use:reveal={{ y: 18, delay: 0.15 }}>
               Ça veut dire des conseils qui valent quelque chose, des horaires qui collent à
               la vraie vie, et l'assurance qu'on comprend ce que c'est qu'une longue
-              journée — qu'elle se passe sur un chantier ou sur un single track.
+              journée de chantier — réelle et épuisante.
             </p>
           </div>
           <div
@@ -218,7 +218,7 @@
             use:reveal={{ y: 16, delay: 0.20 }}
             data-testid="a-propos-tags"
           >
-            {#each ['Saint-Raymond', 'Portneuf', 'Vue rivière', 'Sentiers à 2 km'] as tag (tag)}
+            {#each ['Saint-Raymond', 'Portneuf', 'Vue rivière', 'Foresterie'] as tag (tag)}
               <span class="page-a-propos__tag">{tag}</span>
             {/each}
           </div>

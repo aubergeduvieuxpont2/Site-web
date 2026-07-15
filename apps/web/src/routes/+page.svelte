@@ -27,7 +27,7 @@
       <p class="page-accueil__hero-eyebrow">Saint-Raymond · Portneuf · Québec</p>
       <h1 id="hero-heading" class="page-accueil__hero-heading">L'art de recevoir</h1>
       <p class="page-accueil__hero-sub">
-        Une auberge de caractère pour travailleurs de terrain et aventuriers du plein air.
+        Une auberge de caractère pour les travailleurs de terrain — foresterie et Hydro-Québec.
       </p>
       <div class="page-accueil__hero-ctas" data-testid="hero-ctas">
         <div data-testid="hero-cta-reserver">
@@ -119,7 +119,7 @@
     <div class="page-accueil__amenities-inner">
       <div class="page-accueil__amenities-image" use:reveal={{ x: -20, duration: 0.7 }}>
         <ImagePanel
-          imgKey="le-site-1.jpg"
+          imgKey="living-dining.jpg"
           picsumSeed={10}
           alt="Intérieur de l'Auberge du Vieux Pont"
           aspectRatio="4/3"
@@ -131,9 +131,9 @@
         <h2 id="amenities-heading" class="page-accueil__h2">Fait pour ceux qui bougent</h2>
 
         <p class="page-accueil__amenities-body">
-          L'Auberge du Vieux Pont a été conçue pour les travailleurs de terrain et les
-          aventuriers du plein air. Stockage sécurisé, recharge e-bike, station de lavage
-          — tout est là pour que vous déposiez les outils et récupériez pour demain.
+          L'Auberge du Vieux Pont a été conçue pour les travailleurs de terrain. Stockage sécurisé,
+          recharge d'outils et de radios, salle de séchage — tout est là pour que vous déposiez
+          vos affaires et repartiez reposés.
         </p>
 
         <ul class="page-accueil__amenities-list" role="list">
@@ -167,7 +167,7 @@
       <SectionLabel text="Réservation" showHairline={false} />
       <h2 id="cta-heading" class="page-accueil__cta-heading">Planifiez votre séjour</h2>
       <p class="page-accueil__cta-body">
-        Groupes, travailleurs, cyclistes — on a la chambre qu'il vous faut.
+        Groupes, équipes, travailleurs de quart — on a la chambre qu'il vous faut.
         Réservez directement par formulaire, sans intermédiaire.
       </p>
       <div data-testid="cta-reserver">
@@ -180,148 +180,130 @@
 
 <style>
   /* ═══════════════════════════════════════════════════
-     HERO
+     HERO SECTION
   ═══════════════════════════════════════════════════ */
   .page-accueil__hero {
     position: relative;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
+    align-items: center;
+    background-color: var(--color-surface);
     overflow: hidden;
-    background: var(--color-surface);
   }
 
   .page-accueil__hero-shader-wrap {
     position: absolute;
     inset: 0;
-    z-index: 0;
-  }
-
-  .page-accueil__hero-shader-wrap :global(.hero-shader),
-  .page-accueil__hero-shader-wrap :global(.hero-shader__canvas),
-  .page-accueil__hero-shader-wrap :global(.hero-shader__fallback) {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
   }
 
   .page-accueil__hero-content {
     position: relative;
-    z-index: 1;
+    max-width: 860px;
     text-align: center;
-    max-width: 900px;
-    padding: var(--space-xl) var(--space-md);
+    padding: var(--space-3xl) var(--space-md);
+    z-index: 1;
   }
 
   .page-accueil__hero-eyebrow {
     font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 400;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-ink-variant);
-    margin: 0 0 var(--space-xl);
+    margin: 0;
   }
 
   .page-accueil__hero-heading {
     font-family: var(--font-sans);
     font-weight: 300;
-    font-size: clamp(52px, 8.5vw, 96px);
-    line-height: 1.04;
-    letter-spacing: -0.025em;
+    font-size: clamp(48px, 8vw, 80px);
+    line-height: 1;
+    letter-spacing: -0.02em;
     color: var(--color-ink);
-    margin: 0 0 var(--space-lg);
+    margin: var(--space-lg) 0 0;
   }
 
   .page-accueil__hero-sub {
     font-family: var(--font-sans);
+    font-size: clamp(18px, 2.5vw, 24px);
     font-weight: 400;
-    font-size: 18px;
-    line-height: 1.6;
+    line-height: 1.5;
     color: var(--color-ink-variant);
-    max-width: 500px;
-    margin: 0 auto var(--space-xl);
+    margin: var(--space-md) 0 0;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .page-accueil__hero-ctas {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-md);
+    gap: var(--space-lg);
     justify-content: center;
+    margin-top: var(--space-2xl);
   }
 
   .page-accueil__hero-scroll {
     position: absolute;
-    bottom: var(--space-xl);
+    bottom: var(--space-2xl);
     left: 50%;
     transform: translateX(-50%);
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-xs);
+    text-align: center;
   }
 
   .page-accueil__hero-scroll-label {
     font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
     color: var(--color-ink-variant);
-    opacity: 0.7;
+    display: block;
+    margin-bottom: var(--space-md);
   }
 
   .page-accueil__hero-scroll-line {
     width: 1px;
-    height: 44px;
-    background: var(--color-outline-variant);
-    animation: scrollDrop 2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-    transform-origin: top center;
+    height: 24px;
+    background-color: var(--color-ink-variant);
+    margin-inline: auto;
+    animation: pulse-scroll 1.4s ease-in-out infinite;
   }
 
-  @keyframes scrollDrop {
-    0%   { opacity: 0; transform: scaleY(0); }
-    20%  { opacity: 1; }
-    80%  { opacity: 1; }
-    100% { opacity: 0; transform: scaleY(1); }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .page-accueil__hero-scroll-line {
-      animation: none;
-      opacity: 0.4;
-      transform: none;
-    }
+  @keyframes pulse-scroll {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
   }
 
   /* ═══════════════════════════════════════════════════
      STATS STRIP
   ═══════════════════════════════════════════════════ */
   .page-accueil__stats {
-    background: var(--color-surface-container-low);
-    border-block: 1px solid var(--color-outline-variant);
-    padding: var(--space-3xl) var(--space-md);
+    background-color: var(--color-surface);
+    border-top: 1px solid var(--color-outline-variant);
+    border-bottom: 1px solid var(--color-outline-variant);
   }
 
   .page-accueil__stats-inner {
-    max-width: 1100px;
+    max-width: 1280px;
     margin-inline: auto;
+    padding: var(--space-lg) var(--space-md);
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: var(--space-xl);
+    gap: 0;
   }
 
   .page-accueil__stat {
+    padding: var(--space-lg) var(--space-md);
+    border-right: 1px solid var(--color-outline-variant);
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: var(--space-sm);
-    text-align: center;
-    border-right: 1px solid var(--color-outline-variant);
-    padding-inline: var(--space-lg);
+    align-items: center;
   }
 
   .page-accueil__stat:last-child {
@@ -331,44 +313,40 @@
   .page-accueil__stat-value {
     display: flex;
     align-items: baseline;
-    gap: 2px;
+    justify-content: center;
+    gap: var(--space-xs);
   }
 
   .page-accueil__stat-number {
     font-family: var(--font-sans);
     font-weight: 300;
-    font-size: clamp(40px, 5vw, 60px);
+    font-size: clamp(32px, 4vw, 48px);
     line-height: 1;
-    letter-spacing: -0.025em;
     color: var(--color-ink);
-    font-variant-numeric: tabular-nums;
   }
 
   .page-accueil__stat-suffix {
     font-family: var(--font-sans);
-    font-weight: 300;
-    font-size: clamp(22px, 3vw, 34px);
-    line-height: 1;
-    color: var(--color-ink);
-  }
-
-  .page-accueil__stat-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 400;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: 14px;
     color: var(--color-ink-variant);
   }
 
+  .page-accueil__stat-label {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 1.4;
+    color: var(--color-ink-variant);
+    text-align: center;
+  }
+
   /* ═══════════════════════════════════════════════════
-     CONTOUR DIVIDERS
+     DIVIDERS
   ═══════════════════════════════════════════════════ */
   .page-accueil__divider {
-    padding-inline: var(--space-md);
-    padding-block: var(--space-xl);
     max-width: 1280px;
     margin-inline: auto;
+    padding-inline: var(--space-md);
     width: 100%;
     box-sizing: border-box;
   }
