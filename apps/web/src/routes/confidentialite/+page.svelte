@@ -1,7 +1,14 @@
 <script lang="ts">
   import { PRIVACY, SITE } from "$lib/content";
+  import { settings } from "$lib/settings.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
+
+  // PRIVACY items are static copy; C-03 embeds the default contact email.
+  // Swap in the admin-configured address so the page never shows a stale one.
+  function withConfiguredEmail(item: string): string {
+    return item.replace(SITE.email, settings.contactEmail);
+  }
 </script>
 
 <section class="page-confidentialite bg-surface">
@@ -30,7 +37,7 @@
           {#each section.items as item, idx (idx)}
             <li class="item" data-testid={`privacy-item-${section.code}-${idx}`}>
               <span class="bullet" aria-hidden="true"></span>
-              <span class="item-text">{item}</span>
+              <span class="item-text">{withConfiguredEmail(item)}</span>
             </li>
           {/each}
         </ul>

@@ -62,6 +62,16 @@ export interface ApiError {
   error: string;
 }
 
+export interface PublicSettings {
+  nightlyPrice: number;
+  contactEmail: string;
+  marketingRoomCount: number;
+}
+
+export interface AdminSettings extends PublicSettings {
+  assignableRoomCount: number;
+}
+
 // ---------------------------------------------------------------------------
 // Core fetch helper
 // ---------------------------------------------------------------------------
@@ -204,6 +214,27 @@ export async function createReservation(data: {
   message?: string;
 }): Promise<{ reservation: ReservationRow } | ApiError> {
   return fetchJson<{ reservation: ReservationRow }>("/reservations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+// ---------------------------------------------------------------------------
+
+export async function getPublicSettings(): Promise<PublicSettings | ApiError> {
+  return fetchJson<PublicSettings>("/settings");
+}
+
+export async function adminGetSettings(): Promise<AdminSettings | ApiError> {
+  return fetchJson<AdminSettings>("/admin/settings");
+}
+
+export async function adminUpdateSettings(
+  data: AdminSettings,
+): Promise<AdminSettings | ApiError> {
+  return fetchJson<AdminSettings>("/admin/settings", {
     method: "POST",
     body: JSON.stringify(data),
   });

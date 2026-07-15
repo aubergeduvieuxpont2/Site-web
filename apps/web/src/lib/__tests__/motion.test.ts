@@ -193,7 +193,14 @@ describe('countUp', () => {
   it('respects prefers-reduced-motion by setting to final value', () => {
     mockMatchMedia(true);
     countUp(element, { to: 1200, from: 0, suffix: ' m' });
-    expect(element.textContent).toBe('1200 m');
+    const formatted = (1200).toLocaleString('fr-CA');
+    expect(element.textContent).toBe(`${formatted} m`);
+  });
+
+  it('skips locale formatting when localize is false (e.g. years)', () => {
+    mockMatchMedia(true);
+    countUp(element, { to: 1972, from: 0, localize: false });
+    expect(element.textContent).toBe('1972');
   });
 
   it('formats number with French locale', () => {

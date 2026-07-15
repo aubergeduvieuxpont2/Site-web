@@ -4,12 +4,10 @@ import { render } from 'svelte/server';
 import RoomCard from '../RoomCard.svelte';
 
 const mockRoom = {
-  name: "Le Dortoir de l'Équipe",
-  description: 'Pour les crews et les pelotons.',
-  pricePerNight: 39,
-  imgKey: 'bunkroom',
-  picsumSeed: 42,
-  slug: 'dortoir-equipe',
+  name: 'La Chambre du Quart',
+  description: 'Conçue pour ceux qui dorment le jour.',
+  imgKey: 'bedroom.jpg',
+  picsumSeed: 17,
 };
 
 function renderCard(room = mockRoom) {
@@ -58,19 +56,19 @@ describe('RoomCard (SSR)', () => {
   describe('room name', () => {
     it('displays the room name in h3', () => {
       const { html } = renderCard();
-      expect(html).toContain("Le Dortoir de l'Équipe");
+      expect(html).toContain('La Chambre du Quart');
     });
 
     it('displays a different room name when prop changes', () => {
-      const { html } = renderCard({ ...mockRoom, name: 'La Chambre du Quart' });
-      expect(html).toContain('La Chambre du Quart');
+      const { html } = renderCard({ ...mockRoom, name: 'La Chambre de la Rivière' });
+      expect(html).toContain('La Chambre de la Rivière');
     });
   });
 
   describe('room description', () => {
     it('displays the room description', () => {
       const { html } = renderCard();
-      expect(html).toContain('Pour les crews et les pelotons.');
+      expect(html).toContain('Conçue pour ceux qui dorment le jour.');
     });
 
     it('auto-escapes HTML in description (XSS safe)', () => {
@@ -83,19 +81,19 @@ describe('RoomCard (SSR)', () => {
   });
 
   describe('price label', () => {
-    it('renders price with $/nuit suffix', () => {
+    it('renders flat price with $/nuit suffix from settings', () => {
       const { html } = renderCard();
-      expect(html).toContain('39 $/nuit');
+      expect(html).toContain('89 $/nuit');
     });
 
-    it('renders correct price for a different room', () => {
-      const { html } = renderCard({ ...mockRoom, pricePerNight: 149 });
-      expect(html).toContain('149 $/nuit');
+    it('price is the same for all rooms (flat rate)', () => {
+      const { html } = renderCard({ ...mockRoom, name: 'Le Gîte Familial' });
+      expect(html).toContain('89 $/nuit');
     });
 
     it('price is inside the room-card-price element', () => {
       const { html } = renderCard();
-      expect(html).toMatch(/data-testid="room-card-price"[^>]*>[^<]*39 \$\/nuit/s);
+      expect(html).toMatch(/data-testid="room-card-price"[^>]*>[^<]*89 \$\/nuit/s);
     });
   });
 
@@ -105,14 +103,16 @@ describe('RoomCard (SSR)', () => {
       expect(html).toMatch(/data-testid="room-card-cta"[\s\S]*<a/);
     });
 
-    it('CTA link points to /contact?chambre=<slug>', () => {
+    it('CTA link points to /contact (no room-specific query)', () => {
       const { html } = renderCard();
-      expect(html).toContain('href="/contact?chambre=dortoir-equipe"');
+      expect(html).toContain('href="/contact"');
+      expect(html).not.toContain('?chambre=');
     });
 
-    it('URL-encodes the slug to prevent injection', () => {
-      const { html } = renderCard({ ...mockRoom, slug: 'chambre spéciale' });
-      expect(html).toContain('href="/contact?chambre=chambre%20sp%C3%A9ciale"');
+    it('CTA href is identical for all rooms', () => {
+      const familialHtml = renderCard({ ...mockRoom, name: 'Le Gîte Familial' }).html;
+      expect(familialHtml).toContain('href="/contact"');
+      expect(familialHtml).not.toContain('?');
     });
 
     it('renders "Réserver" as CTA text', () => {
@@ -124,12 +124,12 @@ describe('RoomCard (SSR)', () => {
   describe('image', () => {
     it('renders ImagePanel with the room imgKey', () => {
       const { html } = renderCard();
-      expect(html).toContain('src="/img/bunkroom"');
+      expect(html).toContain('src="/img/bedroom.jpg"');
     });
 
     it('passes alt text equal to room name', () => {
       const { html } = renderCard();
-      expect(html).toContain("alt=\"Le Dortoir de l'Équipe\"");
+      expect(html).toContain('alt="La Chambre du Quart"');
     });
 
     it('sets aspect ratio to 4/3', () => {
@@ -139,7 +139,7 @@ describe('RoomCard (SSR)', () => {
 
     it('sets picsum fallback with picsumSeed', () => {
       const { html } = renderCard();
-      expect(html).toContain('https://picsum.photos/seed/42/1200/800');
+      expect(html).toContain('https://picsum.photos/seed/17/1200/800');
     });
   });
 

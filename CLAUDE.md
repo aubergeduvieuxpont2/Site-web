@@ -58,3 +58,31 @@ Run from the repo root (npm workspaces):
 - Keep the frontend free of secrets. Anything sensitive (including `DB_CONN`)
   lives in the Worker, never in `apps/web`.
 - `compatibility_date` is pinned in each `wrangler.jsonc`; bump deliberately.
+
+## Configurable Settings
+
+Four volatile business facts are managed via a `settings` Postgres table (created in
+`migrations/0007_settings.sql`) and exposed through the API:
+
+| Key | Type | Default | Visibility |
+|---|---|---|---|
+| `nightly_price` | number | 89 | Public |
+| `contact_email` | string | `info@aubergeduvieuxpont.ca` | Public |
+| `marketing_room_count` | number | 12 | Public |
+| `assignable_room_count` | number | 12 | Admin only |
+
+**Frontend fallbacks** (`apps/web/src/lib/content.ts`):
+- `SITE.email` and `SITE.citq` are static constants (non-configurable).
+- `DEFAULTS` exports the three public setting defaults (`nightlyPrice`,
+  `contactEmail`, `marketingRoomCount`) for graceful fallback when the API is
+  unreachable or a settings row is missing.
+- `ROOMS` array now contains only 3 rooms (dortoir removed) with no per-room pricing;
+  all rooms display the flat nightly price from settings.
+
+**API boundaries**:
+- `GET /api/settings` returns the three public settings (no `assignableRoomCount`).
+- `GET /api/admin/settings` and `POST /api/admin/settings` are admin-gated and
+  include all four keys. The update body (camelCase) validates all four as positive
+  integers with a valid email.
+- Settings default to 89 $, and the site gracefully renders these defaults when the
+  database is unreachable.

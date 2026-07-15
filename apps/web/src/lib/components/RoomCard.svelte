@@ -1,20 +1,19 @@
 <script lang="ts">
   import ImagePanel from './ImagePanel.svelte';
   import Button from './Button.svelte';
+  import { settings } from '../settings.svelte';
 
   let { room } = $props<{
     room: {
       name: string;
       description: string;
-      pricePerNight: number;
       imgKey: string;
       picsumSeed: number;
-      slug: string;
     };
   }>();
 
-  const contactHref = $derived(`/contact?chambre=${encodeURIComponent(room.slug)}`);
-  const priceLabel = $derived(`${room.pricePerNight} $/nuit`);
+  const contactHref = "/contact";
+  const priceLabel = $derived(`${settings.nightlyPrice} $/nuit`);
 </script>
 
 <article class="room-card" data-testid="room-card">

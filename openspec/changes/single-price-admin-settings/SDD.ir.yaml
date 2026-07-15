@@ -1,0 +1,466 @@
+REQ:
+  R-BOOK-001:
+    actor: Site visitor
+    capability: browse rooms as illustrative examples with no room-selection path
+    constraints: "RoomCard CTA links to /contact with no ?chambre= query; contact page has no chambre prefill or wording"
+    priority: MUST
+    tests:
+      - T-BOOK-001a
+      - T-BOOK-001b
+  R-BOOK-002:
+    actor: Site visitor
+    capability: see no dormitory anywhere on the site
+    constraints: "dortoir-equipe removed from ROOMS; no dortoir/dormitory copy remains"
+    priority: MUST
+    tests:
+      - T-BOOK-002a
+  R-BOOK-003:
+    actor: Site visitor
+    capability: see a single flat nightly price wherever pricing appears
+    constraints: "no per-room priceFrom/pricePerNight display; default 89 CAD"
+    priority: MUST
+    tests:
+      - T-BOOK-003a
+  R-SET-004:
+    actor: Admin user
+    capability: configure the public contact email
+    constraints: "default info@aubergeduvieuxpont.ca; no hotmail address remains; site renders configured value with default fallback"
+    priority: MUST
+    tests:
+      - T-SET-004a
+      - T-SET-004b
+  R-SET-005:
+    actor: Admin user
+    capability: configure two distinct room counts (marketing + assignable)
+    constraints: "marketing count public default 12; assignable capacity admin-only default 12, never public"
+    priority: MUST
+    tests:
+      - T-SET-005a
+      - T-SET-005b
+  R-BOOK-006:
+    actor: Site visitor
+    capability: see the CITQ number in the footer on every page
+    constraints: "CITQ #304542 non-configurable, always visible, has a data-testid"
+    priority: MUST
+    tests:
+      - T-BOOK-006a
+  R-BOOK-007:
+    actor: Site visitor
+    capability: read generic hydro-worker phrasing implying no Hydro-Quebec affiliation
+    constraints: "no Hydro-Quebec mention remains in web copy"
+    priority: MUST
+    tests:
+      - T-BOOK-007a
+  R-BOOK-008:
+    actor: Site visitor
+    capability: read a tagline conveying no luxury but functional comforts
+    constraints: "SITE.tagline replaced; old tagline string absent"
+    priority: MUST
+    tests:
+      - T-BOOK-008a
+  R-BOOK-009:
+    actor: Site visitor
+    capability: read storage copy without 24/7 monitoring claims
+    constraints: "surveille jour et nuit and stockage surveille reworded"
+    priority: MUST
+    tests:
+      - T-BOOK-009a
+  R-SET-010:
+    actor: System operator
+    capability: apply an idempotent settings migration
+    constraints: "0007_settings.sql creates key/value settings table and seeds four defaults; re-run is a no-op"
+    priority: MUST
+    tests:
+      - T-SET-010a
+  R-SET-011:
+    actor: API consumer
+    capability: read public settings and (as admin) read/write all settings
+    constraints: "GET /api/settings exposes 3 public keys only; admin endpoints gated 401/403; update validated by zValidator custom hook, never manual c.req.json()"
+    priority: MUST
+    tests:
+      - T-SET-011a
+      - T-SET-011b
+      - T-SET-011c
+  R-SET-012:
+    actor: Admin user
+    capability: edit the four settings from a Parametres tab in the admin panel
+    constraints: "follows existing ARIA-tabs pattern; validated inputs; persists via POST"
+    priority: MUST
+    tests:
+      - T-SET-012a
+
+E:
+  E-Setting:
+    fields:
+      key: string (primary key)
+      value: string
+      updated_at: timestamptz
+    tenancy: global
+    invariants:
+      - INV-assignable-private
+      - INV-one-row-per-key
+  E-PublicSettings:
+    fields:
+      nightlyPrice: integer
+      contactEmail: string
+      marketingRoomCount: integer
+  E-AdminSettings:
+    fields:
+      nightlyPrice: integer
+      contactEmail: string
+      marketingRoomCount: integer
+      assignableRoomCount: integer
+
+OP:
+  OP-Settings.getPublic:
+    input: {}
+    auth: []
+    pre: []
+    err: []
+    out: { nightlyPrice: integer, contactEmail: string, marketingRoomCount: integer }
+  OP-Settings.getAdmin:
+    input: {}
+    auth: [admin-only]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    out: { nightlyPrice: integer, contactEmail: string, marketingRoomCount: integer, assignableRoomCount: integer }
+  OP-Settings.update:
+    input: { nightlyPrice: integer, contactEmail: string, marketingRoomCount: integer, assignableRoomCount: integer }
+    auth: [admin-only]
+    pre: []
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+      - ERR-VALIDATION
+    out: { nightlyPrice: integer, contactEmail: string, marketingRoomCount: integer, assignableRoomCount: integer }
+
+ERR:
+  ERR-UNAUTHORIZED:
+    code: 401
+    meaning: no valid session cookie
+  ERR-FORBIDDEN:
+    code: 403
+    meaning: authenticated but not an admin
+  ERR-VALIDATION:
+    code: 400
+    meaning: request body failed zod validation
+
+AUTH:
+  admin-only: user must have a valid session and role equal to admin
+
+INV:
+  INV-assignable-private: assignable_room_count is never returned by the public GET /api/settings endpoint
+  INV-one-row-per-key: the settings table holds exactly one row per key after any number of migration runs or updates
+  INV-default-fallback: public pages render content.ts defaults when the API is unreachable or a settings row is missing
+
+API:
+  GET /api/settings:
+    input: none
+    output: E-PublicSettings
+    errors: []
+    auth: public
+  GET /api/admin/settings:
+    input: none
+    output: E-AdminSettings
+    errors: [ERR-UNAUTHORIZED, ERR-FORBIDDEN]
+    auth: admin-only
+  POST /api/admin/settings:
+    input: E-AdminSettings
+    output: E-AdminSettings
+    errors: [ERR-UNAUTHORIZED, ERR-FORBIDDEN, ERR-VALIDATION]
+    auth: admin-only
+
+UI:
+  screen-admin-settings:
+    actions: [loadSettings, saveSettings]
+    state: { loading, loaded, saving, saved, error }
+  screen-roomcard:
+    actions: [reserve]
+    state: { default }
+  screen-footer:
+    actions: []
+    state: { citq-visible }
+
+DATA:
+  settings table: key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TIMESTAMPTZ DEFAULT now()
+  seeds: nightly_price=89, contact_email=info@aubergeduvieuxpont.ca, marketing_room_count=12, assignable_room_count=12
+  migration: apps/api/migrations/0007_settings.sql (CREATE TABLE IF NOT EXISTS + INSERT ON CONFLICT DO NOTHING)
+
+TEST:
+  T-BOOK-001a:
+    verifies: R-BOOK-001
+    behaviour: "SSR RoomCard CTA href is exactly /contact with no ?chambre= substring"
+    steps:
+      - render RoomCard with a room prop
+      - assert output contains href=\"/contact\" and not ?chambre=
+  T-BOOK-001b:
+    verifies: R-BOOK-001
+    behaviour: "contact page has no chambre prefill effect, text, or placeholder wording"
+    steps:
+      - grep contact/+page.svelte for chambre and Chambre souhaitee
+      - assert no match
+  T-BOOK-002a:
+    verifies: R-BOOK-002
+    behaviour: "no dortoir copy and no dortoir-equipe room remain"
+    steps:
+      - grep apps/web/src for dortoir
+      - assert no product-copy match; ROOMS has 3 entries, none dortoir-equipe
+  T-BOOK-003a:
+    verifies: R-BOOK-003
+    behaviour: "SSR RoomCard shows the flat default price 89 $/nuit"
+    steps:
+      - render RoomCard
+      - assert output contains 89 $/nuit and no per-room price value
+  T-SET-004a:
+    verifies: R-SET-004
+    behaviour: "no hotmail address remains in apps/web/src"
+    steps:
+      - grep apps/web/src for hotmail
+      - assert no match
+  T-SET-004b:
+    verifies: R-SET-004
+    behaviour: "contact page renders the configured contact email with default fallback"
+    steps:
+      - render contact page with default store
+      - assert info@aubergeduvieuxpont.ca appears in the info column and mailto href
+  T-SET-005a:
+    verifies: R-SET-005
+    behaviour: "public settings exclude assignableRoomCount"
+    steps:
+      - inspect PUBLIC_SETTING_KEYS and toPublicSettings output
+      - assert assignable_room_count / assignableRoomCount absent
+  T-SET-005b:
+    verifies: R-SET-005
+    behaviour: "admin Parametres panel exposes both marketing and assignable inputs"
+    steps:
+      - SSR render admin page
+      - assert input-marketing-rooms and input-assignable-rooms testids present
+  T-BOOK-006a:
+    verifies: R-BOOK-006
+    behaviour: "footer renders CITQ #304542 with data-testid footer-citq"
+    steps:
+      - render Footer
+      - assert element data-testid=footer-citq contains CITQ #304542
+  T-BOOK-007a:
+    verifies: R-BOOK-007
+    behaviour: "no Hydro-Quebec mention remains in web copy"
+    steps:
+      - grep apps/web/src for Hydro-Quebec
+      - assert no product-copy match
+  T-BOOK-008a:
+    verifies: R-BOOK-008
+    behaviour: "SITE.tagline replaced with a no-luxury functional-comforts line"
+    steps:
+      - read content.ts SITE.tagline
+      - assert it does not equal the old tagline string
+  T-BOOK-009a:
+    verifies: R-BOOK-009
+    behaviour: "no 24/7 monitoring claims remain"
+    steps:
+      - grep apps/web/src for surveille jour et nuit and stockage surveille
+      - assert no match
+  T-SET-010a:
+    verifies: R-SET-010
+    behaviour: "0007_settings.sql is idempotent"
+    steps:
+      - inspect migration uses CREATE TABLE IF NOT EXISTS and INSERT ON CONFLICT DO NOTHING
+      - applying twice leaves one row per key
+  T-SET-011a:
+    verifies: R-SET-011
+    behaviour: "GET /api/settings returns the three public keys only"
+    steps:
+      - call toPublicSettings on a full AdminSettings object
+      - assert keys nightlyPrice, contactEmail, marketingRoomCount and no assignableRoomCount
+  T-SET-011b:
+    verifies: R-SET-011
+    behaviour: "SettingsUpdateSchema rejects invalid bodies"
+    steps:
+      - parse a payload with negative price -> fails
+      - parse a payload with invalid email -> fails
+      - parse a valid payload -> succeeds
+  T-SET-011c:
+    verifies: R-SET-011
+    behaviour: "admin settings endpoints are gated 401/403"
+    steps:
+      - no session -> 401
+      - guest role -> 403
+  T-SET-012a:
+    verifies: R-SET-012
+    behaviour: "admin page renders a Parametres tab and panel"
+    steps:
+      - SSR render admin page
+      - assert tab-settings and panel-settings testids present
+
+NFR:
+  security: assignable capacity never leaves the admin surface; admin writes require role admin; zod validation on update; parameterized SQL
+  localization: French Quebec copy with correct accents
+  correctness: npm run typecheck, npm run build:web, and full vitest suite pass
+  availability: public pages render defaults when API unreachable or rows missing
+  observability: settings updated_at stamped on each write
+
+FILE:
+  apps/api/migrations/0007_settings.sql: TASK-backend
+  apps/api/src/settings.ts: TASK-backend
+  apps/api/src/index.ts: TASK-backend
+  apps/api/test/settings.test.ts: TASK-backend
+  apps/web/src/lib/content.ts: TASK-content
+  apps/web/src/lib/api.ts: TASK-frontend-data
+  apps/web/src/lib/settings.svelte.ts: TASK-frontend-data
+  apps/web/src/lib/components/RoomCard.svelte: TASK-frontend-ui
+  apps/web/src/lib/components/Footer.svelte: TASK-frontend-ui
+  apps/web/src/routes/+layout.svelte: TASK-frontend-ui
+  apps/web/src/routes/contact/+page.svelte: TASK-frontend-ui
+  apps/web/src/routes/+page.svelte: TASK-frontend-ui
+  apps/web/src/routes/le-site/+page.svelte: TASK-frontend-ui
+  apps/web/src/routes/a-propos/+page.svelte: TASK-frontend-ui
+  apps/web/src/routes/admin/+page.svelte: TASK-admin-ui
+  apps/web/src/lib/components/__tests__/RoomCard.test.ts: TASK-tests
+  apps/web/src/lib/components/__tests__/Footer.test.ts: TASK-tests
+  apps/web/src/routes/__tests__/page-contact.test.ts: TASK-tests
+  apps/web/src/routes/__tests__/page-accueil.test.ts: TASK-tests
+  apps/web/src/routes/__tests__/page-a-propos.test.ts: TASK-tests
+  apps/web/src/routes/le-site/__tests__/page-le-site.test.ts: TASK-tests
+  apps/web/src/lib/__tests__/settings.test.ts: TASK-tests
+  apps/web/src/routes/__tests__/page-admin-settings.test.ts: TASK-tests
+  CLAUDE.md: TASK-content
+
+TASK:
+  TASK-backend:
+    scope:
+      - R-SET-004
+      - R-SET-005
+      - R-SET-010
+      - R-SET-011
+      - OP-Settings.getPublic
+      - OP-Settings.getAdmin
+      - OP-Settings.update
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+      - ERR-VALIDATION
+      - T-SET-005a
+      - T-SET-010a
+      - T-SET-011a
+      - T-SET-011b
+      - T-SET-011c
+    files:
+      - apps/api/migrations/0007_settings.sql
+      - apps/api/src/settings.ts
+      - apps/api/src/index.ts
+      - apps/api/test/settings.test.ts
+    must_preserve:
+      - INV-assignable-private
+      - INV-one-row-per-key
+    produce: [code, migrations, tests]
+    verifies: [R-SET-004, R-SET-005, R-SET-010, R-SET-011]
+  TASK-content:
+    scope:
+      - R-BOOK-002
+      - R-BOOK-003
+      - R-BOOK-007
+      - R-BOOK-008
+      - R-BOOK-009
+      - R-SET-004
+    files:
+      - apps/web/src/lib/content.ts
+      - CLAUDE.md
+    must_preserve:
+      - INV-default-fallback
+    produce: [code, docs]
+    verifies: [R-BOOK-002, R-BOOK-003, R-BOOK-007, R-BOOK-008, R-BOOK-009]
+  TASK-frontend-data:
+    scope:
+      - R-SET-011
+      - R-SET-004
+      - OP-Settings.getPublic
+      - OP-Settings.update
+      - INV-default-fallback
+    files:
+      - apps/web/src/lib/api.ts
+      - apps/web/src/lib/settings.svelte.ts
+    must_preserve:
+      - INV-default-fallback
+    produce: [code]
+    verifies: [R-SET-011, R-SET-004]
+  TASK-frontend-ui:
+    scope:
+      - R-BOOK-001
+      - R-BOOK-003
+      - R-BOOK-006
+      - R-BOOK-007
+      - R-SET-004
+      - R-SET-005
+    files:
+      - apps/web/src/lib/components/RoomCard.svelte
+      - apps/web/src/lib/components/Footer.svelte
+      - apps/web/src/routes/+layout.svelte
+      - apps/web/src/routes/contact/+page.svelte
+      - apps/web/src/routes/+page.svelte
+      - apps/web/src/routes/le-site/+page.svelte
+      - apps/web/src/routes/a-propos/+page.svelte
+    must_preserve:
+      - INV-default-fallback
+    produce: [code]
+    verifies: [R-BOOK-001, R-BOOK-003, R-BOOK-006, R-BOOK-007, R-SET-004]
+  TASK-admin-ui:
+    scope:
+      - R-SET-012
+      - R-SET-005
+      - OP-Settings.getAdmin
+      - OP-Settings.update
+    files:
+      - apps/web/src/routes/admin/+page.svelte
+    must_preserve:
+      - INV-assignable-private
+    produce: [code]
+    verifies: [R-SET-012, R-SET-005]
+  TASK-tests:
+    scope:
+      - T-BOOK-001a
+      - T-BOOK-001b
+      - T-BOOK-002a
+      - T-BOOK-003a
+      - T-SET-004a
+      - T-SET-004b
+      - T-SET-005b
+      - T-BOOK-006a
+      - T-BOOK-007a
+      - T-BOOK-008a
+      - T-BOOK-009a
+      - T-SET-012a
+    files:
+      - apps/web/src/lib/components/__tests__/RoomCard.test.ts
+      - apps/web/src/lib/components/__tests__/Footer.test.ts
+      - apps/web/src/routes/__tests__/page-contact.test.ts
+      - apps/web/src/routes/__tests__/page-accueil.test.ts
+      - apps/web/src/routes/__tests__/page-a-propos.test.ts
+      - apps/web/src/routes/le-site/__tests__/page-le-site.test.ts
+      - apps/web/src/lib/__tests__/settings.test.ts
+      - apps/web/src/routes/__tests__/page-admin-settings.test.ts
+    must_preserve:
+      - INV-default-fallback
+    produce: [tests]
+    verifies: [R-BOOK-001, R-BOOK-002, R-BOOK-006, R-SET-012]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: settings stored as a key/value table (key, value, updated_at)
+    rationale: "matches idempotency convention; add settings without schema churn"
+  ST-02:
+    status: locked
+    decision: public GET exposes only nightly_price, contact_email, marketing_room_count
+    rationale: "assignable capacity is operational and must not leak publicly"
+  ST-03:
+    status: locked
+    decision: admin update uses POST (not PUT) and zValidator with a custom error hook
+    rationale: "fits existing CORS allowMethods and the repo zValidator rule"
+  ST-04:
+    status: locked
+    decision: RoomCard reads the flat price from the shared settings store
+    rationale: "single source; all price displays update together; per-room price data deleted"
+  ST-05:
+    status: locked
+    decision: PRIVACY C-03 email is a static default, not dynamically configurable
+    rationale: "contact page is the dynamic render point; keeps scope small"

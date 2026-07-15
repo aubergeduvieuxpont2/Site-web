@@ -4,6 +4,7 @@
   import { afterNavigate } from "$app/navigation";
   import Nav from "$lib/components/Nav.svelte";
   import Footer from "$lib/components/Footer.svelte";
+  import { loadSettings } from "$lib/settings.svelte";
 
   // The shell only needs the children snippet. The authenticated user loaded in
   // `+layout.ts` is surfaced as `data.user` for child routes (profil, admin);
@@ -26,6 +27,7 @@
       "(prefers-reduced-motion: reduce)",
     ).matches;
     triggerEnter();
+    loadSettings();
   });
 
   // onMount covers the initial hard load; afterNavigate covers every

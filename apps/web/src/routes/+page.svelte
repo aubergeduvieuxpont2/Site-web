@@ -6,9 +6,20 @@
   import Contour from '$lib/components/Contour.svelte';
   import Button from '$lib/components/Button.svelte';
   import { ROOMS, AMENITIES, STATS } from '$lib/content';
+  import { settings } from '$lib/settings.svelte';
   import { reveal, countUp } from '$lib/motion';
 
   const featuredRooms = ROOMS.slice(0, 3);
+
+  // Build stats with the rooms count from settings. $derived (not a plain
+  // const) because loadSettings() resolves after mount; the year keeps its
+  // digits unlocalized so countUp doesn't render "1 972".
+  const renderedStats = $derived([
+    STATS[0],
+    { ...STATS[1], localize: false },
+    { ...STATS[2], value: settings.marketingRoomCount },
+    STATS[3],
+  ]);
 </script>
 
 <div class="page-accueil" data-testid="page-accueil">
@@ -27,7 +38,7 @@
       <p class="page-accueil__hero-eyebrow">Saint-Raymond · Portneuf · Québec</p>
       <h1 id="hero-heading" class="page-accueil__hero-heading">L'art de recevoir</h1>
       <p class="page-accueil__hero-sub">
-        Une auberge de caractère pour les travailleurs de terrain — foresterie et Hydro-Québec.
+        Une auberge de caractère pour les travailleurs de terrain — foresterie et secteur hydroélectrique.
       </p>
       <div class="page-accueil__hero-ctas" data-testid="hero-ctas">
         <div data-testid="hero-cta-reserver">
@@ -52,7 +63,7 @@
     data-testid="stats-section"
   >
     <div class="page-accueil__stats-inner">
-      {#each STATS as stat, i}
+      {#each renderedStats as stat, i (`${stat.label}-${stat.value}`)}
         <div
           class="page-accueil__stat"
           data-testid="stat-item"
@@ -66,7 +77,7 @@
               class="page-accueil__stat-number"
               data-testid="stat-number"
               aria-hidden="true"
-              use:countUp={{ to: stat.value }}
+              use:countUp={{ to: stat.value, localize: stat.localize ?? true }}
             >{stat.value}</span>
             <span class="page-accueil__stat-suffix" aria-hidden="true">{stat.suffix}</span>
           </div>

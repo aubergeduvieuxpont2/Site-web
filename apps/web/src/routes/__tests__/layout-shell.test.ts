@@ -8,6 +8,17 @@ vi.mock("$app/navigation", () => ({
   afterNavigate: () => {},
 }));
 
+// The composed Nav reads `$page.url.pathname`; the real store is uninitialized
+// outside a request, so stub it with a minimal readable (see error-page.test.ts).
+vi.mock("$app/stores", () => ({
+  page: {
+    subscribe(run: (value: unknown) => void) {
+      run({ url: new URL("http://localhost/") });
+      return () => {};
+    },
+  },
+}));
+
 // Nav and Footer read shared content constants; provide the minimum shape.
 vi.mock("$lib/content", () => ({
   SITE: {
@@ -18,6 +29,19 @@ vi.mock("$lib/content", () => ({
     address: { street: "111, avenue Saint-Michel", city: "Saint-Raymond" },
   },
   NAV: [],
+}));
+
+// The layout and the composed Footer query `window.matchMedia` (reduced
+// motion), which jsdom does not implement — stub it as in motion.test.ts.
+window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: vi.fn(),
+  removeListener: vi.fn(),
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+  dispatchEvent: vi.fn(),
 }));
 
 /** A snippet that renders an identifiable child, so we can assert it lands in <main>. */

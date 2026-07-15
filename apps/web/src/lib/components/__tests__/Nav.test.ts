@@ -1,5 +1,19 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
+
+// Nav reads `$page.url.pathname` from the SvelteKit `page` store. Outside a
+// real request that store is uninitialized (`url` is undefined), so we stub
+// `$app/stores` with a minimal readable — same pattern as error-page.test.ts.
+// jsdom's location defaults to "/", which the active-link test relies on.
+vi.mock("$app/stores", () => ({
+  page: {
+    subscribe(run: (value: unknown) => void) {
+      run({ url: new URL("http://localhost/") });
+      return () => {};
+    },
+  },
+}));
+
 import Nav from "../Nav.svelte";
 import { NAV, SITE } from "$lib/content";
 

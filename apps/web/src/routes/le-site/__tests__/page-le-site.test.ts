@@ -89,7 +89,7 @@ describe('page-le-site route', () => {
 
     it('renders the chambres heading', () => {
       const { html } = renderPage();
-      expect(html).toContain('Nos chambres et dortoirs');
+      expect(html).toContain('Nos chambres');
     });
 
     it('renders section label Hébergement', () => {

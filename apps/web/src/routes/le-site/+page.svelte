@@ -81,11 +81,11 @@
       <Contour number="01" width="contained" />
       <SectionLabel text="Hébergement" />
       <h2 class="page-le-site__heading" use:reveal={{ y: 20, delay: 0.05 }}>
-        Nos chambres et dortoirs
+        Nos chambres
       </h2>
       <p class="page-le-site__intro" use:reveal={{ y: 16, delay: 0.1 }}>
-        De la couchette de chantier à la chambre privée sur la rivière — chaque option
-        est calibrée pour ceux qui arrivent couverts de boue et repartent reposés.
+        Chaque chambre est calibrée pour ceux qui arrivent couverts de boue et repartent reposés.
+        Les chambres sont assignées à votre arrivée selon les besoins de votre équipe.
       </p>
       <div class="page-le-site__rooms-grid" data-testid="rooms-grid" use:revealStagger={{ y: 24, each: 0.07 }}>
         {#each ROOMS as room}
@@ -141,7 +141,7 @@
           <p class="page-le-site__body">
             Depuis 1972, l'Auberge du Vieux Pont domine la rivière Sainte-Anne au cœur de
             Saint-Raymond. Pierre, bois, fer forgé — les matériaux parlent d'eux-mêmes.
-            À proximité des principaux chantiers forestiers et des lignes Hydro-Québec de Portneuf.
+            À proximité des principaux chantiers forestiers et des lignes du réseau hydroélectrique de Portneuf.
           </p>
           <p class="page-le-site__body">
             Un endroit calibré pour ceux qui partent tôt et rentrent tard, avec du béton qu'on

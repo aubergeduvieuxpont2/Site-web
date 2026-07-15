@@ -1,10 +1,13 @@
 import { animate, inView, stagger } from "motion";
 
-const prefersReduced =
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-
 const EASE = [0.33, 1, 0.68, 1] as const;
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+  );
+}
 
 type RevealParams = {
   y?: number;
@@ -21,7 +24,7 @@ type RevealParams = {
 export function reveal(node: HTMLElement, params: RevealParams = {}) {
   const { y = 16, x = 0, delay = 0, duration = 0.6, amount = 0.1 } = params;
 
-  if (prefersReduced) {
+  if (prefersReducedMotion()) {
     node.style.opacity = "1";
     return {};
   }
@@ -67,7 +70,7 @@ export function revealStagger(node: HTMLElement, params: StaggerParams = {}) {
     node.querySelectorAll<HTMLElement>(selector),
   );
 
-  if (prefersReduced) {
+  if (prefersReducedMotion()) {
     children.forEach((child) => (child.style.opacity = "1"));
     return {};
   }
@@ -95,12 +98,21 @@ export function revealStagger(node: HTMLElement, params: StaggerParams = {}) {
  */
 export function countUp(
   node: HTMLElement,
-  params: { to: number; from?: number; duration?: number; suffix?: string; prefix?: string },
+  params: {
+    to: number;
+    from?: number;
+    duration?: number;
+    suffix?: string;
+    prefix?: string;
+    localize?: boolean;
+  },
 ) {
-  const { to, from = 0, duration = 1.6, suffix = "", prefix = "" } = params;
+  const { to, from = 0, duration = 1.6, suffix = "", prefix = "", localize = true } = params;
+  // localize: false for values like years, where "1 972" would be wrong.
+  const fmt = (n: number) => (localize ? n.toLocaleString("fr-CA") : String(n));
 
-  if (prefersReduced) {
-    node.textContent = `${prefix}${to}${suffix}`;
+  if (prefersReducedMotion()) {
+    node.textContent = `${prefix}${fmt(to)}${suffix}`;
     return {};
   }
 
@@ -112,7 +124,7 @@ export function countUp(
         duration,
         ease: EASE,
         onUpdate: (value) => {
-          node.textContent = `${prefix}${Math.round(value).toLocaleString("fr-CA")}${suffix}`;
+          node.textContent = `${prefix}${fmt(Math.round(value))}${suffix}`;
         },
       });
     },

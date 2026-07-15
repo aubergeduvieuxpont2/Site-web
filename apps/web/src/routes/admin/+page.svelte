@@ -8,7 +8,10 @@
     adminReservations,
     adminOutbox,
     requeueOutbox,
+    adminGetSettings,
+    adminUpdateSettings,
     isError,
+    type AdminSettings,
   } from "$lib/api";
   import type { ReservationRow, OutboxRow } from "$lib/api";
 
@@ -17,7 +20,7 @@
   let denied = $state(false);
 
   // ─── Tab state ───
-  let activeTab = $state<"reservations" | "outbox">("reservations");
+  let activeTab = $state<"reservations" | "outbox" | "settings">("reservations");
 
   // ─── Reservations ───
   let searchQuery = $state("");
@@ -33,6 +36,19 @@
   let outboxError = $state<string | null>(null);
   let expandedErrors = $state(new Set<number>());
   let requeueingIds = $state(new Set<number>());
+
+  // ─── Settings ───
+  let settingsLoading = $state(false);
+  let settingsError = $state<string | null>(null);
+  let settingsSaved = $state(false);
+  let settingsSaving = $state(false);
+  let settings = $state<AdminSettings>({
+    nightlyPrice: 89,
+    contactEmail: "info@aubergeduvieuxpont.ca",
+    marketingRoomCount: 12,
+    assignableRoomCount: 12,
+  });
+  let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
 
   // ─── Helpers ───
   function formatDate(iso: string): string {
@@ -79,6 +95,58 @@
     }
   }
 
+  async function loadSettings() {
+    settingsLoading = true;
+    settingsError = null;
+    const res = await adminGetSettings();
+    settingsLoading = false;
+    if (isError(res)) {
+      settingsError = res.error;
+    } else {
+      settings = res;
+    }
+  }
+
+  async function saveSettings() {
+    settingsSaving = true;
+    settingsSaved = false;
+    settingsError = null;
+    settingsErrors = {};
+
+    const errors: Partial<Record<keyof AdminSettings, string>> = {};
+    if (!Number.isInteger(settings.nightlyPrice) || settings.nightlyPrice <= 0) {
+      errors.nightlyPrice = "Prix doit être un entier positif";
+    }
+    if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
+      errors.contactEmail = "Courriel invalide";
+    }
+    if (!Number.isInteger(settings.marketingRoomCount) || settings.marketingRoomCount <= 0) {
+      errors.marketingRoomCount = "Le nombre doit être positif";
+    }
+    if (!Number.isInteger(settings.assignableRoomCount) || settings.assignableRoomCount <= 0) {
+      errors.assignableRoomCount = "La capacité doit être positive";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      settingsErrors = errors;
+      settingsSaving = false;
+      return;
+    }
+
+    const res = await adminUpdateSettings(settings);
+    settingsSaving = false;
+
+    if (isError(res)) {
+      settingsError = res.error;
+    } else {
+      settings = res;
+      settingsSaved = true;
+      setTimeout(() => {
+        settingsSaved = false;
+      }, 3000);
+    }
+  }
+
   // ─── Debounced search ───
   function onSearchInput() {
     clearTimeout(searchTimer);
@@ -89,7 +157,7 @@
 
   // ─── Tab keyboard nav (ARIA tabs pattern) ───
   function onTablistKeydown(e: KeyboardEvent) {
-    const order = ["reservations", "outbox"] as const;
+    const order = ["reservations", "outbox", "settings"] as const;
     const idx = order.indexOf(activeTab);
     let next = idx;
     if (e.key === "ArrowRight") {
@@ -153,11 +221,12 @@
     }
   }
 
-  // ─── Reactive outbox reload when tab or filter changes ───
+  // ─── Reactive data reload when tab changes ───
   $effect(() => {
-    const filter = statusFilter; // captured dependency
     if (activeTab === "outbox") {
-      loadOutbox(filter);
+      loadOutbox(statusFilter);
+    } else if (activeTab === "settings") {
+      loadSettings();
     }
   });
 
@@ -234,6 +303,21 @@
               data-testid="tab-outbox"
             >
               File HubSpot
+            </button>
+            <button
+              role="tab"
+              id="tab-settings"
+              aria-controls="panel-settings"
+              aria-selected={activeTab === "settings"}
+              tabindex={activeTab === "settings" ? 0 : -1}
+              class="page-admin__tab {activeTab === 'settings' ? 'page-admin__tab--active' : ''}"
+              onclick={() => {
+                activeTab = "settings";
+              }}
+              onkeydown={onTablistKeydown}
+              data-testid="tab-settings"
+            >
+              Paramètres
             </button>
           </div>
         </div>
@@ -441,6 +525,114 @@
                   {/if}
                 </tbody>
               </table>
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Settings panel -->
+      <div
+        role="tabpanel"
+        id="panel-settings"
+        aria-labelledby="tab-settings"
+        hidden={activeTab !== "settings"}
+        data-testid="panel-settings"
+      >
+        <div class="page-admin__panel-inner">
+          {#if settingsLoading}
+            <div class="page-admin__spinner" aria-hidden="true"></div>
+          {:else if settingsError}
+            <div class="page-admin__error-banner" role="alert" data-testid="settings-error">
+              {settingsError}
+            </div>
+          {:else}
+            <div class="page-admin__settings-form">
+              <div class="page-admin__field">
+                <label class="page-admin__field-label" for="input-nightly-price">
+                  Prix par nuit ($)
+                </label>
+                <input
+                  id="input-nightly-price"
+                  type="number"
+                  min="1"
+                  bind:value={settings.nightlyPrice}
+                  class="page-admin__search-input"
+                  data-testid="input-nightly-price"
+                />
+                {#if settingsErrors.nightlyPrice}
+                  <span class="page-admin__field-error" role="alert" data-testid="error-nightly-price">{settingsErrors.nightlyPrice}</span>
+                {/if}
+              </div>
+
+              <div class="page-admin__field">
+                <label class="page-admin__field-label" for="input-contact-email">
+                  Courriel de contact
+                </label>
+                <input
+                  id="input-contact-email"
+                  type="email"
+                  bind:value={settings.contactEmail}
+                  class="page-admin__search-input"
+                  data-testid="input-contact-email"
+                />
+                {#if settingsErrors.contactEmail}
+                  <span class="page-admin__field-error" role="alert" data-testid="error-contact-email">{settingsErrors.contactEmail}</span>
+                {/if}
+              </div>
+
+              <div class="page-admin__field">
+                <label class="page-admin__field-label" for="input-marketing-rooms">
+                  Chambres affichées (marketing)
+                </label>
+                <input
+                  id="input-marketing-rooms"
+                  type="number"
+                  min="1"
+                  bind:value={settings.marketingRoomCount}
+                  class="page-admin__search-input"
+                  data-testid="input-marketing-rooms"
+                />
+                {#if settingsErrors.marketingRoomCount}
+                  <span class="page-admin__field-error" role="alert" data-testid="error-marketing-rooms">{settingsErrors.marketingRoomCount}</span>
+                {/if}
+              </div>
+
+              <div class="page-admin__field">
+                <label class="page-admin__field-label" for="input-assignable-rooms">
+                  Capacité assignable (opérations)
+                </label>
+                <input
+                  id="input-assignable-rooms"
+                  type="number"
+                  min="1"
+                  bind:value={settings.assignableRoomCount}
+                  class="page-admin__search-input"
+                  data-testid="input-assignable-rooms"
+                />
+                {#if settingsErrors.assignableRoomCount}
+                  <span class="page-admin__field-error" role="alert" data-testid="error-assignable-rooms">{settingsErrors.assignableRoomCount}</span>
+                {/if}
+              </div>
+
+              {#if settingsSaved}
+                <div class="page-admin__success-message" role="status" data-testid="settings-saved">
+                  Paramètres enregistrés.
+                </div>
+              {/if}
+
+              <button
+                class="page-admin__requeue-btn"
+                onclick={saveSettings}
+                disabled={settingsSaving}
+                data-testid="settings-save-btn"
+              >
+                {#if settingsSaving}
+                  <span class="page-admin__spinner" aria-hidden="true"></span>
+                  Enregistrement…
+                {:else}
+                  Enregistrer
+                {/if}
+              </button>
             </div>
           {/if}
         </div>
@@ -972,6 +1164,32 @@
     .page-admin__requeue-btn:hover {
       transform: none;
     }
+  }
+
+  /* ─── Settings Form ─── */
+  .page-admin__settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    max-width: 600px;
+  }
+
+  .page-admin__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .page-admin__success-message {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-variant);
+    padding: var(--space-md);
+    background-color: var(--color-surface-container-low);
+    border-radius: var(--radius);
   }
 
   /* ─── Screen-reader only utility ─── */

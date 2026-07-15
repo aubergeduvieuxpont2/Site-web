@@ -1,13 +1,13 @@
 /**
  * Site content for L'Auberge du Vieux Pont — Saint-Raymond, Québec.
  * Real location details; copy written for the target market:
- * industrial workers — forestry crews and Hydro-Québec teams.
+ * industrial workers — forestry crews and hydro-electric sector workers.
  */
 
 export const SITE = {
   name: "L'Auberge du Vieux Pont",
   shortName: "Le Vieux Pont",
-  tagline: "L'utilité industrielle rencontre l'hospitalité rurale.",
+  tagline: "Pas de luxe — tout le confort fonctionnel.",
   established: "1972",
   region: "Saint-Raymond · Portneuf · Québec",
   address: {
@@ -19,8 +19,15 @@ export const SITE = {
   },
   phone: "418 655-1212",
   phoneHref: "tel:+14186551212",
-  email: "aubergeduvieuxpont@hotmail.com",
+  email: "info@aubergeduvieuxpont.ca",
+  citq: "304542",
   coords: { lat: 46.9, lng: -71.84 },
+} as const;
+
+export const DEFAULTS = {
+  nightlyPrice: 89,
+  contactEmail: "info@aubergeduvieuxpont.ca",
+  marketingRoomCount: 12,
 } as const;
 
 export type NavLink = { label: string; href: string; code: string };
@@ -40,44 +47,17 @@ export type Room = {
   capacity: string;
   beds: string;
   size: string;
-  priceFrom: number;
   blurb: string;
   specs: string[];
   seed: string;
   // RoomCard spec fields
   slug: string;
   description: string;
-  pricePerNight: number;
   imgKey: string;
   picsumSeed: number;
 };
 
 export const ROOMS: Room[] = [
-  {
-    id: "dortoir-equipe",
-    code: "DOR-06",
-    name: "Le Dortoir de l'Équipe",
-    kind: "Dortoir partagé",
-    capacity: "Jusqu'à 6",
-    beds: "6 lits superposés",
-    size: "24 m²",
-    priceFrom: 39,
-    blurb:
-      "Pour les équipes et les crews. Six couchettes robustes, casiers cadenassables, et un plancher solide conçu pour le travail quotidien.",
-    specs: [
-      "Casiers individuels verrouillables",
-      "Prises de recharge à chaque lit",
-      "Plancher de béton scellé, lavable",
-      "Salle de bain commune attenante",
-    ],
-    seed: "team-dormitory",
-    slug: "dortoir-equipe",
-    description:
-      "Pour les équipes et les crews. Six couchettes robustes, casiers cadenassables, et un plancher solide conçu pour le travail quotidien.",
-    pricePerNight: 39,
-    imgKey: "bedroom.jpg",
-    picsumSeed: 42,
-  },
   {
     id: "chambre-quart",
     code: "QRT-02",
@@ -86,7 +66,6 @@ export const ROOMS: Room[] = [
     capacity: "1 à 2",
     beds: "1 lit queen",
     size: "16 m²",
-    priceFrom: 89,
     blurb:
       "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
     specs: [
@@ -99,7 +78,6 @@ export const ROOMS: Room[] = [
     slug: "chambre-quart",
     description:
       "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
-    pricePerNight: 89,
     imgKey: "bedroom.jpg",
     picsumSeed: 17,
   },
@@ -111,7 +89,6 @@ export const ROOMS: Room[] = [
     capacity: "1 à 2",
     beds: "1 lit queen",
     size: "18 m²",
-    priceFrom: 109,
     blurb:
       "Terrasse privée sur la rivière Sainte-Anne avec accès direct. Séchoir à vêtements de travail, recharge pour outils et radios, refuge idéal entre deux quarts.",
     specs: [
@@ -124,7 +101,6 @@ export const ROOMS: Room[] = [
     slug: "refuge-rider",
     description:
       "Terrasse privée sur la rivière Sainte-Anne avec accès direct. Séchoir à vêtements de travail, recharge pour outils et radios, refuge idéal entre deux quarts.",
-    pricePerNight: 109,
     imgKey: "balcony.jpg",
     picsumSeed: 85,
   },
@@ -136,7 +112,6 @@ export const ROOMS: Room[] = [
     capacity: "Jusqu'à 5",
     beds: "1 queen + 3 simples",
     size: "32 m²",
-    priceFrom: 149,
     blurb:
       "De l'espace pour la tribu. Kitchenette complète, coin repas et rangement pour tout l'équipement de la semaine.",
     specs: [
@@ -149,7 +124,6 @@ export const ROOMS: Room[] = [
     slug: "gite-familial",
     description:
       "De l'espace pour la tribu. Kitchenette complète, coin repas et rangement pour tout l'équipement de la semaine.",
-    pricePerNight: 149,
     imgKey: "living-dining.jpg",
     picsumSeed: 63,
   },
@@ -161,7 +135,7 @@ export const AMENITIES: Amenity[] = [
   {
     code: "A-01",
     title: "Stockage sécurisé",
-    text: "Local verrouillé pour équipement et outils lourds, surveillé jour et nuit.",
+    text: "Local verrouillé pour équipement et outils lourds.",
     icon: "lock",
   },
   {
@@ -203,7 +177,7 @@ export const AMENITIES: Amenity[] = [
   {
     code: "A-08",
     title: "Proximité des chantiers",
-    text: "À proximité des principaux chantiers forestiers et lignes d'Hydro-Québec.",
+    text: "À proximité des principaux chantiers forestiers et lignes du réseau hydroélectrique.",
     icon: "trail",
   },
 ];
@@ -275,13 +249,13 @@ export const ATTRACTIONS: Attraction[] = [
   },
 ];
 
-export type Stat = { value: number; suffix: string; label: string };
+export type Stat = { value: number; suffix: string; label: string; localize?: boolean };
 
 export const STATS: Stat[] = [
   { value: 30, suffix: " min", label: "des principaux chantiers forestiers" },
   { value: 1972, suffix: "", label: "année de fondation" },
-  { value: 32, suffix: " lits", label: "du dortoir à la chambre privée" },
-  { value: 24, suffix: " h", label: "stockage surveillé" },
+  { value: 12, suffix: " chambres", label: "disponibles pour l'équipe" },
+  { value: 24, suffix: " h", label: "stockage sécurisé" },
 ];
 
 export type PolicySection = { code: string; title: string; items: string[] };
@@ -326,7 +300,7 @@ export const POLICIES: PolicySection[] = [
     code: "P-05",
     title: "Animaux et chantiers",
     items: [
-      "Animaux acceptés dans les dortoirs et le Gîte Familial, sur réservation.",
+      "Animaux acceptés dans le Gîte Familial, sur réservation.",
       "Bottes de travail et équipement boueux tolérés — c'est fait pour ça.",
     ],
   },
@@ -354,7 +328,7 @@ export const PRIVACY: PolicySection[] = [
     title: "Vos droits",
     items: [
       "Accès, rectification ou suppression sur demande écrite à l'auberge.",
-      "Pour toute question : aubergeduvieuxpont@hotmail.com.",
+      "Pour toute question : info@aubergeduvieuxpont.ca.",
     ],
   },
 ];
