@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#191c1e"/>
+  <!-- Old bridge arch over the Sainte-Anne -->
+  <path d="M4 24 V17 A12 9 0 0 1 28 17 V24" fill="none" stroke="#f7f9fb" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M9.5 24 V19.5 A6.5 6 0 0 1 22.5 19.5 V24" fill="none" stroke="#fd761a" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="3" y1="25" x2="29" y2="25" stroke="#f7f9fb" stroke-width="2" stroke-linecap="round"/>
+</svg>
