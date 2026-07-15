@@ -23,7 +23,7 @@ async function searchDealByDedupeKey(
   dedupeKey: string
 ): Promise<string | null> {
   try {
-    const dedupeProperty = "hs_dedup_reservation";
+    const dedupeProperty = "dedupe_key";
     const searchResult = (await hubspotFetch(
       env,
       `/crm/v3/objects/deals/search`,
@@ -80,7 +80,7 @@ export async function executeDealCreate(
   if (payload.room) properties.room_type = payload.room;
   if (payload.people !== undefined) properties.number_of_guests = payload.people;
   if (payload.description) properties.description = payload.description;
-  if (dedupeKey) properties.hs_dedup_reservation = dedupeKey;
+  if (dedupeKey) properties.dedupe_key = dedupeKey;
 
   const createResult = (await hubspotFetch(env, `/crm/v3/objects/deals`, {
     method: "POST",
