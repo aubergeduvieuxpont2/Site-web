@@ -9,6 +9,8 @@ type Bindings = {
   // `.dev.env` (via `wrangler dev --env-file`); in production set it with
   // `wrangler secret put DB_CONN`.
   DB_CONN: string;
+  // Internal service binding to the HubSpot gateway Worker.
+  HUBSPOT: Fetcher;
 };
 
 type MessageRow = {
@@ -34,16 +36,39 @@ const MessageRequestSchema = z.object({
   body: z.string().min(1, "body must be non-empty"),
 });
 
+const trimToNull = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const t = (v ?? "").trim();
+    return t.length > 0 ? t : null;
+  });
+
 const ReservationRequestSchema = z.object({
-  name: z.string().min(1, "name is required"),
-  email: z.string().min(1, "email is required"),
-  phone: z.string().optional().default(""),
-  room: z.string().optional().default(""),
-  arrive: z.string().optional().default(""),
-  depart: z.string().optional().default(""),
-  people: z.coerce.number().int().min(1).optional().default(1),
-  message: z.string().optional().default(""),
+  name: z.string().trim().min(1, "name is required"),
+  email: z
+    .string()
+    .trim()
+    .min(1, "email is required")
+    .email("valid email is required"),
+  phone: trimToNull,
+  room: trimToNull,
+  arrive: trimToNull,
+  depart: trimToNull,
+  message: trimToNull,
+  people: z.coerce.number().int().min(1).catch(1),
 });
+
+const reservationHook = (result: any, c: any) =>
+  result.success
+    ? undefined
+    : c.json(
+        {
+          error:
+            result.error.issues[0]?.message ?? "Invalid request",
+        },
+        400
+      );
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -132,53 +157,14 @@ app.post(
 app.post(
   "/api/reservations",
   rateLimitMiddleware,
+  zValidator("json", ReservationRequestSchema, reservationHook),
   async (c) => {
-    let data: any;
-    try {
-      data = await c.req.json();
-    } catch {
-      return c.json({ error: "Invalid JSON body" }, 400);
-    }
-
-    // Defensive read and trim required fields
-    const nameRaw = typeof data.name === "string" ? data.name : "";
-    const emailRaw = typeof data.email === "string" ? data.email : "";
-    const name = nameRaw.trim();
-    const email = emailRaw.trim();
-
-    if (!name || !email) {
-      return c.json({ error: "name and email are required" }, 400);
-    }
-
-    // Normalize optional string fields: trim, convert empty to null
-    const normalizeString = (val: any): string | null => {
-      if (typeof val !== "string") return null;
-      const trimmed = val.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    };
-
-    const phone = normalizeString(data.phone);
-    const room = normalizeString(data.room);
-    const arrive = normalizeString(data.arrive);
-    const depart = normalizeString(data.depart);
-    const message = normalizeString(data.message);
-
-    // Coerce people to positive integer, default to 1 if invalid
-    let people = 1;
-    if (typeof data.people === "number") {
-      if (Number.isFinite(data.people)) {
-        const num = Math.floor(data.people);
-        if (num >= 1) people = num;
-      }
-    } else if (typeof data.people === "string") {
-      const num = parseInt(data.people, 10);
-      if (Number.isFinite(num) && num >= 1) people = num;
-    }
+    const data = c.req.valid("json");
 
     const sql = neon(c.env.DB_CONN);
     const rows = (await sql`
       INSERT INTO reservations (name, email, phone, room, arrive, depart, people, message)
-      VALUES (${name}, ${email}, ${phone}, ${room}, ${arrive}, ${depart}, ${people}, ${message})
+      VALUES (${data.name}, ${data.email}, ${data.phone}, ${data.room}, ${data.arrive}, ${data.depart}, ${data.people}, ${data.message})
       RETURNING id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
     `) as ReservationRow[];
 
@@ -186,6 +172,44 @@ app.post(
     if (!created) {
       return c.json({ error: "Failed to create reservation" }, 500);
     }
+
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          await c.env.HUBSPOT.fetch(
+            new Request("http://hubspot/ops/enqueue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kind: "contact.upsert",
+                payload: { email: data.email, name: data.name },
+              }),
+            })
+          );
+
+          await c.env.HUBSPOT.fetch(
+            new Request("http://hubspot/ops/enqueue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                kind: "deal.create",
+                payload: {
+                  contactEmail: data.email,
+                  dealname: `Reservation #${created.id}`,
+                  arrive: data.arrive || undefined,
+                  depart: data.depart || undefined,
+                  room: data.room || undefined,
+                  people: data.people || undefined,
+                  description: data.message || undefined,
+                },
+                dedupeKey: `reservation-${created.id}`,
+              }),
+            })
+          );
+        } catch {
+        }
+      })()
+    );
 
     return c.json({ reservation: created }, 201);
   }

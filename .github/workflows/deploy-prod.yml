@@ -34,6 +34,10 @@ jobs:
       - name: Build web
         run: npm run build:web
 
+      - name: Deploy HubSpot gateway
+        run: npx wrangler deploy
+        working-directory: apps/hubspot
+
       - name: Deploy API (www/api/*, dev+a+b /api/*)
         run: npx wrangler deploy
         working-directory: apps/api

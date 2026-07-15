@@ -12,6 +12,9 @@
     "build:web": "npm run build --workspace apps/web",
     "deploy:web": "npm run deploy --workspace apps/web",
     "deploy:api": "npm run deploy --workspace apps/api",
+    "dev:hubspot": "npm run dev --workspace apps/hubspot",
+    "deploy:hubspot": "npm run deploy --workspace apps/hubspot",
+    "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace apps/api"
   },

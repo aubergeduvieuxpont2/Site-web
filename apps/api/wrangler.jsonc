@@ -29,4 +29,10 @@
   //     (the `dev` script passes `--env-file ../../.dev.env`).
   //   - Production: set it as a secret with `wrangler secret put DB_CONN`.
   // No binding block is needed — DB_CONN is a plain var/secret on `c.env`.
+
+  // Internal service binding to the HubSpot gateway Worker.
+  // The gateway has no public route; the API reaches it exclusively via this binding.
+  "services": [
+    { "binding": "HUBSPOT", "service": "site-web-hubspot" }
+  ]
 }

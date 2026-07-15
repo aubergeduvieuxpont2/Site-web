@@ -1,0 +1,359 @@
+REQ:
+  R-GW-001:
+    actor: Any monorepo service (via HUBSPOT binding)
+    capability: enqueue a durable HubSpot op that is delivered eventually
+    constraints: envelope Zod-validated; returns 202 with row id; persists a pending outbox row
+    priority: MUST
+    tests: [T-GW-001a, T-GW-001b]
+  R-GW-002:
+    actor: Any monorepo service
+    capability: execute a HubSpot op synchronously and get the normalized result
+    constraints: returns { ok:true,... } or { ok:false, status, message }
+    priority: MUST
+    tests: [T-GW-002a]
+  R-GW-003:
+    actor: Operator / monitor
+    capability: check gateway health (token + DB)
+    constraints: 200 {ok:true} on success; non-200 normalized error otherwise
+    priority: MUST
+    tests: [T-GW-003a]
+  R-GW-004:
+    actor: Cron scheduler
+    capability: drain due pending outbox rows atomically with retry/backoff/failure
+    constraints: claim <=25 via FOR UPDATE SKIP LOCKED; backoff honors Retry-After; failed on permanent 4xx or attempts>=8
+    priority: MUST
+    tests: [T-GW-004a, T-GW-004b, T-GW-004c]
+  R-GW-005:
+    actor: Op catalog
+    capability: map contact.upsert/deal.create/note.create/list.add/list.remove/timeline.event to HubSpot requests
+    constraints: deal.create resolves contact by email + v4 association id 3; dedupeKey search-before-create
+    priority: MUST
+    tests: [T-GW-005a, T-GW-005b, T-GW-005c]
+  R-RES-001:
+    actor: Reservation guest
+    capability: submit a reservation that also enqueues CRM ops without affecting the response
+    constraints: 201 {reservation} unchanged; two enqueues in waitUntil try/catch; gateway failure never changes response
+    priority: MUST
+    tests: [T-RES-001a, T-RES-001b]
+  R-RES-002:
+    actor: Reservation guest
+    capability: reservation input validated via zod-validator middleware with email-format tightening
+    constraints: zValidator('json', ReservationRequestSchema, hook) middleware (no manual c.req.json); custom hook preserves same 400 {error} shape/trimming/defaults; email must be valid format
+    priority: MUST
+    tests: [T-RES-002a, T-RES-002b]
+  R-INFRA-001:
+    actor: CI / deploy pipeline
+    capability: typecheck+test all workspaces; deploy hubspot before api
+    constraints: npm test --workspaces --if-present in CI; hubspot deploy step before API step in deploy-prod.yml
+    priority: MUST
+    tests: [T-INFRA-001a, T-INFRA-001b]
+
+E:
+  E-OutboxRow:
+    fields:
+      id: bigint (identity)
+      kind: text
+      payload: jsonb
+      dedupe_key: text nullable
+      status: text (pending|delivered|failed)
+      attempts: int
+      next_attempt_at: timestamptz
+      last_error: text nullable
+      hubspot_id: text nullable
+      created_at: timestamptz
+      updated_at: timestamptz
+    tenancy: single-tenant (shared DB)
+    invariants:
+      - INV-claim-atomic
+      - INV-terminal-failed
+  E-OpEnvelope:
+    fields:
+      kind: enum(contact.upsert|deal.create|note.create|list.add|list.remove|timeline.event)
+      payload: object (per-kind Zod schema)
+      dedupe_key: string nullable
+    invariants:
+      - INV-envelope-valid
+
+OP:
+  OP-Gateway.enqueue:
+    input: { kind: string, payload: object, dedupeKey: "string?" }
+    auth: [internal-binding]
+    pre: [envelope validates against per-kind schema]
+    err: [ERR-VALIDATION]
+    out: { id: string }
+  OP-Gateway.execute:
+    input: { kind: string, payload: object, dedupeKey: "string?" }
+    auth: [internal-binding]
+    pre: [envelope validates]
+    err: [ERR-VALIDATION, ERR-HUBSPOT, ERR-TRANSIENT]
+    out: { ok: true, hubspotId: "string?" }
+  OP-Gateway.health:
+    input: {}
+    auth: [internal-binding]
+    pre: []
+    err: [ERR-HUBSPOT, ERR-DB]
+    out: { ok: true }
+  OP-Outbox.claimBatch:
+    input: { limit: 25 }
+    auth: [cron]
+    pre: [status=pending AND next_attempt_at<=now()]
+    err: []
+    out: { rows: "E-OutboxRow[]" }
+  OP-Outbox.drain:
+    input: {}
+    auth: [cron]
+    pre: []
+    err: [ERR-HUBSPOT, ERR-TRANSIENT]
+    out: { delivered: int, retried: int, failed: int }
+  OP-Reservation.create:
+    input: ReservationRequest
+    auth: [public-api]
+    pre: [zValidator('json', ReservationRequestSchema, hook) middleware passes; data read via c.req.valid('json')]
+    err: [ERR-VALIDATION]
+    out: { reservation: object }
+
+ERR:
+  ERR-VALIDATION:
+    code: 400
+    meaning: envelope/reservation payload failed Zod validation
+  ERR-HUBSPOT:
+    code: 502
+    meaning: HubSpot returned a permanent error (normalized { ok:false, status, message })
+  ERR-TRANSIENT:
+    code: 429
+    meaning: HubSpot rate-limited or 5xx/network — retry with backoff honoring Retry-After
+  ERR-DB:
+    code: 503
+    meaning: database unreachable (SELECT 1 failed)
+
+AUTH:
+  internal-binding: reachable only via the HUBSPOT Cloudflare service binding (no public route)
+  cron: the Worker scheduled() handler triggered by cron * * * * *
+  public-api: existing public /api surface on apps/api
+
+INV:
+  INV-claim-atomic: concurrent drains never double-claim a row (FOR UPDATE SKIP LOCKED)
+  INV-terminal-failed: a failed row is never re-claimed or auto-retried
+  INV-envelope-valid: no outbox row is inserted for an invalid envelope
+  INV-reservation-isolation: no gateway/HubSpot failure changes the reservation HTTP response
+  INV-secret-safety: HUBSPOT_TOKEN/DB_CONN never committed to config files
+
+API:
+  POST /ops/enqueue:
+    input: E-OpEnvelope
+    output: { id: string }
+    errors: [ERR-VALIDATION]
+    auth: internal-binding
+  POST /ops/execute:
+    input: E-OpEnvelope
+    output: { ok: true, hubspotId: "string?" }
+    errors: [ERR-VALIDATION, ERR-HUBSPOT, ERR-TRANSIENT]
+    auth: internal-binding
+  GET /health:
+    input: {}
+    output: { ok: true }
+    errors: [ERR-HUBSPOT, ERR-DB]
+    auth: internal-binding
+  POST /api/reservations:
+    input: ReservationRequest
+    output: { reservation: object }
+    errors: [ERR-VALIDATION]
+    auth: public-api
+
+DATA:
+  hubspot_outbox table: id bigint identity pk, kind text, payload jsonb, dedupe_key text, status text default 'pending', attempts int default 0, next_attempt_at timestamptz default now(), last_error text, hubspot_id text, created_at timestamptz, updated_at timestamptz
+  hubspot_outbox_due_idx: partial index on (next_attempt_at) WHERE status='pending'
+  migration: apps/api/migrations/0003_hubspot_outbox.sql (two statements, no embedded semicolons, no dollar-quoting)
+  mirror: apps/api/schema.sql
+
+UI: {}
+
+TEST:
+  T-GW-001a:
+    verifies: R-GW-001
+    behaviour: "POST /ops/enqueue valid envelope returns 202 { id } and inserts a pending row"
+    steps:
+      - stub Neon; POST /ops/enqueue { kind:'contact.upsert', payload:{email} }
+      - assert 202, body.id present, insert called with status pending
+  T-GW-001b:
+    verifies: R-GW-001
+    behaviour: "invalid envelope returns non-2xx { ok:false, status, message } and inserts no row"
+    steps:
+      - POST /ops/enqueue { kind:'bogus', payload:{} }
+      - assert non-2xx, ok:false, no insert
+  T-GW-002a:
+    verifies: R-GW-002
+    behaviour: "POST /ops/execute returns { ok:true } on stubbed success and { ok:false, status, message } on stubbed HubSpot non-2xx"
+    steps:
+      - stub fetch 200 -> assert ok:true
+      - stub fetch 400 -> assert ok:false, status 400
+  T-GW-003a:
+    verifies: R-GW-003
+    behaviour: "GET /health returns 200 {ok:true} when token+DB ok; non-200 normalized error when token missing"
+    steps:
+      - stub account-info 200 + SELECT 1 ok -> assert 200 ok:true
+      - stub account-info 401 -> assert non-200 ok:false
+  T-GW-004a:
+    verifies: R-GW-004
+    behaviour: "claimBatch issues one UPDATE ... FOR UPDATE SKIP LOCKED ... RETURNING limited to 25"
+    steps:
+      - inspect generated SQL string contains FOR UPDATE SKIP LOCKED and LIMIT 25
+  T-GW-004b:
+    verifies: R-GW-004
+    behaviour: "computeBackoff grows with attempts and honors Retry-After"
+    steps:
+      - computeBackoff(1) < computeBackoff(3)
+      - computeBackoff(1, retryAfter=120) >= 120
+  T-GW-004c:
+    verifies: R-GW-004
+    behaviour: "row -> failed on permanent 4xx or attempts>=8; delivered on success"
+    steps:
+      - classifyFailure(400)=='permanent'; classifyFailure(500)=='transient'
+      - attempts=8 transient -> markFailed; success -> markDelivered with hubspot_id
+  T-GW-005a:
+    verifies: R-GW-005
+    behaviour: "contact.upsert maps to contacts endpoint keyed by email (fetch stubbed)"
+    steps:
+      - executeOp contact.upsert -> assert path/method/body
+  T-GW-005b:
+    verifies: R-GW-005
+    behaviour: "deal.create resolves contact by email, creates deal, associates v4 type id 3; dedupeKey search-before-create"
+    steps:
+      - stub search hit -> returns existing id, no create
+      - stub search miss -> creates contact+deal+association id 3
+  T-GW-005c:
+    verifies: R-GW-005
+    behaviour: "hubspotFetch normalizes a non-2xx into { ok:false, status, message }"
+    steps:
+      - stub 500 -> assert normalized error shape
+  T-RES-001a:
+    verifies: R-RES-001
+    behaviour: "valid reservation returns 201 { reservation } and issues 2 enqueue calls via HUBSPOT binding"
+    steps:
+      - POST /api/reservations valid -> 201; HUBSPOT.fetch called twice (contact.upsert, deal.create dedupeKey reservation-<id>)
+  T-RES-001b:
+    verifies: R-RES-001
+    behaviour: "HUBSPOT binding rejection does not change the reservation response"
+    steps:
+      - stub HUBSPOT.fetch to reject -> POST still returns 201 unchanged
+  T-RES-002a:
+    verifies: R-RES-002
+    behaviour: "valid body 201 { reservation } identical shape; people defaults 1; empty optionals -> null"
+    steps:
+      - POST minimal valid -> assert shape and defaults
+  T-RES-002b:
+    verifies: R-RES-002
+    behaviour: "missing name/email or invalid email returns 400 { error }"
+    steps:
+      - POST {email:'not-an-email', name:'x'} -> 400 { error }
+  T-INFRA-001a:
+    verifies: R-INFRA-001
+    behaviour: "npm run typecheck passes all workspaces; npm test --workspaces --if-present passes hubspot suite"
+    steps:
+      - run typecheck -> 0 errors
+      - run test -> hubspot vitest passes
+  T-INFRA-001b:
+    verifies: R-INFRA-001
+    behaviour: "deploy-prod.yml has Deploy HubSpot gateway step before Deploy API; ci.yml runs test after typecheck"
+    steps:
+      - grep step order in deploy-prod.yml
+      - grep test step in ci.yml
+
+NFR:
+  security: HUBSPOT_TOKEN/DB_CONN only as secrets/.dev.env; no public route on gateway
+  reliability: at-least-once delivery; atomic claim tolerant of overlapping cron; idempotent migration
+  observability: last_error retained on failed rows; observability.enabled in wrangler.jsonc
+  typecheck: all workspaces 0 errors
+
+FILE:
+  apps/hubspot/package.json: TASK-hubspot-config
+  apps/hubspot/tsconfig.json: TASK-hubspot-config
+  apps/hubspot/wrangler.jsonc: TASK-hubspot-config
+  apps/hubspot/vitest.config.ts: TASK-hubspot-config
+  apps/hubspot/src/env.ts: TASK-hubspot-core
+  apps/hubspot/src/hubspotClient.ts: TASK-hubspot-core
+  apps/hubspot/src/ops/**/*.ts: TASK-hubspot-ops
+  apps/hubspot/src/outbox.ts: TASK-hubspot-outbox
+  apps/hubspot/src/scheduled.ts: TASK-hubspot-outbox
+  apps/hubspot/src/index.ts: TASK-hubspot-core
+  apps/hubspot/test/**/*.ts: TASK-hubspot-tests
+  apps/api/migrations/0003_hubspot_outbox.sql: TASK-db
+  apps/api/schema.sql: TASK-db
+  apps/api/wrangler.jsonc: TASK-api-consumer
+  apps/api/src/index.ts: TASK-api-consumer
+  .github/workflows/deploy-prod.yml: TASK-wiring
+  .github/workflows/ci.yml: TASK-wiring
+  package.json: TASK-wiring
+  .dev.env.example: TASK-wiring
+
+TASK:
+  TASK-hubspot-config:
+    scope: [R-GW-001, R-GW-002, R-GW-003]
+    files: [apps/hubspot/package.json, apps/hubspot/tsconfig.json, apps/hubspot/wrangler.jsonc, apps/hubspot/vitest.config.ts]
+    must_preserve: [INV-secret-safety]
+    produce: [config]
+    verifies: [R-GW-001, R-INFRA-001]
+  TASK-hubspot-core:
+    scope: [R-GW-001, R-GW-002, R-GW-003, ERR-VALIDATION, ERR-HUBSPOT, ERR-DB]
+    files: [apps/hubspot/src/env.ts, apps/hubspot/src/hubspotClient.ts, apps/hubspot/src/index.ts]
+    must_preserve: [INV-envelope-valid, INV-secret-safety]
+    produce: [code]
+    verifies: [R-GW-001, R-GW-002, R-GW-003]
+  TASK-hubspot-ops:
+    scope: [R-GW-005, ERR-HUBSPOT, ERR-TRANSIENT]
+    files: [apps/hubspot/src/ops/**/*.ts]
+    must_preserve: [INV-envelope-valid]
+    produce: [code]
+    verifies: [R-GW-005]
+  TASK-hubspot-outbox:
+    scope: [R-GW-004, OP-Outbox.claimBatch, OP-Outbox.drain, ERR-TRANSIENT]
+    files: [apps/hubspot/src/outbox.ts, apps/hubspot/src/scheduled.ts]
+    must_preserve: [INV-claim-atomic, INV-terminal-failed]
+    produce: [code]
+    verifies: [R-GW-004]
+  TASK-hubspot-tests:
+    scope: [T-GW-005a, T-GW-005b, T-GW-005c, T-GW-004b, T-GW-004c, T-GW-002a]
+    files: [apps/hubspot/test/**/*.ts]
+    must_preserve: []
+    produce: [tests]
+    verifies: [R-GW-002, R-GW-004, R-GW-005]
+  TASK-db:
+    scope: [R-GW-004, INV-terminal-failed]
+    files: [apps/api/migrations/0003_hubspot_outbox.sql, apps/api/schema.sql]
+    must_preserve: []
+    produce: [migrations]
+    verifies: [R-GW-004]
+  TASK-api-consumer:
+    scope: [R-RES-001, R-RES-002, R-GW-001]
+    files: [apps/api/src/index.ts, apps/api/wrangler.jsonc]
+    must_preserve: [INV-reservation-isolation]
+    produce: [code, config]
+    verifies: [R-RES-001, R-RES-002]
+  TASK-wiring:
+    scope: [R-INFRA-001]
+    files: [.github/workflows/deploy-prod.yml, .github/workflows/ci.yml, package.json, .dev.env.example]
+    must_preserve: [INV-secret-safety]
+    produce: [config]
+    verifies: [R-INFRA-001]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: Gateway has no public route; reachable only via HUBSPOT service binding + cron
+    rationale: keeps HubSpot token off public surfaces (mirrors ab-splitter)
+  ST-02:
+    status: locked
+    decision: deal.create carries contactEmail and resolves/creates contact at execution with v4 association id 3
+    rationale: order-insensitive, retry-safe ops with no cross-op id passing
+  ST-03:
+    status: locked
+    decision: deploy ordering enforced in-job in deploy-prod.yml (hubspot before api), no separate workflow
+    rationale: HUBSPOT binding must resolve when api deploys on the shared push
+  ST-04:
+    status: locked
+    decision: reservation validation via zod-validator middleware (zValidator('json', ReservationRequestSchema, hook)) with a custom error hook preserving the exact 400 {error} contract (email-format tightening only); no manual c.req.json parsing; enqueue isolated in waitUntil try/catch
+    rationale: satisfies Hono rule (route handlers must use zod-validator middleware); custom hook + schema-encoded transforms preserve the exact external contract; gateway failure never changes response
+  ST-05:
+    status: locked
+    decision: outbox migration limited to two plain CREATE ... IF NOT EXISTS statements (no embedded ; / dollar-quoting)
+    rationale: migrate.mjs strips -- comments and splits naively on ;
