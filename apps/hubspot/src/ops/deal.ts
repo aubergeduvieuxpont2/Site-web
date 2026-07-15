@@ -54,19 +54,41 @@ async function searchDealByDedupeKey(
   return null;
 }
 
+async function ensureDealContactAssociation(
+  env: Env,
+  dealId: string,
+  contactId: string
+): Promise<void> {
+  // The v4 single-association PUT expects a bare array body; failures propagate
+  // so the outbox retries until the association exists.
+  const ASSOCIATION_TYPE_DEAL_TO_CONTACT = 3;
+  await hubspotFetch(
+    env,
+    `/crm/v4/objects/deals/${dealId}/associations/contacts/${contactId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify([
+        { associationCategory: "HUBSPOT_DEFINED", associationTypeId: ASSOCIATION_TYPE_DEAL_TO_CONTACT },
+      ]),
+    }
+  );
+}
+
 export async function executeDealCreate(
   env: Env,
   payload: DealCreatePayload,
   dedupeKey?: string
 ): Promise<{ ok: true; hubspotId: string }> {
+  const contactId = await resolveOrCreateContactByEmail(env, payload.contactEmail);
+
   if (dedupeKey) {
     const existingId = await searchDealByDedupeKey(env, dedupeKey);
     if (existingId) {
+      // A retried op may have created the deal but not the association.
+      await ensureDealContactAssociation(env, existingId, contactId);
       return { ok: true, hubspotId: existingId };
     }
   }
-
-  const contactId = await resolveOrCreateContactByEmail(env, payload.contactEmail);
 
   const properties: Record<string, unknown> = {
     dealname: payload.dealname,
@@ -89,20 +111,7 @@ export async function executeDealCreate(
 
   const dealId = createResult.id;
 
-  try {
-    const ASSOCIATION_TYPE_DEAL_TO_CONTACT = 3;
-    await hubspotFetch(
-      env,
-      `/crm/v4/objects/deals/${dealId}/associations/contacts/${contactId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify({
-          types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: ASSOCIATION_TYPE_DEAL_TO_CONTACT }],
-        }),
-      }
-    );
-  } catch {
-  }
+  await ensureDealContactAssociation(env, dealId, contactId);
 
   return { ok: true, hubspotId: dealId };
 }

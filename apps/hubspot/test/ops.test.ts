@@ -390,23 +390,39 @@ describe("Operations", () => {
         expect(associationCall).toBeDefined();
         if (associationCall) {
           const body = JSON.parse(associationCall[1].body);
-          expect(body.types[0].associationTypeId).toBe(3);
+          expect(body[0].associationTypeId).toBe(3);
         }
       });
 
       it("returns existing deal when dedupeKey matches", async () => {
         const mockFetch = global.fetch as any;
-        mockFetch.mockResolvedValueOnce(
-          new Response(
-            JSON.stringify({
-              results: [{ id: "existing-deal-456" }],
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            }
-          )
-        );
+        mockFetch.mockImplementation((url: string, init?: any) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [{ id: "contact-789" }] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v3/objects/deals/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [{ id: "existing-deal-456" }] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v4/objects/deals/existing-deal-456/associations/contacts/contact-789")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({}), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
 
         const result = await executeDealCreate(
           mockEnv,
