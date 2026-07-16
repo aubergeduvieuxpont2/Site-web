@@ -198,17 +198,18 @@ describe('+page.svelte (page-accueil SSR)', () => {
   });
 
   describe('contour dividers', () => {
-    it('renders three contour dividers', () => {
+    it('renders four contour dividers', () => {
       const html = renderPage();
       const matches = html.match(/data-testid="contour"/g);
-      expect(matches).toHaveLength(3);
+      expect(matches).toHaveLength(4);
     });
 
-    it('contours carry register numbers 01, 02, 03', () => {
+    it('contours carry register numbers 01, 02, 03, 04', () => {
       const html = renderPage();
       expect(html).toContain('>01<');
       expect(html).toContain('>02<');
       expect(html).toContain('>03<');
+      expect(html).toContain('>04<');
     });
   });
 

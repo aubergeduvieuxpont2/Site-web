@@ -22,7 +22,45 @@ export const SITE = {
   email: "info@aubergeduvieuxpont.ca",
   citq: "304542",
   coords: { lat: 46.9, lng: -71.84 },
+  // Canonical production origin — the base for canonical URLs, Open Graph
+  // URLs and absolute image URLs in structured data. No trailing slash.
+  url: "https://www.aubergeduvieuxpont.ca",
 } as const;
+
+/**
+ * Frequently-asked questions surfaced on the home page and emitted as
+ * `FAQPage` structured data. The visible copy and the JSON-LD are built from
+ * this single source so they always match (a Google rich-result requirement).
+ */
+export type Faq = { question: string; answer: string };
+
+export const FAQ: Faq[] = [
+  {
+    question: "Où se trouve L'Auberge du Vieux Pont ?",
+    answer:
+      "Au 111, avenue Saint-Michel à Saint-Raymond, dans Portneuf (Québec), au bord de la rivière Sainte-Anne — à environ 30 minutes des principaux chantiers forestiers de la région.",
+  },
+  {
+    question: "Offrez-vous des tarifs d'entreprise pour les équipes ?",
+    answer:
+      "Oui. Nous proposons des ententes contractuelles avantageuses pour les équipes de foresterie et du secteur hydroélectrique. Écrivez-nous à info@aubergeduvieuxpont.ca pour obtenir un tarif de groupe.",
+  },
+  {
+    question: "Peut-on arriver tard ou loger pour un quart de nuit ?",
+    answer:
+      "Oui. Nos chambres sont insonorisées et équipées de rideaux occultants, pensées pour les travailleurs de quart qui doivent dormir le jour.",
+  },
+  {
+    question: "Y a-t-il du rangement pour l'équipement et les outils ?",
+    answer:
+      "Oui : un local de stockage sécurisé verrouillé, un dépôt de recharge pour outils et radios, et une salle de séchage pour les vêtements et bottes de travail.",
+  },
+  {
+    question: "Quels services sont inclus et à partir de quel tarif ?",
+    answer:
+      "Les chambres débutent à 89 $ la nuit. La cuisine partagée, la buanderie, le café en libre-service et le WiFi sont inclus.",
+  },
+];
 
 export const DEFAULTS = {
   nightlyPrice: 89,

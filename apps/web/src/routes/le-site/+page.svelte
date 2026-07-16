@@ -4,6 +4,8 @@
   import SectionLabel from '$lib/components/SectionLabel.svelte';
   import Contour from '$lib/components/Contour.svelte';
   import Button from '$lib/components/Button.svelte';
+  import Seo from '$lib/components/Seo.svelte';
+  import { breadcrumbSchema } from '$lib/seo';
   import { reveal, revealStagger } from '$lib/motion';
   import { ATTRACTIONS, PROPERTY_AREAS } from '$lib/content';
   import { settings, loadSettings } from '$lib/settings.svelte';
@@ -696,6 +698,14 @@
   }
 </style>
 
-<svelte:head>
-  <title>Le site — Auberge du Vieux Pont</title>
-</svelte:head>
+<Seo
+  title="Le site — Auberge du Vieux Pont"
+  description="Découvrez L'Auberge du Vieux Pont : chambres insonorisées, cuisine partagée, buanderie, salle de séchage et salon commun, sur la rivière Sainte-Anne à Saint-Raymond."
+  path="/le-site"
+  schema={[
+    breadcrumbSchema([
+      { name: 'Accueil', path: '/' },
+      { name: 'Le site', path: '/le-site' },
+    ]),
+  ]}
+/>

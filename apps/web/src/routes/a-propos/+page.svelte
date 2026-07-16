@@ -1,6 +1,8 @@
 <script lang="ts">
   import { reveal, revealStagger } from '$lib/motion';
   import { SITE } from '$lib/content';
+  import Seo from '$lib/components/Seo.svelte';
+  import { breadcrumbSchema } from '$lib/seo';
   import Contour from '$lib/components/Contour.svelte';
   import ImagePanel from '$lib/components/ImagePanel.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
@@ -665,6 +667,14 @@
   }
 </style>
 
-<svelte:head>
-  <title>À propos — Auberge du Vieux Pont</title>
-</svelte:head>
+<Seo
+  title="À propos — Auberge du Vieux Pont"
+  description="L'Auberge du Vieux Pont à Saint-Raymond depuis 1972 — un hébergement pensé pour les équipes de foresterie et du secteur hydroélectrique de Portneuf."
+  path="/a-propos"
+  schema={[
+    breadcrumbSchema([
+      { name: 'Accueil', path: '/' },
+      { name: 'À propos', path: '/a-propos' },
+    ]),
+  ]}
+/>

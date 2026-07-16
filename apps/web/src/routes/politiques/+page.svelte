@@ -2,6 +2,8 @@
   import { POLICIES } from "$lib/content";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
+  import Seo from "$lib/components/Seo.svelte";
+  import { breadcrumbSchema } from "$lib/seo";
 </script>
 
 <section class="page-politiques bg-surface">
@@ -169,6 +171,14 @@
   }
 </style>
 
-<svelte:head>
-  <title>Politiques — Auberge du Vieux Pont</title>
-</svelte:head>
+<Seo
+  title="Politiques — Auberge du Vieux Pont"
+  description="Politiques et règlements de L'Auberge du Vieux Pont : arrivée, départ, annulation et vie commune à Saint-Raymond."
+  path="/politiques"
+  schema={[
+    breadcrumbSchema([
+      { name: "Accueil", path: "/" },
+      { name: "Politiques", path: "/politiques" },
+    ]),
+  ]}
+/>

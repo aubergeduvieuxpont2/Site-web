@@ -1,0 +1,10 @@
+# L'Auberge du Vieux Pont — robots directives
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profil
+Disallow: /connexion
+Disallow: /reinitialisation
+Disallow: /api/
+
+Sitemap: https://www.aubergeduvieuxpont.ca/sitemap.xml

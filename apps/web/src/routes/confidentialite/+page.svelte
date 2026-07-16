@@ -3,6 +3,8 @@
   import { settings } from "$lib/settings.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
+  import Seo from "$lib/components/Seo.svelte";
+  import { breadcrumbSchema } from "$lib/seo";
 
   // PRIVACY items are static copy; C-03 embeds the default contact email.
   // Swap in the admin-configured address so the page never shows a stale one.
@@ -251,6 +253,14 @@
   }
 </style>
 
-<svelte:head>
-  <title>Confidentialité — Auberge du Vieux Pont</title>
-</svelte:head>
+<Seo
+  title="Confidentialité — Auberge du Vieux Pont"
+  description="Politique de confidentialité de L'Auberge du Vieux Pont — comment nous protégeons vos renseignements personnels."
+  path="/confidentialite"
+  schema={[
+    breadcrumbSchema([
+      { name: "Accueil", path: "/" },
+      { name: "Confidentialité", path: "/confidentialite" },
+    ]),
+  ]}
+/>
