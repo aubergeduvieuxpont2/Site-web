@@ -35,14 +35,18 @@ const ADMIN: User = { id: 1, email: "admin@example.com", name: "Admin", role: "a
 function reservation(over: Partial<ReservationRow> = {}): ReservationRow {
   return {
     id: 100,
-    email: "jean@example.com",
     name: "Jean Tremblay",
-    check_in: "2026-08-01",
-    check_out: "2026-08-03",
-    guests: 2,
+    first_name: "Jean",
+    last_name: "Tremblay",
+    email: "jean@example.com",
+    phone: null,
+    room: null,
+    arrive: "2026-08-01",
+    depart: "2026-08-03",
+    people: 2,
+    room_count: null,
     message: null,
     created_at: "2026-07-01T12:00:00.000Z",
-    updated_at: "2026-07-01T12:00:00.000Z",
     ...over,
   };
 }
@@ -145,44 +149,95 @@ describe("page-profil user card", () => {
 describe("page-profil reservations", () => {
   it("shows the empty state when there are no reservations", async () => {
     const { findByTestId } = render(Page);
-    expect((await findByTestId("profil-res-empty")).textContent).toContain("Aucune réservation");
+    expect((await findByTestId("empty-state")).textContent).toContain("Aucune réservation");
   });
 
-  it("renders a row per reservation and expands details on demand", async () => {
+  it("renders a row per reservation with corrected field names", async () => {
     getProfile.mockResolvedValue(
       profile({
-        reservations: [reservation({ id: 1, message: "Arrivée tardive" }), reservation({ id: 2 })],
+        reservations: [
+          reservation({ id: 1, arrive: "2026-08-01", depart: "2026-08-03", people: 2 }),
+          reservation({ id: 2, arrive: "2026-09-10", depart: "2026-09-15", people: 3 }),
+        ],
       }),
     );
-    const { findByTestId, findAllByTestId, queryByTestId, getByTestId } = render(Page);
-    const rows = await findAllByTestId(/profil-res-row-\d+/);
+    const { findAllByTestId } = render(Page);
+    const rows = await findAllByTestId(/reservation-row-\d+/);
     expect(rows).toHaveLength(2);
-
-    // Detail row is hidden until the expand toggle is pressed.
-    expect(queryByTestId("profil-res-detail-0")).toBeNull();
-    const toggle = await findByTestId("profil-res-expand-0");
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-
-    await fireEvent.click(toggle);
-    const detail = await findByTestId("profil-res-detail-0");
-    expect(detail.textContent).toContain("Jean Tremblay");
-    expect(detail.textContent).toContain("Arrivée tardive");
-    expect(getByTestId("profil-res-expand-0").getAttribute("aria-expanded")).toBe("true");
-
-    // Collapsing hides the detail again.
-    await fireEvent.click(getByTestId("profil-res-expand-0"));
-    await waitFor(() => expect(queryByTestId("profil-res-detail-0")).toBeNull());
   });
 
-  it("renders reservation values as text, never as HTML", async () => {
+  it("formats arrive and depart dates in fr-CA locale", async () => {
     getProfile.mockResolvedValue(
-      profile({ reservations: [reservation({ name: "<b>x</b>", message: "<script>1</script>" })] }),
+      profile({
+        reservations: [reservation({ id: 1, arrive: "2026-08-01", depart: "2026-08-03" })],
+      }),
     );
-    const { findByTestId } = render(Page);
-    await fireEvent.click(await findByTestId("profil-res-expand-0"));
-    const detail = await findByTestId("profil-res-detail-0");
-    expect(detail.textContent).toContain("<b>x</b>");
-    expect(detail.querySelector("b")).toBeNull();
+    const { findAllByTestId } = render(Page);
+    const arriveCells = await findAllByTestId("cell-arrive");
+    const departCells = await findAllByTestId("cell-depart");
+    // "2026-08-01" → "1 août 2026" in fr-CA
+    expect(arriveCells[0].textContent).toContain("août");
+    expect(departCells[0].textContent).toContain("août");
+  });
+
+  it("renders — for null arrive and depart dates", async () => {
+    getProfile.mockResolvedValue(
+      profile({
+        reservations: [reservation({ id: 1, arrive: null, depart: null })],
+      }),
+    );
+    const { findAllByTestId } = render(Page);
+    const arriveCells = await findAllByTestId("cell-arrive");
+    const departCells = await findAllByTestId("cell-depart");
+    expect(arriveCells[0].textContent).toBe("—");
+    expect(departCells[0].textContent).toBe("—");
+  });
+
+  it("renders room slug when present, — when null", async () => {
+    getProfile.mockResolvedValue(
+      profile({
+        reservations: [
+          reservation({ id: 1, room: "chambre-bleue" }),
+          reservation({ id: 2, room: null }),
+        ],
+      }),
+    );
+    const { findAllByTestId } = render(Page);
+    const roomCells = await findAllByTestId("cell-room");
+    expect(roomCells[0].textContent).toBe("chambre-bleue");
+    expect(roomCells[1].textContent).toBe("—");
+  });
+
+  it("renders people count", async () => {
+    getProfile.mockResolvedValue(
+      profile({
+        reservations: [reservation({ id: 1, people: 4 })],
+      }),
+    );
+    const { findAllByTestId } = render(Page);
+    const peopleCells = await findAllByTestId("cell-people");
+    expect(peopleCells[0].textContent).toBe("4");
+  });
+
+  it("renders reservation data as text, never as HTML", async () => {
+    getProfile.mockResolvedValue(
+      profile({
+        reservations: [reservation({ id: 1, room: "<b>x</b>" })],
+      }),
+    );
+    const { findAllByTestId } = render(Page);
+    const roomCells = await findAllByTestId("cell-room");
+    expect(roomCells[0].textContent).toContain("<b>x</b>");
+    expect(roomCells[0].querySelector("b")).toBeNull();
+  });
+
+  it("table is display-only — no expand buttons", async () => {
+    getProfile.mockResolvedValue(
+      profile({ reservations: [reservation({ id: 1 })] }),
+    );
+    const { queryAllByTestId, findByTestId } = render(Page);
+    await findByTestId("profil-reservation-table");
+    expect(queryAllByTestId(/profil-res-expand-/)).toHaveLength(0);
   });
 });
 

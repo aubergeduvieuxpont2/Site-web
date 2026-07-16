@@ -30,6 +30,18 @@ import {
   ROOM_IMAGE_KEYS,
   slugify,
 } from "./rooms";
+import {
+  resolveEffectiveNightly,
+  nightsBetween,
+  computeInvoice,
+  type InvoiceBreakdown,
+} from "./pricing";
+import {
+  AssignRoomSchema,
+  reservationDatesValid,
+  freeRoomsForRange,
+  isRoomFreeForRange,
+} from "./assignments";
 
 type Bindings = {
   DB_CONN: string;
@@ -448,7 +460,24 @@ app.get("/api/auth/me", async (c) => {
   if (!user) {
     return c.json({ error: "Unauthorized" }, 401);
   }
-  return c.json({ user });
+
+  const sql = neon(c.env.DB_CONN);
+  const userRows = (await sql`
+    SELECT discount_percent, fixed_nightly_price FROM users WHERE id = ${user.id}
+  `) as { discount_percent: number | null; fixed_nightly_price: number | null }[];
+
+  const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+  const adminSettings = rowsToAdminSettings(settingsRows);
+
+  const effectiveNightlyPrice = resolveEffectiveNightly(
+    {
+      fixedNightlyPrice: userRows[0]?.fixed_nightly_price,
+      discountPercent: userRows[0]?.discount_percent,
+    },
+    adminSettings.nightlyPrice
+  );
+
+  return c.json({ user: { ...user, effectiveNightlyPrice } });
 });
 
 app.post("/api/auth/logout", async (c) => {
@@ -890,6 +919,328 @@ app.post("/api/admin/users/:id/reset-link", async (c) => {
   return c.json({ url });
 });
 
+// Room assignment endpoints
+app.get("/api/admin/reservations/:id/assignments", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const reservationId = Number(c.req.param("id"));
+  const sql = neon(c.env.DB_CONN);
+
+  const assignments = (await sql`
+    SELECT room_slug FROM reservation_room_assignments WHERE reservation_id = ${reservationId}
+  `) as { room_slug: string }[];
+
+  return c.json({ assignments });
+});
+
+app.get("/api/admin/reservations/:id/free-rooms", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const reservationId = Number(c.req.param("id"));
+  const sql = neon(c.env.DB_CONN);
+
+  const res = (await sql`
+    SELECT arrive, depart FROM reservations WHERE id = ${reservationId}
+  `) as { arrive: string | null; depart: string | null }[];
+
+  if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart)) {
+    return c.json({ error: "Réservation incomplète : dates ou nombre de chambres manquants." }, 422);
+  }
+
+  const rooms = await freeRoomsForRange(sql, res[0].arrive!, res[0].depart!, reservationId);
+  return c.json({ rooms });
+});
+
+app.post(
+  "/api/admin/reservations/:id/assignments",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator("json", AssignRoomSchema),
+  async (c) => {
+    const reservationId = Number(c.req.param("id"));
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const res = (await sql`
+      SELECT arrive, depart, room_count FROM reservations WHERE id = ${reservationId}
+    `) as { arrive: string | null; depart: string | null; room_count: number | null }[];
+
+    if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
+      return c.json({ error: "Réservation incomplète : dates ou nombre de chambres manquants." }, 422);
+    }
+
+    const assignmentCount = (await sql`
+      SELECT COUNT(*) as count FROM reservation_room_assignments WHERE reservation_id = ${reservationId}
+    `) as { count: number }[];
+
+    if (assignmentCount[0].count >= res[0].room_count) {
+      return c.json({ error: "Nombre de chambres atteint pour cette réservation." }, 409);
+    }
+
+    const isFree = await isRoomFreeForRange(sql, data.roomSlug, res[0].arrive!, res[0].depart!, reservationId);
+    if (!isFree) {
+      return c.json({ error: "Cette chambre est déjà réservée pour ces dates." }, 409);
+    }
+
+    try {
+      const assignment = (await sql`
+        INSERT INTO reservation_room_assignments (reservation_id, room_slug)
+        VALUES (${reservationId}, ${data.roomSlug})
+        RETURNING id, reservation_id, room_slug, created_at
+      `) as { id: number; reservation_id: number; room_slug: string; created_at: string }[];
+
+      return c.json({ assignment: assignment[0] }, 201);
+    } catch {
+      return c.json({ error: "Impossible de créer l'assignation." }, 409);
+    }
+  }
+);
+
+app.delete("/api/admin/reservations/:id/assignments/:roomSlug", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const reservationId = Number(c.req.param("id"));
+  const roomSlug = c.req.param("roomSlug");
+  const sql = neon(c.env.DB_CONN);
+
+  const deleted = (await sql`
+    DELETE FROM reservation_room_assignments
+    WHERE reservation_id = ${reservationId} AND room_slug = ${roomSlug}
+    RETURNING id
+  `) as { id: number }[];
+
+  if (deleted.length === 0) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  return c.json({ ok: true });
+});
+
+// Invoice endpoint
+app.post(
+  "/api/admin/reservations/:id/invoice",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator(
+    "json",
+    z.object({
+      type: z.enum(["deposit", "full"]),
+      depositPercent: z.coerce.number().optional(),
+    })
+  ),
+  async (c) => {
+    const reservationId = Number(c.req.param("id"));
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const res = (await sql`
+      SELECT email, arrive, depart, room_count FROM reservations WHERE id = ${reservationId}
+    `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null }[];
+
+    if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
+      return c.json({ error: "Réservation incomplète : dates ou nombre de chambres manquants." }, 422);
+    }
+
+    const userRows = (await sql`
+      SELECT discount_percent, fixed_nightly_price FROM users WHERE lower(email) = lower(${res[0].email})
+    `) as { discount_percent: number | null; fixed_nightly_price: number | null }[];
+
+    const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+    const adminSettings = rowsToAdminSettings(settingsRows);
+
+    const effectiveNightly = resolveEffectiveNightly(
+      {
+        fixedNightlyPrice: userRows[0]?.fixed_nightly_price,
+        discountPercent: userRows[0]?.discount_percent,
+      },
+      adminSettings.nightlyPrice
+    );
+    const nights = nightsBetween(res[0].arrive!, res[0].depart!);
+
+    const breakdown = computeInvoice({
+      effectiveNightly,
+      nights,
+      roomCount: res[0].room_count,
+      tps: adminSettings.tps,
+      tvq: adminSettings.tvq,
+      accommodationTax: adminSettings.accommodationTax,
+      type: data.type,
+      depositPercent: data.depositPercent,
+    });
+
+    await c.env.HUBSPOT.fetch(
+      new Request("http://hubspot/ops/enqueue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "invoice.create",
+          payload: {
+            contactEmail: res[0].email,
+            amount: breakdown.amount,
+            description: `Facture - Réservation #${reservationId}`,
+            currency: "CAD",
+          },
+          dedupeKey: `invoice-${reservationId}-${data.type}`,
+        }),
+      })
+    );
+
+    return c.json({ ok: true, breakdown });
+  }
+);
+
+// Admin user detail endpoint
+app.get("/api/admin/users/:id", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const targetId = Number(c.req.param("id"));
+  const sql = neon(c.env.DB_CONN);
+
+  const userRows = (await sql`
+    SELECT id, email, name, role, first_name, last_name, phone, company, created_at, hubspot_contact_id, discount_percent, fixed_nightly_price
+    FROM users WHERE id = ${targetId}
+  `) as {
+    id: number;
+    email: string;
+    name: string | null;
+    role: string;
+    first_name: string | null;
+    last_name: string | null;
+    phone: string | null;
+    company: string | null;
+    created_at: string;
+    hubspot_contact_id: string | null;
+    discount_percent: number | null;
+    fixed_nightly_price: number | null;
+  }[];
+
+  if (!userRows[0]) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  let hubspot = null;
+  if (userRows[0].hubspot_contact_id) {
+    try {
+      const hsResult = await c.env.HUBSPOT.fetch(
+        new Request("http://hubspot/ops/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "contact.getById",
+            payload: { contactId: userRows[0].hubspot_contact_id },
+          }),
+        })
+      );
+      if (hsResult.ok) {
+        const hsData = (await hsResult.json()) as any;
+        hubspot = hsData.data || null;
+      }
+    } catch {
+    }
+  }
+
+  return c.json({ user: userRows[0], hubspot });
+});
+
+// User pricing endpoint
+app.post(
+  "/api/admin/users/:id/pricing",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator(
+    "json",
+    z.object({
+      discountPercent: z.coerce.number().min(0).max(100).nullable().optional(),
+      fixedNightlyPrice: z.coerce.number().min(0).nullable().optional(),
+    })
+  ),
+  async (c) => {
+    const targetId = Number(c.req.param("id"));
+    const data = c.req.valid("json");
+
+    if (data.discountPercent != null && data.fixedNightlyPrice != null) {
+      return c.json({ error: "Un seul mode de tarification est permis." }, 400);
+    }
+
+    const sql = neon(c.env.DB_CONN);
+
+    const updated = (await sql`
+      UPDATE users
+      SET discount_percent = ${data.discountPercent === undefined ? null : data.discountPercent},
+          fixed_nightly_price = ${data.fixedNightlyPrice === undefined ? null : data.fixedNightlyPrice}
+      WHERE id = ${targetId}
+      RETURNING id, email, name, role, first_name, last_name, phone, company, created_at, hubspot_contact_id, discount_percent, fixed_nightly_price
+    `) as {
+      id: number;
+      email: string;
+      name: string | null;
+      role: string;
+      first_name: string | null;
+      last_name: string | null;
+      phone: string | null;
+      company: string | null;
+      created_at: string;
+      hubspot_contact_id: string | null;
+      discount_percent: number | null;
+      fixed_nightly_price: number | null;
+    }[];
+
+    if (!updated[0]) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    return c.json({ user: updated[0] });
+  }
+);
+
 // Public settings endpoint
 app.get("/api/settings", async (c) => {
   const sql = neon(c.env.DB_CONN);
@@ -955,6 +1306,9 @@ app.post(
     await Promise.all([
       sql`INSERT INTO settings (key, value) VALUES ('nightly_price', ${data.nightlyPrice.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('contact_email', ${data.contactEmail}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('tps', ${data.tps.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('tvq', ${data.tvq.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('accommodation_tax', ${data.accommodationTax.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];

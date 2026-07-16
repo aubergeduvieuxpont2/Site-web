@@ -3,16 +3,25 @@ import { z } from "zod";
 export const SETTINGS_DEFAULTS = {
   nightly_price: 89,
   contact_email: "info@aubergeduvieuxpont.ca",
+  tps: 5,
+  tvq: 9.975,
+  accommodation_tax: 3.5,
 } as const;
 
 export const PUBLIC_SETTING_KEYS = [
   "nightly_price",
   "contact_email",
+  "tps",
+  "tvq",
+  "accommodation_tax",
 ] as const;
 
 export const SettingsUpdateSchema = z.object({
   nightlyPrice: z.coerce.number().int().positive(),
   contactEmail: z.string().trim().email(),
+  tps: z.coerce.number().min(0),
+  tvq: z.coerce.number().min(0),
+  accommodationTax: z.coerce.number().min(0),
 });
 
 export const settingsHook = (result: any, c: any) =>
@@ -29,11 +38,17 @@ export const settingsHook = (result: any, c: any) =>
 export interface AdminSettings {
   nightlyPrice: number;
   contactEmail: string;
+  tps: number;
+  tvq: number;
+  accommodationTax: number;
 }
 
 export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
+  tps: number;
+  tvq: number;
+  accommodationTax: number;
   // Live count of publicly-visible rooms. Optional: omitted from the response
   // when the count query fails so the endpoint never 500s and the frontend
   // fallback (DEFAULTS.publicRoomCount) can take over.
@@ -52,6 +67,15 @@ export function rowsToAdminSettings(
     ),
     contactEmail:
       rowMap.get("contact_email") ?? SETTINGS_DEFAULTS.contact_email,
+    tps: parseFloat(
+      rowMap.get("tps") ?? String(SETTINGS_DEFAULTS.tps)
+    ),
+    tvq: parseFloat(
+      rowMap.get("tvq") ?? String(SETTINGS_DEFAULTS.tvq)
+    ),
+    accommodationTax: parseFloat(
+      rowMap.get("accommodation_tax") ?? String(SETTINGS_DEFAULTS.accommodation_tax)
+    ),
   };
 }
 
@@ -59,6 +83,9 @@ export function toPublicSettings(admin: AdminSettings): PublicSettings {
   return {
     nightlyPrice: admin.nightlyPrice,
     contactEmail: admin.contactEmail,
+    tps: admin.tps,
+    tvq: admin.tvq,
+    accommodationTax: admin.accommodationTax,
   };
 }
 

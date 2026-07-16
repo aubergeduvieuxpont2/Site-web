@@ -69,6 +69,15 @@ describe("AdminUtilisateursTab", () => {
     expect(getByTestId("users-cell-name-2").textContent).toContain("Marie Tremblay");
   });
 
+  it("renders the email as a link to the user profile page", async () => {
+    const { getByTestId } = renderTab();
+    await waitFor(() => getByTestId("utilisateurs-row-email-link-2"));
+    const link = getByTestId("utilisateurs-row-email-link-2") as HTMLAnchorElement;
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/admin/utilisateurs/2");
+    expect(link.textContent?.trim()).toBe("marie@example.com");
+  });
+
   it("renders '—' for a null name", async () => {
     adminUsers.mockResolvedValue({ users: [user({ name: null })] });
     const { getByTestId } = renderTab();

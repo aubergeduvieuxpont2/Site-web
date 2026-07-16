@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, waitFor, cleanup } from "@testing-library/svelte";
-import type { ReservationRow, OutboxRow, User, ApiError } from "$lib/api";
+import type { ReservationRow, OutboxRow, User, ApiError, AdminSettings } from "$lib/api";
 
 // ---------------------------------------------------------------------------
 // Mock the typed API client. The admin page must reach the network only
@@ -12,12 +12,18 @@ const getMe = vi.fn();
 const adminReservations = vi.fn();
 const adminOutbox = vi.fn();
 const requeueOutbox = vi.fn();
+const adminGetSettings = vi.fn();
+const adminUpdateSettings = vi.fn();
+const changePassword = vi.fn();
 
 vi.mock("$lib/api", () => ({
   getMe: (...a: unknown[]) => getMe(...a),
   adminReservations: (...a: unknown[]) => adminReservations(...a),
   adminOutbox: (...a: unknown[]) => adminOutbox(...a),
   requeueOutbox: (...a: unknown[]) => requeueOutbox(...a),
+  adminGetSettings: (...a: unknown[]) => adminGetSettings(...a),
+  adminUpdateSettings: (...a: unknown[]) => adminUpdateSettings(...a),
+  changePassword: (...a: unknown[]) => changePassword(...a),
   isError: (r: unknown): r is ApiError =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
 }));
@@ -31,14 +37,31 @@ const GUEST: User = { id: 2, email: "guest@example.com", name: "Guest", role: "g
 function reservation(over: Partial<ReservationRow> = {}): ReservationRow {
   return {
     id: 100,
-    email: "jean@example.com",
     name: "Jean Tremblay",
-    check_in: "2026-08-01",
-    check_out: "2026-08-03",
-    guests: 2,
+    first_name: "Jean",
+    last_name: "Tremblay",
+    email: "jean@example.com",
+    phone: null,
+    room: null,
+    arrive: "2026-08-01",
+    depart: "2026-08-03",
+    people: 2,
+    room_count: null,
     message: null,
     created_at: "2026-07-01T12:00:00.000Z",
-    updated_at: "2026-07-01T12:00:00.000Z",
+    ...over,
+  };
+}
+
+function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
+  return {
+    nightlyPrice: 89,
+    contactEmail: "info@aubergeduvieuxpont.ca",
+    marketingRoomCount: 12,
+    assignableRoomCount: 12,
+    tps: 5,
+    tvq: 9.975,
+    accommodationTax: 3.5,
     ...over,
   };
 }
@@ -64,11 +87,17 @@ beforeEach(() => {
   adminReservations.mockReset();
   adminOutbox.mockReset();
   requeueOutbox.mockReset();
+  adminGetSettings.mockReset();
+  adminUpdateSettings.mockReset();
+  changePassword.mockReset();
   // Sensible defaults; individual tests override.
   getMe.mockResolvedValue({ user: ADMIN });
   adminReservations.mockResolvedValue({ reservations: [reservation()] });
   adminOutbox.mockResolvedValue({ rows: [outbox()] });
   requeueOutbox.mockResolvedValue({ row: outbox({ status: "pending", attempts: 0, last_error: null }) });
+  adminGetSettings.mockResolvedValue(adminSettings());
+  adminUpdateSettings.mockImplementation(async (s: AdminSettings) => s);
+  changePassword.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
@@ -253,5 +282,58 @@ describe("page-admin ARIA tab semantics", () => {
     await waitFor(() =>
       expect(getByTestId("tab-reservations").getAttribute("aria-selected")).toBe("true"),
     );
+  });
+});
+
+describe("page-admin tax settings fields", () => {
+  it("renders the three tax inputs seeded from the loaded settings", async () => {
+    adminGetSettings.mockResolvedValue(
+      adminSettings({ tps: 5, tvq: 9.975, accommodationTax: 3.5 }),
+    );
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-settings"));
+    await waitFor(() => expect(adminGetSettings).toHaveBeenCalled());
+    await findByTestId("tps-input");
+
+    expect((getByTestId("tps-input") as HTMLInputElement).value).toBe("5");
+    expect((getByTestId("tvq-input") as HTMLInputElement).value).toBe("9.975");
+    expect((getByTestId("accommodation-tax-input") as HTMLInputElement).value).toBe("3.5");
+  });
+
+  it("shows a French error and blocks save for a negative tax rate", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-settings"));
+    await waitFor(() => expect(adminGetSettings).toHaveBeenCalled());
+    await findByTestId("tps-input");
+
+    await fireEvent.input(getByTestId("tvq-input"), { target: { value: "-1" } });
+    await waitFor(() =>
+      expect(getByTestId("tvq-error").textContent).toContain("ne peut pas être négative"),
+    );
+
+    await fireEvent.click(getByTestId("settings-save-btn"));
+    // A blocked save never reaches the API.
+    expect(adminUpdateSettings).not.toHaveBeenCalled();
+  });
+
+  it("accepts zero and decimal tax rates and persists them", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-settings"));
+    await waitFor(() => expect(adminGetSettings).toHaveBeenCalled());
+    await findByTestId("tps-input");
+
+    await fireEvent.input(getByTestId("tps-input"), { target: { value: "0" } });
+    await fireEvent.input(getByTestId("tvq-input"), { target: { value: "9.975" } });
+    await fireEvent.input(getByTestId("accommodation-tax-input"), { target: { value: "3.5" } });
+
+    await fireEvent.click(getByTestId("settings-save-btn"));
+
+    await waitFor(() => expect(adminUpdateSettings).toHaveBeenCalledTimes(1));
+    const sent = adminUpdateSettings.mock.calls[0][0] as AdminSettings;
+    expect(sent.tps).toBe(0);
+    expect(sent.tvq).toBe(9.975);
+    expect(sent.accommodationTax).toBe(3.5);
+    // No lingering validation errors after a clean save.
+    expect(getByTestId("tps-error").textContent).toBe("");
   });
 });
