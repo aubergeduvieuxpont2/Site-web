@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { login, register, forgotPassword, isError } from "$lib/api";
-  import { setUser } from "$lib/auth.svelte";
+  import { loadAuth } from "$lib/auth.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
 
@@ -46,9 +46,10 @@
           : "Identifiants invalides";
       loginStatus = "idle";
     } else {
-      // Update the shared auth store before navigating so the Nav renders the
+      // Load the canonical session (with computed effectiveNightlyPrice) into
+      // the shared auth store before navigating so the Nav renders the
       // authenticated state (Profil/Admin, logout) immediately — no reload.
-      setUser(result.user);
+      await loadAuth();
       await goto("/profil");
     }
   }
@@ -105,9 +106,10 @@
           : result.error; // includes "Un compte existe déjà" (409)
       regStatus = "idle";
     } else {
-      // Update the shared auth store before navigating so the Nav renders the
+      // Load the canonical session (with computed effectiveNightlyPrice) into
+      // the shared auth store before navigating so the Nav renders the
       // authenticated state (Profil/Admin, logout) immediately — no reload.
-      setUser(result.user);
+      await loadAuth();
       await goto("/profil");
     }
   }

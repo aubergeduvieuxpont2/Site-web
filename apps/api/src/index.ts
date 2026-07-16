@@ -34,6 +34,7 @@ import {
   resolveEffectiveNightly,
   nightsBetween,
   computeInvoice,
+  toNumberOrNull,
   type InvoiceBreakdown,
 } from "./pricing";
 import {
@@ -484,8 +485,8 @@ app.get("/api/auth/me", async (c) => {
 
   const effectiveNightlyPrice = resolveEffectiveNightly(
     {
-      fixedNightlyPrice: userRows[0]?.fixed_nightly_price,
-      discountPercent: userRows[0]?.discount_percent,
+      fixedNightlyPrice: toNumberOrNull(userRows[0]?.fixed_nightly_price),
+      discountPercent: toNumberOrNull(userRows[0]?.discount_percent),
     },
     adminSettings.nightlyPrice
   );
@@ -845,6 +846,9 @@ app.get("/api/admin/users", async (c) => {
   const sql = neon(c.env.DB_CONN);
   const q = c.req.query("q") || "";
 
+  // No NUMERIC normalization needed here: this list selects no pricing columns
+  // (discount_percent / fixed_nightly_price), so there are no string-typed
+  // numerics to coerce. See toNumberOrNull call sites on the detail endpoints.
   const users = (await sql`
     SELECT id, email, name, role, created_at
     FROM users
@@ -1101,8 +1105,8 @@ app.post(
 
     const effectiveNightly = resolveEffectiveNightly(
       {
-        fixedNightlyPrice: userRows[0]?.fixed_nightly_price,
-        discountPercent: userRows[0]?.discount_percent,
+        fixedNightlyPrice: toNumberOrNull(userRows[0]?.fixed_nightly_price),
+        discountPercent: toNumberOrNull(userRows[0]?.discount_percent),
       },
       adminSettings.nightlyPrice
     );
@@ -1196,7 +1200,13 @@ app.get("/api/admin/users/:id", async (c) => {
     }
   }
 
-  return c.json({ user: userRows[0], hubspot });
+  const targetUser = {
+    ...userRows[0],
+    discount_percent: toNumberOrNull(userRows[0].discount_percent),
+    fixed_nightly_price: toNumberOrNull(userRows[0].fixed_nightly_price),
+  };
+
+  return c.json({ user: targetUser, hubspot });
 });
 
 // User pricing endpoint
@@ -1254,7 +1264,13 @@ app.post(
       return c.json({ error: "Not found" }, 404);
     }
 
-    return c.json({ user: updated[0] });
+    const user = {
+      ...updated[0],
+      discount_percent: toNumberOrNull(updated[0].discount_percent),
+      fixed_nightly_price: toNumberOrNull(updated[0].fixed_nightly_price),
+    };
+
+    return c.json({ user });
   }
 );
 

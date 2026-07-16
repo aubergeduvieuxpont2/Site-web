@@ -1,0 +1,266 @@
+REQ:
+  R-API-001:
+    actor: API consumer
+    capability: "receive discount_percent and fixed_nightly_price as JSON numbers, not strings"
+    constraints: "NUMERIC columns must be normalized at the serialization boundary; no field rename"
+    priority: MUST
+    tests:
+      - T-API-001a
+      - T-API-001b
+  R-API-002:
+    actor: Authenticated user
+    capability: "GET /api/auth/me computes effectiveNightlyPrice correctly even when NUMERIC arrives as a string"
+    constraints: "resolveEffectiveNightly precedence and rounding unchanged"
+    priority: MUST
+    tests:
+      - T-API-001c
+  R-ADMIN-001:
+    actor: Admin user
+    capability: "the Prix effectif preview keeps showing the discounted price after reloading the user-detail page"
+    constraints: "UserPricingForm coerces string props to numbers before seeding preview state"
+    priority: MUST
+    tests:
+      - T-ADMIN-001a
+      - T-ADMIN-001b
+  R-AUTH-001:
+    actor: Any user
+    capability: "after login or register the site shows the effective nightly price without a hard reload"
+    constraints: "hydrate auth.user via loadAuth(); do not change login/register API responses"
+    priority: MUST
+    tests:
+      - T-AUTH-001a
+  R-HOME-001:
+    actor: Home-page visitor
+    capability: "see the nightly price exactly once in the rooms section, not repeated on every card"
+    constraints: "price = auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice; responsive at 320px"
+    priority: MUST
+    tests:
+      - T-HOME-001a
+      - T-HOME-001b
+  R-HOME-002:
+    actor: Home-page visitor
+    capability: "RoomCard renders no price block"
+    constraints: "RoomCard is used only on the home page"
+    priority: MUST
+    tests:
+      - T-HOME-002a
+
+E:
+  E-UserPricing:
+    fields:
+      discount_percent: "number | null (NUMERIC in DB, normalized on read)"
+      fixed_nightly_price: "number | null (NUMERIC in DB, normalized on read)"
+    tenancy: per-user
+    invariants:
+      - INV-numeric-normalized
+      - INV-pricing-exclusive
+
+OP:
+  OP-Pricing.toNumberOrNull:
+    input: { v: unknown }
+    auth: []
+    pre: []
+    err: []
+    out: { result: "number | null" }
+  OP-Pricing.resolveEffective:
+    input: { userPricing: object, publicPrice: number }
+    auth: []
+    pre: []
+    err: []
+    out: { effectiveNightly: number }
+
+AUTH:
+  admin-read-user: admin can read any user's pricing fields
+  admin-write-pricing: admin can set a user's discount or fixed price
+  user-read-self: authenticated user can read their own effective price via /api/auth/me
+
+INV:
+  INV-numeric-normalized: "discount_percent and fixed_nightly_price are numbers (or null) in every API JSON response and before resolveEffectiveNightly"
+  INV-pricing-exclusive: "at most one of discount_percent / fixed_nightly_price is non-null"
+  INV-resolve-precedence: "resolveEffectiveNightly returns the fixed price when set, else the discounted price, else the public price; rounding to cents is preserved"
+
+ERR: {}
+
+API:
+  GET /api/auth/me:
+    input: session-cookie
+    output: "{ user: { ...user, effectiveNightlyPrice: number } | null }"
+    errors: []
+    auth: user-read-self
+  GET /api/admin/users/{id}:
+    input: id
+    output: "{ user: E-UserPricing + profile, hubspot }"
+    errors: []
+    auth: admin-read-user
+  POST /api/admin/users/{id}/pricing:
+    input: "{ discountPercent?: number|null, fixedNightlyPrice?: number|null }"
+    output: "{ user: E-UserPricing + profile }"
+    errors: []
+    auth: admin-write-pricing
+
+UI:
+  screen-admin-user-detail:
+    actions: [save-pricing, reload]
+    state: { loading, loaded, error }
+  screen-home:
+    actions: [view-price]
+    state: { anonymous, personalized }
+  screen-connexion:
+    actions: [login, register]
+    state: { idle, sending, authenticated }
+
+DATA:
+  users table: "id, ..., discount_percent NUMERIC, fixed_nightly_price NUMERIC (migration 0015; unchanged)"
+
+TEST:
+  T-API-001a:
+    verifies: R-API-001
+    behaviour: "toNumberOrNull maps string/number/null/undefined correctly"
+    steps:
+      - "toNumberOrNull('10.00') === 10"
+      - "toNumberOrNull('75') === 75"
+      - "toNumberOrNull(null) === null"
+      - "toNumberOrNull(undefined) === null"
+  T-API-001b:
+    verifies: R-API-001
+    behaviour: "admin user-detail / pricing response mapping yields numeric fields"
+    steps:
+      - "map a row {discount_percent:'10.00', fixed_nightly_price:null} through the boundary helper"
+      - "assert typeof result.discount_percent === 'number' and result.discount_percent === 10"
+  T-API-001c:
+    verifies: R-API-002
+    behaviour: "resolveEffectiveNightly on normalized string input returns discounted price"
+    steps:
+      - "resolveEffectiveNightly({ discountPercent: toNumberOrNull('10.00') }, 89) === 80.10"
+  T-ADMIN-001a:
+    verifies: R-ADMIN-001
+    behaviour: "computeEffectivePrice with numeric discount returns discounted price"
+    steps:
+      - "computeEffectivePrice('discount', 89, 10, 0) === 80.10"
+  T-ADMIN-001b:
+    verifies: R-ADMIN-001
+    behaviour: "UserPricingForm seeded with initialDiscount string shows discounted preview"
+    steps:
+      - "render UserPricingForm with initialDiscount='10.00', publicNightlyPrice=89"
+      - "assert upf-preview-amount reflects the discounted price, not 89"
+  T-AUTH-001a:
+    verifies: R-AUTH-001
+    behaviour: "connexion handlers hydrate via loadAuth, not setUser"
+    steps:
+      - "assert connexion/+page.svelte source calls loadAuth() in handleLogin and handleRegister"
+      - "assert setUser is not imported"
+  T-HOME-001a:
+    verifies: R-HOME-001
+    behaviour: "home page renders exactly one price-amount with default price"
+    steps:
+      - "SSR-render +page.svelte"
+      - "assert exactly one data-testid='price-amount' containing '$89.00' and a '/nuit' label"
+  T-HOME-001b:
+    verifies: R-HOME-001
+    behaviour: "anonymous visitor sees no custom-pricing badge"
+    steps:
+      - "SSR-render +page.svelte with no auth.user"
+      - "assert output has no data-testid='custom-pricing-badge'"
+  T-HOME-002a:
+    verifies: R-HOME-002
+    behaviour: "RoomCard renders no price block"
+    steps:
+      - "SSR-render RoomCard"
+      - "assert no data-testid='price-amount', no '/nuit', no '89.00', no custom-pricing-badge"
+
+NFR:
+  security: "no field rename; no new endpoint; no change to auth gating"
+  reliability: "no migration; NUMERIC columns unchanged; resolveEffectiveNightly semantics frozen"
+  responsiveness: "home-page price does not overflow at 320px viewport"
+  build: "typecheck, all vitest suites, and build:web pass"
+
+FILE:
+  apps/api/src/pricing.ts: TASK-api
+  apps/api/src/index.ts: TASK-api
+  apps/api/test/pricing.test.ts: TASK-api
+  apps/web/src/lib/components/admin/UserPricingForm.svelte: TASK-admin-form
+  apps/web/src/lib/components/admin/__tests__/UserPricingForm.test.ts: TASK-admin-form
+  apps/web/src/routes/connexion/+page.svelte: TASK-auth
+  apps/web/src/lib/components/RoomCard.svelte: TASK-home
+  apps/web/src/lib/components/__tests__/RoomCard.test.ts: TASK-home
+  apps/web/src/routes/+page.svelte: TASK-home
+  apps/web/src/routes/__tests__/page-accueil.test.ts: TASK-home
+
+TASK:
+  TASK-api:
+    scope:
+      - R-API-001
+      - R-API-002
+      - OP-Pricing.toNumberOrNull
+      - OP-Pricing.resolveEffective
+      - T-API-001a
+      - T-API-001b
+      - T-API-001c
+    files:
+      - apps/api/src/pricing.ts
+      - apps/api/src/index.ts
+      - apps/api/test/pricing.test.ts
+    must_preserve:
+      - INV-numeric-normalized
+      - INV-resolve-precedence
+      - INV-pricing-exclusive
+    produce: [code, tests]
+    verifies: [R-API-001, R-API-002]
+  TASK-admin-form:
+    scope:
+      - R-ADMIN-001
+      - T-ADMIN-001a
+      - T-ADMIN-001b
+    files:
+      - apps/web/src/lib/components/admin/UserPricingForm.svelte
+      - apps/web/src/lib/components/admin/__tests__/UserPricingForm.test.ts
+    must_preserve:
+      - INV-numeric-normalized
+    produce: [code, tests]
+    verifies: [R-ADMIN-001]
+  TASK-auth:
+    scope:
+      - R-AUTH-001
+      - T-AUTH-001a
+    files:
+      - apps/web/src/routes/connexion/+page.svelte
+    must_preserve: []
+    produce: [code]
+    verifies: [R-AUTH-001]
+  TASK-home:
+    scope:
+      - R-HOME-001
+      - R-HOME-002
+      - T-HOME-001a
+      - T-HOME-001b
+      - T-HOME-002a
+    files:
+      - apps/web/src/lib/components/RoomCard.svelte
+      - apps/web/src/lib/components/__tests__/RoomCard.test.ts
+      - apps/web/src/routes/+page.svelte
+      - apps/web/src/routes/__tests__/page-accueil.test.ts
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-HOME-001, R-HOME-002]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Normalize NUMERIC-as-string with a shared toNumberOrNull helper at every API read/return site"
+    rationale: "single fix covers admin preview, resolveEffectiveNightly, and invoice math; avoids per-consumer patches"
+  ST-02:
+    status: locked
+    decision: "Place toNumberOrNull in apps/api/src/pricing.ts and export it"
+    rationale: "co-located with resolveEffectiveNightly, unit-testable, importable by index.ts"
+  ST-03:
+    status: locked
+    decision: "Post-login/register, hydrate auth.user via await loadAuth() instead of setUser(result.user)"
+    rationale: "GET /api/auth/me is the only path that computes effectiveNightlyPrice; single source of truth avoids duplicating logic in the API"
+  ST-04:
+    status: locked
+    decision: "Remove the price block from RoomCard and render one price display in the home rooms section"
+    rationale: "RoomCard is home-only; single price is cleaner and matches page-le-site__price"
+  ST-05:
+    status: locked
+    decision: "UserPricingForm also coerces props through Number() defensively"
+    rationale: "cheap belt-and-suspenders against any string prop even after the API is fixed"

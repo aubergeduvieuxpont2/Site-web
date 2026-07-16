@@ -7,6 +7,7 @@
   import Button from '$lib/components/Button.svelte';
   import { ROOMS, AMENITIES, STATS } from '$lib/content';
   import { settings } from '$lib/settings.svelte';
+  import { auth } from '$lib/auth.svelte';
   import { reveal, countUp } from '$lib/motion';
 
   const featuredRooms = ROOMS.slice(0, 3);
@@ -100,6 +101,17 @@
     <h2 id="rooms-heading" class="page-accueil__h2" use:reveal>
       Des espaces pensés pour vous
     </h2>
+
+    <div class="page-accueil__price-display" aria-label="Prix par nuit">
+      <span class="page-accueil__price-amount" data-testid="price-amount"
+        ><span class="page-accueil__price-number"
+          >${(auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice).toFixed(2)}</span
+        ><span class="page-accueil__price-unit"> /nuit</span
+      ></span>
+      {#if auth.user?.effectiveNightlyPrice != null && auth.user.effectiveNightlyPrice !== settings.nightlyPrice}
+        <span class="page-accueil__price-badge" data-testid="custom-pricing-badge">Tarif personnalisé</span>
+      {/if}
+    </div>
 
     <div class="page-accueil__rooms-grid" data-testid="rooms-grid">
       {#each featuredRooms as room, i}
@@ -380,6 +392,62 @@
     max-width: 1280px;
     margin-inline: auto;
     padding: 0 var(--space-md) var(--space-3xl);
+  }
+
+  /* ── Price display ───────────────────────────────────────────────────── */
+  .page-accueil__price-display {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm, 0.75rem);
+    margin-top: var(--space-md, 1.25rem);
+  }
+
+  .page-accueil__price-amount {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0;
+    line-height: 1.2;
+  }
+
+  .page-accueil__price-number {
+    font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--color-tertiary, #9d4300);
+    letter-spacing: 0;
+  }
+
+  .page-accueil__price-unit {
+    font-family: var(--font-sans, "IBM Plex Sans", ui-sans-serif, sans-serif);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-ink-muted, #76777d);
+    letter-spacing: 0;
+  }
+
+  .page-accueil__price-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    background-color: var(--color-ember-pale, #ffdbca);
+    color: var(--color-tertiary, #9d4300);
+    border: 1px solid var(--color-outline-variant, #c6c6cd);
+    border-radius: 2px;
+    font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  /* Narrow-viewport guard: flex-wrap already handles wrapping; clamp
+     the number so it never pushes past the viewport edge at 320px. */
+  @media (max-width: 360px) {
+    .page-accueil__price-number {
+      font-size: 18px;
+    }
   }
 
   .page-accueil__rooms-grid {

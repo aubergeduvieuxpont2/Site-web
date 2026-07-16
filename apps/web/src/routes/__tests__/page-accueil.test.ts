@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { render } from 'svelte/server';
 import Page from '../+page.svelte';
 import { settings } from '$lib/settings.svelte';
+import { auth } from '$lib/auth.svelte';
 
 function renderPage() {
   const result = render(Page, { props: {} });
@@ -156,6 +157,108 @@ describe('+page.svelte (page-accueil SSR)', () => {
       const html = renderPage();
       expect(html).toContain('data-testid="rooms-more"');
       expect(html).toContain('href="/le-site#chambres"');
+    });
+  });
+
+  // The consolidated price display (home-price-display) lives in the rooms
+  // section header, replacing the per-room price that RoomCard used to show.
+  describe('price display', () => {
+    afterEach(() => {
+      settings.nightlyPrice = 89;
+      auth.user = null;
+      auth.loaded = false;
+    });
+
+    it('renders exactly one price-amount', () => {
+      const html = renderPage();
+      const matches = html.match(/data-testid="price-amount"/g);
+      expect(matches).toHaveLength(1);
+    });
+
+    it('shows the public nightly price formatted as $XX.XX /nuit for anonymous visitors', () => {
+      const html = renderPage();
+      expect(html).toContain('$89.00');
+      expect(html).toContain('/nuit');
+    });
+
+    it('reflects a changed nightly price from settings', () => {
+      settings.nightlyPrice = 120;
+      const html = renderPage();
+      expect(html).toContain('$120.00');
+    });
+
+    it('does not render the custom-pricing badge when there is no authenticated user', () => {
+      const html = renderPage();
+      expect(html).not.toContain('data-testid="custom-pricing-badge"');
+      expect(html).not.toContain('Tarif personnalisé');
+    });
+
+    it('labels the price container for screen readers', () => {
+      expect(renderPage()).toContain('aria-label="Prix par nuit"');
+    });
+
+    // Personalized path: an authenticated user carries an effectiveNightlyPrice
+    // that overrides the public price and surfaces the "Tarif personnalisé" badge.
+    it('shows the user\'s effectiveNightlyPrice and the custom badge when it differs from the public price', () => {
+      auth.user = {
+        id: 1,
+        email: 'client@example.com',
+        name: 'Client',
+        role: 'guest',
+        effectiveNightlyPrice: 75,
+      };
+      auth.loaded = true;
+      const html = renderPage();
+      expect(html).toContain('$75.00');
+      expect(html).not.toContain('$89.00');
+      expect(html).toContain('data-testid="custom-pricing-badge"');
+      expect(html).toContain('Tarif personnalisé');
+    });
+
+    it('still renders exactly one price-amount for an authenticated user', () => {
+      auth.user = {
+        id: 2,
+        email: 'client@example.com',
+        name: 'Client',
+        role: 'guest',
+        effectiveNightlyPrice: 75,
+      };
+      auth.loaded = true;
+      const html = renderPage();
+      const matches = html.match(/data-testid="price-amount"/g);
+      expect(matches).toHaveLength(1);
+    });
+
+    // Fallback path: an authed user whose effective price equals the public price
+    // shows the price but NOT the badge (nothing personalized to flag).
+    it('does not render the badge when the effective price equals the public price', () => {
+      auth.user = {
+        id: 3,
+        email: 'client@example.com',
+        name: 'Client',
+        role: 'guest',
+        effectiveNightlyPrice: 89,
+      };
+      auth.loaded = true;
+      const html = renderPage();
+      expect(html).toContain('$89.00');
+      expect(html).not.toContain('data-testid="custom-pricing-badge"');
+      expect(html).not.toContain('Tarif personnalisé');
+    });
+
+    // Fallback path: an authed user without an effectiveNightlyPrice falls back
+    // to the public nightly price and shows no badge.
+    it('falls back to the public price when the user has no effectiveNightlyPrice', () => {
+      auth.user = {
+        id: 4,
+        email: 'client@example.com',
+        name: 'Client',
+        role: 'guest',
+      };
+      auth.loaded = true;
+      const html = renderPage();
+      expect(html).toContain('$89.00');
+      expect(html).not.toContain('data-testid="custom-pricing-badge"');
     });
   });
 
