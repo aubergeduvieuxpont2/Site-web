@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { getMe, getProfile, logout, changePassword, isError } from "$lib/api";
   import type { User, ReservationRow } from "$lib/api";
+  import ProfilReservationTable from "$lib/components/ProfilReservationTable.svelte";
 
   // ── State ────────────────────────────────────────────────────────────
   type Phase = "loading" | "loaded" | "error";
@@ -11,9 +12,6 @@
   let errorMessage = $state("");
   let user = $state<User | null>(null);
   let reservations = $state<ReservationRow[]>([]);
-
-  // Which reservation row is expanded (by id), or null.
-  let expandedId = $state<number | null>(null);
 
   // Guard against a double logout click.
   let loggingOut = $state(false);
@@ -49,29 +47,6 @@
     pwdSuccess = true;
     currentPassword = "";
     newPassword = "";
-  }
-
-  // ── Helpers ──────────────────────────────────────────────────────────
-
-  /**
-   * Format an ISO date string in French-Canadian locale. The result is only
-   * ever placed into the DOM via a Svelte text binding (auto-escaped), never
-   * interpolated into markup.
-   */
-  function formatDate(iso: string): string {
-    try {
-      return new Intl.DateTimeFormat("fr-CA", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }).format(new Date(iso));
-    } catch {
-      return iso;
-    }
-  }
-
-  function toggleRow(id: number): void {
-    expandedId = expandedId === id ? null : id;
   }
 
   // ── Mount: auth gate → profile fetch ─────────────────────────────────
@@ -212,81 +187,7 @@
           Mes réservations
         </h2>
 
-        {#if reservations.length === 0}
-          <p class="profil__empty" data-testid="profil-res-empty">
-            Aucune réservation pour l'instant.
-          </p>
-        {:else}
-          <div class="profil__table-wrap" role="region" aria-label="Liste des réservations">
-            <table class="profil__table" data-testid="profil-res-table">
-              <thead>
-                <tr>
-                  <th scope="col" class="profil__th">Arrivée</th>
-                  <th scope="col" class="profil__th">Départ</th>
-                  <th scope="col" class="profil__th">Pers.</th>
-                  <th scope="col" class="profil__th"><span class="sr-only">Actions</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each reservations as row, i (row.id)}
-                  <tr
-                    class="profil__res-row {expandedId === row.id ? 'profil__res-row--open' : ''}"
-                    data-testid="profil-res-row-{i}"
-                  >
-                    <td class="profil__td">{formatDate(row.check_in)}</td>
-                    <td class="profil__td">{formatDate(row.check_out)}</td>
-                    <td class="profil__td">{row.guests}</td>
-                    <td class="profil__td profil__td--action">
-                      <button
-                        class="profil__expand-btn"
-                        type="button"
-                        aria-expanded={expandedId === row.id}
-                        aria-controls="profil-res-detail-{row.id}"
-                        aria-label="{expandedId === row.id
-                          ? 'Masquer'
-                          : 'Afficher'} les détails du séjour du {formatDate(row.check_in)}"
-                        data-testid="profil-res-expand-{i}"
-                        onclick={() => toggleRow(row.id)}
-                      >
-                        {expandedId === row.id ? "↑" : "↓"}
-                      </button>
-                    </td>
-                  </tr>
-                  {#if expandedId === row.id}
-                    <tr
-                      id="profil-res-detail-{row.id}"
-                      class="profil__res-detail"
-                      data-testid="profil-res-detail-{i}"
-                    >
-                      <td colspan="4" class="profil__res-detail-cell">
-                        <dl class="profil__res-detail-dl">
-                          <div class="profil__res-detail-field">
-                            <dt>Nom</dt>
-                            <dd>{row.name}</dd>
-                          </div>
-                          <div class="profil__res-detail-field">
-                            <dt>Courriel</dt>
-                            <dd>{row.email}</dd>
-                          </div>
-                          {#if row.message}
-                            <div class="profil__res-detail-field profil__res-detail-field--full">
-                              <dt>Message</dt>
-                              <dd>{row.message}</dd>
-                            </div>
-                          {/if}
-                          <div class="profil__res-detail-field">
-                            <dt>Créée le</dt>
-                            <dd>{formatDate(row.created_at)}</dd>
-                          </div>
-                        </dl>
-                      </td>
-                    </tr>
-                  {/if}
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
+        <ProfilReservationTable {reservations} />
       </section>
 
       <div class="profil__hairline" role="separator" aria-hidden="true"></div>
@@ -533,143 +434,6 @@
     flex-shrink: 0;
   }
 
-  /* ── Empty state ── */
-  .profil__empty {
-    font-family: var(--font-sans);
-    font-size: 16px;
-    color: var(--color-ink-variant, #45464d);
-    line-height: 1.65;
-    margin: 0;
-    padding: var(--space-xl, 40px) 0;
-  }
-
-  /* ── Reservations table ── */
-  .profil__table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    border: 1px solid var(--color-outline-variant, #c6c6cd);
-    border-radius: var(--radius-lg, 0.5rem);
-    background-color: var(--color-surface-container-lowest, #ffffff);
-  }
-
-  .profil__table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: var(--font-sans);
-    font-size: 15px;
-  }
-
-  .profil__th {
-    padding: var(--space-md, 16px) var(--space-lg, 24px);
-    text-align: left;
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-ink-variant, #45464d);
-    background-color: var(--color-surface-container-low, #f2f4f6);
-    border-bottom: 1px solid var(--color-outline-variant, #c6c6cd);
-    white-space: nowrap;
-  }
-
-  .profil__td {
-    padding: var(--space-md, 16px) var(--space-lg, 24px);
-    color: var(--color-ink, #191c1e);
-    line-height: 1.4;
-    vertical-align: middle;
-    border-bottom: 1px solid var(--color-outline-variant, #c6c6cd);
-  }
-
-  .profil__res-row:last-of-type .profil__td {
-    border-bottom: none;
-  }
-
-  @media (hover: hover) {
-    .profil__res-row:hover .profil__td {
-      background-color: var(--color-surface-container-low, #f2f4f6);
-    }
-  }
-
-  .profil__res-row--open .profil__td {
-    background-color: var(--color-surface-container-low, #f2f4f6);
-  }
-
-  .profil__td--action {
-    width: 56px;
-    text-align: center;
-  }
-
-  /* ── Expand button ── */
-  .profil__expand-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--color-outline-variant, #c6c6cd);
-    border-radius: var(--radius, 0.25rem);
-    background: transparent;
-    cursor: pointer;
-    font-family: var(--font-sans);
-    font-size: 16px;
-    color: var(--color-ink-variant, #45464d);
-    transition:
-      background-color 150ms ease,
-      border-color 150ms ease;
-  }
-
-  .profil__expand-btn:hover {
-    background-color: var(--color-surface-container, #eceef0);
-    border-color: var(--color-outline, #76777d);
-  }
-
-  .profil__expand-btn:focus-visible {
-    outline: 2px solid var(--color-primary, #000000);
-    outline-offset: 3px;
-  }
-
-  /* ── Expanded detail row ── */
-  .profil__res-detail-cell {
-    padding: var(--space-lg, 24px) var(--space-lg, 24px);
-    background-color: var(--color-surface-container-low, #f2f4f6);
-    border-bottom: 1px solid var(--color-outline-variant, #c6c6cd);
-  }
-
-  .profil__res-detail-dl {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: var(--space-md, 16px);
-  }
-
-  .profil__res-detail-field {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .profil__res-detail-field--full {
-    grid-column: 1 / -1;
-  }
-
-  .profil__res-detail-field dt {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--color-ink-variant, #45464d);
-  }
-
-  .profil__res-detail-field dd {
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--color-ink, #191c1e);
-    margin: 0;
-    line-height: 1.5;
-    word-break: break-word;
-  }
-
   /* ── Change-password section ── */
   .profil__section--pwd {
     max-width: 480px;
@@ -904,19 +668,6 @@
     }
   }
 
-  /* ── Hidden utility (screen-reader only) ── */
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
   /* ── Responsive ── */
   @media (max-width: 640px) {
     .profil__user-card {
@@ -959,10 +710,6 @@
     .profil__skeleton-row {
       animation: none;
       opacity: 0.7;
-    }
-
-    .profil__expand-btn {
-      transition: none;
     }
   }
 </style>

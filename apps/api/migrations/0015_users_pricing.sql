@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS discount_percent    NUMERIC(5,2);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS fixed_nightly_price NUMERIC(10,2);

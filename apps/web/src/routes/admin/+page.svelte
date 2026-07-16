@@ -51,6 +51,9 @@
     contactEmail: "info@aubergeduvieuxpont.ca",
     marketingRoomCount: 12,
     assignableRoomCount: 12,
+    tps: 5,
+    tvq: 9.975,
+    accommodationTax: 3.5,
   });
   let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
 
@@ -119,6 +122,30 @@
     }
   }
 
+  // ─── Tax settings (tax-settings-fields) ───
+  // Percent rates (TPS, TVQ, taxe d'hébergement) accept decimals (step 0.001) and
+  // must be non-negative; 0 is allowed. Validation runs on input for immediate
+  // inline feedback and again in saveSettings as the authoritative guard.
+  const TAX_KEYS = ["tps", "tvq", "accommodationTax"] as const;
+  type TaxKey = (typeof TAX_KEYS)[number];
+
+  // Returns a French error message for an invalid tax value, or null when valid.
+  function taxError(value: number | null | undefined): string | null {
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      return "Valeur invalide.";
+    }
+    if (value < 0) return "La valeur ne peut pas être négative.";
+    return null;
+  }
+
+  function validateTaxField(key: TaxKey) {
+    const next = { ...settingsErrors };
+    const err = taxError(settings[key]);
+    if (err) next[key] = err;
+    else delete next[key];
+    settingsErrors = next;
+  }
+
   async function saveSettings() {
     settingsSaving = true;
     settingsSaved = false;
@@ -131,6 +158,10 @@
     }
     if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
       errors.contactEmail = "Courriel invalide";
+    }
+    for (const key of TAX_KEYS) {
+      const err = taxError(settings[key]);
+      if (err) errors[key] = err;
     }
 
     if (Object.keys(errors).length > 0) {
@@ -458,9 +489,9 @@
                       <tr class="page-admin__row" data-testid="reservation-row">
                         <td>{row.name}</td>
                         <td class="page-admin__email">{row.email}</td>
-                        <td class="page-admin__date">{formatDate(row.check_in)}</td>
-                        <td class="page-admin__date">{formatDate(row.check_out)}</td>
-                        <td class="page-admin__num">{row.guests}</td>
+                        <td class="page-admin__date">{formatDate(row.arrive ?? "")}</td>
+                        <td class="page-admin__date">{formatDate(row.depart ?? "")}</td>
+                        <td class="page-admin__num">{row.people}</td>
                         <td class="page-admin__date">{formatDate(row.created_at)}</td>
                       </tr>
                     {/each}
@@ -664,6 +695,81 @@
                       data-testid="error-contact-email">{settingsErrors.contactEmail}</span
                     >
                   {/if}
+                </div>
+
+                <!-- ── Tax settings (tax-settings-fields) ── -->
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="tps-input">TPS (%)</label>
+                  <input
+                    id="tps-input"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    bind:value={settings.tps}
+                    oninput={() => validateTaxField("tps")}
+                    class="page-admin__search-input page-admin__tax-input"
+                    data-testid="tps-input"
+                    aria-describedby={settingsErrors.tps ? "tps-error" : undefined}
+                    aria-invalid={!!settingsErrors.tps}
+                  />
+                  <span
+                    class="page-admin__field-error"
+                    id="tps-error"
+                    role="alert"
+                    aria-live="polite"
+                    data-testid="tps-error">{settingsErrors.tps ?? ""}</span
+                  >
+                </div>
+
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="tvq-input">TVQ (%)</label>
+                  <input
+                    id="tvq-input"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    bind:value={settings.tvq}
+                    oninput={() => validateTaxField("tvq")}
+                    class="page-admin__search-input page-admin__tax-input"
+                    data-testid="tvq-input"
+                    aria-describedby={settingsErrors.tvq ? "tvq-error" : undefined}
+                    aria-invalid={!!settingsErrors.tvq}
+                  />
+                  <span
+                    class="page-admin__field-error"
+                    id="tvq-error"
+                    role="alert"
+                    aria-live="polite"
+                    data-testid="tvq-error">{settingsErrors.tvq ?? ""}</span
+                  >
+                </div>
+
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="accommodation-tax-input">
+                    Taxe d'hébergement (%)
+                  </label>
+                  <input
+                    id="accommodation-tax-input"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    bind:value={settings.accommodationTax}
+                    oninput={() => validateTaxField("accommodationTax")}
+                    class="page-admin__search-input page-admin__tax-input"
+                    data-testid="accommodation-tax-input"
+                    aria-describedby={settingsErrors.accommodationTax
+                      ? "accommodation-tax-error"
+                      : undefined}
+                    aria-invalid={!!settingsErrors.accommodationTax}
+                  />
+                  <span
+                    class="page-admin__field-error"
+                    id="accommodation-tax-error"
+                    role="alert"
+                    aria-live="polite"
+                    data-testid="accommodation-tax-error"
+                    >{settingsErrors.accommodationTax ?? ""}</span
+                  >
                 </div>
 
                 {#if settingsSaved}
@@ -1341,6 +1447,30 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-sm);
+  }
+
+  /* Tax percent inputs — monospace numerics, constrained width, no spinners. */
+  .page-admin__tax-input {
+    width: 200px;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page-admin__tax-input[type="number"]::-webkit-outer-spin-button,
+  .page-admin__tax-input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .page-admin__tax-input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  @media (max-width: 640px) {
+    .page-admin__tax-input {
+      width: 100%;
+    }
   }
 
   /* ─── Settings sub-section wrapper ─── */

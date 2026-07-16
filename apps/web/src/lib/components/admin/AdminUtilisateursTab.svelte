@@ -212,9 +212,18 @@
         {:else}
           {#each users as user (user.id)}
             <tr class="admin-utilisateurs-tab__row" data-testid="users-row-{user.id}">
-              <!-- Email -->
-              <td class="admin-utilisateurs-tab__td" data-testid="users-cell-email-{user.id}">
-                {user.email}
+              <!-- Email — links to the user profile page -->
+              <td
+                class="admin-utilisateurs-tab__td"
+                data-testid="users-cell-email-{user.id}"
+              >
+                <a
+                  href="/admin/utilisateurs/{user.id}"
+                  class="utilisateurs-row__email-link"
+                  data-testid="utilisateurs-row-email-link-{user.id}"
+                >
+                  {user.email}
+                </a>
               </td>
 
               <!-- Nom -->
@@ -772,6 +781,25 @@
 
   .admin-utilisateurs-tab__skeleton-row {
     border-bottom: 1px solid var(--color-hairline);
+  }
+
+  /* ─── Email link (utilisateurs-row) ─── */
+  .utilisateurs-row__email-link {
+    color: var(--color-terracotta);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 150ms ease-out;
+  }
+
+  .utilisateurs-row__email-link:hover {
+    color: var(--color-terracotta-dark, #6a3a20);
+    text-decoration: underline;
+  }
+
+  .utilisateurs-row__email-link:focus {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   /* ─── Empty state ─── */

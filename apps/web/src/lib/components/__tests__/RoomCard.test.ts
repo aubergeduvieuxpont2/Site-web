@@ -37,9 +37,9 @@ describe('RoomCard (SSR)', () => {
       expect(html).toContain('data-testid="room-card-description"');
     });
 
-    it('renders data-testid="room-card-price" on span', () => {
+    it('renders data-testid="price-amount" on price span', () => {
       const { html } = renderCard();
-      expect(html).toContain('data-testid="room-card-price"');
+      expect(html).toContain('data-testid="price-amount"');
     });
 
     it('does not render a CTA button', () => {
@@ -81,20 +81,31 @@ describe('RoomCard (SSR)', () => {
     });
   });
 
-  describe('price label', () => {
-    it('renders flat price with $/nuit suffix from settings', () => {
+  describe('price display', () => {
+    it('renders the default price with 2 decimal places', () => {
       const { html } = renderCard();
-      expect(html).toContain('89 $/nuit');
+      expect(html).toContain('89.00');
+    });
+
+    it('renders /nuit label separately', () => {
+      const { html } = renderCard();
+      expect(html).toContain('/nuit');
+    });
+
+    it('price amount uses price-amount class and shows dollar prefix', () => {
+      const { html } = renderCard();
+      expect(html).toMatch(/class="price-amount[^"]*"[^>]*>\$89\.00/);
     });
 
     it('price is the same for all rooms (flat rate)', () => {
       const { html } = renderCard({ ...mockRoom, name: 'Le Gîte Familial' });
-      expect(html).toContain('89 $/nuit');
+      expect(html).toContain('89.00');
     });
 
-    it('price is inside the room-card-price element', () => {
+    it('does not show custom pricing badge when no user is logged in', () => {
       const { html } = renderCard();
-      expect(html).toMatch(/data-testid="room-card-price"[^>]*>[^<]*89 \$\/nuit/s);
+      expect(html).not.toContain('data-testid="custom-pricing-badge"');
+      expect(html).not.toContain('Tarif personnalisé');
     });
   });
 

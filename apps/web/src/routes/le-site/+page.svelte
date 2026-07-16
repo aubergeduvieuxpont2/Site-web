@@ -7,6 +7,7 @@
   import { reveal, revealStagger } from '$lib/motion';
   import { ATTRACTIONS, PROPERTY_AREAS } from '$lib/content';
   import { settings, loadSettings } from '$lib/settings.svelte';
+  import { auth } from '$lib/auth.svelte';
 
   const NAV_SECTIONS = [
     { id: 'chambres', label: 'Chambres' },
@@ -114,7 +115,7 @@
         Les chambres sont assignées à votre arrivée selon les besoins de votre équipe.
         Tarif unique&nbsp;:
         <strong class="page-le-site__price" data-testid="property-overview-price"
-          >{settings.nightlyPrice} $/nuit</strong
+          >{auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice} $/nuit</strong
         >.
       </p>
 

@@ -23,24 +23,23 @@ export interface User {
   name: string | null;
   role: "guest" | "admin";
   hubspotContactId?: string | null;
+  effectiveNightlyPrice?: number;
 }
 
 export interface ReservationRow {
   id: number;
-  email: string;
   name: string;
-  check_in: string;
-  check_out: string;
-  guests: number;
+  first_name: string | null;
+  last_name: string | null;
+  email: string;
+  phone: string | null;
+  room: string | null;
+  arrive: string | null;
+  depart: string | null;
+  people: number;
+  room_count: number | null;
   message: string | null;
   created_at: string;
-  updated_at: string;
-  // Split-name + room-count columns (nullable; populated by the reservation
-  // route once the 0013/0014 migrations have applied). Optional so rows read
-  // back before the migration — and existing fixtures — stay assignable.
-  first_name?: string | null;
-  last_name?: string | null;
-  room_count?: number | null;
 }
 
 export interface OutboxRow {
@@ -85,6 +84,9 @@ export interface PublicSettings {
   // required client-side: loadSettings seeds it from DEFAULTS (12) so callers
   // always read a number even when the API omits it on a count failure.
   publicRoomCount: number;
+  tps: number;
+  tvq: number;
+  accommodationTax: number;
 }
 
 // `publicRoomCount` is a live, computed public field — never part of an admin
@@ -117,6 +119,23 @@ export interface RoomInput {
   capacity: number;
   imageKey: string;
   isPublic: boolean;
+}
+
+/**
+ * A room currently assigned to a reservation. Keyed by the stable `room_slug`
+ * (the assignment join table stores the slug, not a numeric room id).
+ */
+export interface RoomAssignment {
+  room_slug: string;
+}
+
+/**
+ * A room free for a reservation's date range. `slug` is the stable key used in
+ * assign/unassign calls; `name` is the display label.
+ */
+export interface FreeRoom {
+  slug: string;
+  name: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +401,73 @@ export async function adminUserResetLink(
   );
 }
 
+/**
+ * Full local-profile shape returned by `GET /api/admin/users/:id` (admin-gated).
+ * These are the columns persisted in Postgres — HubSpot live data is delivered
+ * separately in the `hubspot` field so a HubSpot outage never blocks the local
+ * record.
+ */
+export interface AdminUserDetail {
+  id: number;
+  email: string;
+  name: string | null;
+  role: "guest" | "admin";
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  company: string | null;
+  created_at: string;
+  hubspot_contact_id: string | null;
+  discount_percent: number | null;
+  fixed_nightly_price: number | null;
+}
+
+/** Mutually-exclusive pricing body accepted by the pricing endpoint. */
+export interface UserPricingBody {
+  discountPercent: number | null;
+  fixedNightlyPrice: number | null;
+}
+
+/**
+ * Fetch a single user's full local profile plus any live HubSpot properties
+ * (admin-gated). `hubspot` is `null` when the account has no HubSpot id or the
+ * portal call failed — the server never returns a 5xx for that case. `id` is
+ * validated defensively before it is interpolated into the path.
+ */
+export async function adminGetUser(
+  id: number | string,
+): Promise<
+  { user: AdminUserDetail; hubspot: Record<string, unknown> | null } | ApiError
+> {
+  const safeId = Math.trunc(Number(id));
+  if (!Number.isInteger(safeId) || safeId <= 0) {
+    return { error: "Identifiant invalide" };
+  }
+  return fetchJson<{
+    user: AdminUserDetail;
+    hubspot: Record<string, unknown> | null;
+  }>(`/admin/users/${encodeURIComponent(String(safeId))}`);
+}
+
+/**
+ * Set a user's custom nightly pricing (admin-gated). Exactly one of the two
+ * columns should be non-null; the server enforces mutual exclusivity and nulls
+ * the other. `id` is validated defensively before path interpolation.
+ */
+export async function adminSetUserPricing(
+  id: number | string,
+  body: UserPricingBody,
+): Promise<{ user: AdminUserDetail } | ApiError> {
+  const safeId = Math.trunc(Number(id));
+  if (!Number.isInteger(safeId) || safeId <= 0) {
+    return { error: "Identifiant invalide" };
+  }
+  return fetchJson<{ user: AdminUserDetail }>(
+    `/admin/users/${encodeURIComponent(String(safeId))}/pricing`,
+    { method: "POST", body: JSON.stringify(body) },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Guest reservation
 // ---------------------------------------------------------------------------
@@ -472,3 +558,111 @@ export async function adminDeleteRoom(
     method: "DELETE",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Room assignments (admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * Guard a reservation id before it is interpolated into a request path. Only a
+ * finite positive integer is accepted, so a caller can never inject extra path
+ * segments; the guard mirrors {@link requeueOutbox} / {@link adminSetUserRole}.
+ */
+function safeReservationId(id: number): number | null {
+  const safe = Math.trunc(id);
+  return Number.isInteger(safe) && safe > 0 ? safe : null;
+}
+
+/**
+ * Admin-gated: the rooms currently assigned to a reservation.
+ */
+export async function adminReservationAssignments(
+  reservationId: number,
+): Promise<{ assignments: RoomAssignment[] } | ApiError> {
+  const safe = safeReservationId(reservationId);
+  if (safe === null) return { error: "Identifiant invalide" };
+  return fetchJson<{ assignments: RoomAssignment[] }>(
+    `/admin/reservations/${encodeURIComponent(String(safe))}/assignments`,
+  );
+}
+
+/**
+ * Admin-gated: rooms free for a reservation's date range. The server returns a
+ * 422 with a French `error` when the reservation's dates are null/invalid or
+ * `depart <= arrive`; that surfaces through the `{ error }` branch.
+ */
+export async function adminFreeRooms(
+  reservationId: number,
+): Promise<{ rooms: FreeRoom[] } | ApiError> {
+  const safe = safeReservationId(reservationId);
+  if (safe === null) return { error: "Identifiant invalide" };
+  return fetchJson<{ rooms: FreeRoom[] }>(
+    `/admin/reservations/${encodeURIComponent(String(safe))}/free-rooms`,
+  );
+}
+
+/**
+ * Admin-gated: assign a room to a reservation. A 409 (overlap or capacity
+ * reached) and a 422 (ineligible dates) both surface as `{ error }` carrying
+ * the server's French message.
+ */
+export async function adminAssignRoom(
+  reservationId: number,
+  roomSlug: string,
+): Promise<{ assignment: RoomAssignment } | ApiError> {
+  const safe = safeReservationId(reservationId);
+  if (safe === null) return { error: "Identifiant invalide" };
+  return fetchJson<{ assignment: RoomAssignment }>(
+    `/admin/reservations/${encodeURIComponent(String(safe))}/assignments`,
+    { method: "POST", body: JSON.stringify({ roomSlug }) },
+  );
+}
+
+/**
+ * Admin-gated: remove a room assignment. `roomSlug` is encoded into the fixed
+ * path so it cannot inject extra path segments.
+ */
+export async function adminUnassignRoom(
+  reservationId: number,
+  roomSlug: string,
+): Promise<{ ok: true } | ApiError> {
+  const safe = safeReservationId(reservationId);
+  if (safe === null) return { error: "Identifiant invalide" };
+  return fetchJson<{ ok: true }>(
+    `/admin/reservations/${encodeURIComponent(String(safe))}/assignments/${encodeURIComponent(roomSlug)}`,
+    { method: "DELETE" },
+  );
+}
+
+/**
+ * Invoice breakdown result from creating an invoice.
+ */
+export interface InvoiceBreakdown {
+  nights: number;
+  roomCount: number;
+  effectiveNightly: number;
+  base: number;
+  lodgingTax: number;
+  accommodationTax: number;
+  total: number;
+  amount: number;
+}
+
+/**
+ * Admin-gated: create an invoice for a reservation and enqueue the HubSpot op.
+ * Returns the breakdown on success (200); a 422 surfaces when the reservation
+ * lacks dates or room count as `{ error }`.
+ */
+export async function adminCreateInvoice(
+  reservationId: number,
+  type: "deposit" | "full",
+  depositPercent?: number,
+): Promise<{ ok: true; breakdown: InvoiceBreakdown } | ApiError> {
+  const safe = safeReservationId(reservationId);
+  if (safe === null) return { error: "Identifiant invalide" };
+  return fetchJson<{ ok: true; breakdown: InvoiceBreakdown }>(
+    `/admin/reservations/${encodeURIComponent(String(safe))}/invoice`,
+    { method: "POST", body: JSON.stringify({ type, depositPercent }) },
+  );
+}
+

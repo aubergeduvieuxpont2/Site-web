@@ -7,10 +7,12 @@ import { ListAddSchema, ListRemoveSchema, executeListAdd, executeListRemove } fr
 import { TimelineEventSchema, executeTimelineEvent } from "./timeline";
 import { ContactGetSchema, executeContactGet } from "./contactGet";
 import { DealListByContactSchema, executeDealListByContact } from "./dealList";
+import { InvoiceCreateSchema, executeInvoiceCreate } from "./invoice";
+import { ContactGetByIdSchema, executeContactGetById } from "./contactGetById";
 import type { NormalizedError } from "../hubspotClient";
 
 export type OpEnvelope = {
-  kind: "contact.upsert" | "deal.create" | "note.create" | "list.add" | "list.remove" | "timeline.event" | "contact.get" | "deal.listByContact";
+  kind: "contact.upsert" | "deal.create" | "note.create" | "list.add" | "list.remove" | "timeline.event" | "contact.get" | "deal.listByContact" | "invoice.create" | "contact.getById";
   payload: unknown;
   dedupeKey?: string;
 };
@@ -20,7 +22,7 @@ export type ParseResult =
   | { success: false; error: NormalizedError };
 
 export const EnvelopeSchema = z.object({
-  kind: z.enum(["contact.upsert", "deal.create", "note.create", "list.add", "list.remove", "timeline.event", "contact.get", "deal.listByContact"]),
+  kind: z.enum(["contact.upsert", "deal.create", "note.create", "list.add", "list.remove", "timeline.event", "contact.get", "deal.listByContact", "invoice.create", "contact.getById"]),
   payload: z.unknown(),
   dedupeKey: z.string().optional(),
 });
@@ -62,6 +64,14 @@ const registry: Record<string, OpHandler> = {
   "deal.listByContact": {
     payloadSchema: DealListByContactSchema,
     execute: (env, payload) => executeDealListByContact(env, payload as any),
+  },
+  "invoice.create": {
+    payloadSchema: InvoiceCreateSchema,
+    execute: (env, payload, dedupeKey) => executeInvoiceCreate(env, payload as any, dedupeKey),
+  },
+  "contact.getById": {
+    payloadSchema: ContactGetByIdSchema,
+    execute: (env, payload, dedupeKey) => executeContactGetById(env, payload as any, dedupeKey),
   },
 };
 

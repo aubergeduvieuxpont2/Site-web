@@ -29,6 +29,9 @@ export const DEFAULTS = {
   contactEmail: "info@aubergeduvieuxpont.ca",
   marketingRoomCount: 12,
   publicRoomCount: 12,
+  tps: 5,
+  tvq: 9.975,
+  accommodationTax: 3.5,
 } as const;
 
 export type NavLink = { label: string; href: string; code: string };

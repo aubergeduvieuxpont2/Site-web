@@ -1,0 +1,526 @@
+REQ:
+  R-DATE-001:
+    actor: "Admin user"
+    capability: "see localized fr-CA reservation dates with a dash for null dates"
+    constraints: "frontend ReservationRow must match the API arrive/depart/people contract; date-only-safe parse avoids UTC day-shift"
+    priority: MUST
+    tests: [T-DATE-001a, T-DATE-001b]
+  R-ASSIGN-001:
+    actor: "Admin user"
+    capability: "assign a room to a reservation without double-booking overlapping nights"
+    constraints: "reject when the same room_slug overlaps another reservation on the half-open [arrive, depart) rule"
+    priority: MUST
+    tests: [T-ASSIGN-001a, T-ASSIGN-001b]
+  R-ASSIGN-002:
+    actor: "Admin user"
+    capability: "list rooms free for a reservation date range"
+    constraints: "exclude rooms with an overlapping assignment"
+    priority: MUST
+    tests: [T-ASSIGN-002a]
+  R-ASSIGN-003:
+    actor: "Admin user"
+    capability: "be blocked from assigning ineligible reservations"
+    constraints: "null or invalid dates or depart <= arrive returns a French 422 message"
+    priority: MUST
+    tests: [T-ASSIGN-003a]
+  R-TAX-001:
+    actor: "Admin user"
+    capability: "configure TPS, TVQ and accommodation tax percents"
+    constraints: "non-negative numbers, 0 allowed, decimals allowed; negatives rejected"
+    priority: MUST
+    tests: [T-TAX-001a, T-TAX-001b]
+  R-TAX-002:
+    actor: "Any client"
+    capability: "read tax percents from the public and admin settings responses"
+    constraints: "taxes appear in both responses; pricing columns never appear in public"
+    priority: MUST
+    tests: [T-TAX-002a]
+  R-INV-001:
+    actor: "Admin user"
+    capability: "create a deposit or full invoice for a reservation"
+    constraints: "amount computed in a shared helper with no tax compounding; enqueued as invoice.create"
+    priority: MUST
+    tests: [T-INV-001a, T-INV-001b]
+  R-INV-002:
+    actor: "System"
+    capability: "register and execute an invoice.create HubSpot op"
+    constraints: "posts to the invoices object in CAD with a contact association; failure lands in outbox failed"
+    priority: MUST
+    tests: [T-INV-002a]
+  R-INV-003:
+    actor: "Admin user"
+    capability: "be rejected when invoicing an incomplete reservation"
+    constraints: "missing or invalid dates or null room_count returns 422"
+    priority: MUST
+    tests: [T-INV-003a]
+  R-PROF-001:
+    actor: "Admin user"
+    capability: "view a dedicated user profile with local fields, HubSpot data and a back link"
+    constraints: "client-only route; HubSpot contact fetched by id via synchronous execute"
+    priority: MUST
+    tests: [T-PROF-001a]
+  R-PROF-002:
+    actor: "Admin user"
+    capability: "still see local fields when HubSpot data is unavailable"
+    constraints: "null hubspot_contact_id or a failed fetch yields a French fallback, never a 5xx"
+    priority: MUST
+    tests: [T-PROF-002a]
+  R-PRICE-001:
+    actor: "Any user"
+    capability: "have a server-computed effective nightly price on the session endpoint"
+    constraints: "precedence fixed_nightly_price > discount_percent > public nightly_price"
+    priority: MUST
+    tests: [T-PRICE-001a, T-PRICE-001b]
+  R-PRICE-002:
+    actor: "Logged-in user"
+    capability: "see their effective nightly price in guest price displays"
+    constraints: "threaded through the auth store into RoomCard and le-site"
+    priority: MUST
+    tests: [T-PRICE-002a]
+  R-PRICE-003:
+    actor: "Admin user"
+    capability: "invoice a reservation at the resolved user effective price"
+    constraints: "resolve by case-insensitive email, fall back to public nightly_price"
+    priority: MUST
+    tests: [T-PRICE-003a]
+  R-PRICE-004:
+    actor: "Admin user"
+    capability: "set at most one of discount_percent or fixed_nightly_price"
+    constraints: "mutual exclusivity enforced by the API validator and the admin UI"
+    priority: MUST
+    tests: [T-PRICE-004a]
+
+E:
+  E-User:
+    fields:
+      id: bigint
+      email: string
+      discount_percent: "numeric(5,2) nullable"
+      fixed_nightly_price: "numeric(10,2) nullable"
+      hubspot_contact_id: "string nullable"
+    tenancy: single-tenant
+    invariants: [INV-pricing-exclusive]
+  E-Setting:
+    fields:
+      key: string
+      value: "string (raw percent or number)"
+    tenancy: single-tenant
+    invariants: [INV-tax-nonnegative]
+  E-ReservationRoomAssignment:
+    fields:
+      id: bigint
+      reservation_id: "bigint fk reservations.id"
+      room_slug: "text fk rooms.slug"
+    tenancy: single-tenant
+    invariants: [INV-no-overlap, INV-unique-assignment]
+  E-Reservation:
+    fields:
+      id: bigint
+      email: string
+      arrive: "date string YYYY-MM-DD nullable"
+      depart: "date string YYYY-MM-DD nullable"
+      people: integer
+      room_count: "integer nullable"
+    tenancy: single-tenant
+    invariants: []
+
+OP:
+  OP-Assignment.create:
+    input: "{ reservationId, roomSlug }"
+    auth: [admin-only]
+    pre: [reservation-dates-valid, room-count-not-exceeded, room-free-for-range]
+    err: [ERR-INELIGIBLE, ERR-OVERLAP, ERR-ROOMCOUNT]
+    out: "{ assignment }"
+  OP-Assignment.remove:
+    input: "{ reservationId, roomSlug }"
+    auth: [admin-only]
+    pre: []
+    err: [ERR-NOTFOUND]
+    out: "{ ok: true }"
+  OP-Assignment.freeRooms:
+    input: "{ reservationId }"
+    auth: [admin-only]
+    pre: [reservation-dates-valid]
+    err: [ERR-INELIGIBLE]
+    out: "{ rooms }"
+  OP-Settings.update:
+    input: "{ nightlyPrice, contactEmail, tps, tvq, accommodationTax }"
+    auth: [admin-only]
+    pre: [taxes-nonnegative]
+    err: [ERR-VALIDATION]
+    out: "AdminSettings"
+  OP-Invoice.create:
+    input: "{ reservationId, type, depositPercent }"
+    auth: [admin-only]
+    pre: [reservation-complete]
+    err: [ERR-INCOMPLETE]
+    out: "{ ok: true, breakdown }"
+  OP-User.get:
+    input: "{ id }"
+    auth: [admin-only]
+    pre: []
+    err: [ERR-NOTFOUND]
+    out: "{ user, hubspot }"
+  OP-User.setPricing:
+    input: "{ id, discountPercent, fixedNightlyPrice }"
+    auth: [admin-only]
+    pre: [pricing-mutually-exclusive]
+    err: [ERR-VALIDATION]
+    out: "{ user }"
+  OP-Auth.me:
+    input: "{}"
+    auth: [session-user]
+    pre: []
+    err: [ERR-UNAUTHORIZED]
+    out: "{ user with effectiveNightlyPrice }"
+
+AUTH:
+  admin-only: "caller session user must have role admin, else 401 or 403"
+  session-user: "caller must have a valid session cookie"
+
+INV:
+  INV-pricing-exclusive: "a user never has both discount_percent and fixed_nightly_price non-null"
+  INV-tax-nonnegative: "tps, tvq and accommodation_tax are always >= 0"
+  INV-no-overlap: "a room_slug is never assigned to two reservations whose night ranges overlap"
+  INV-unique-assignment: "a room_slug is assigned at most once per reservation"
+
+ERR:
+  ERR-INELIGIBLE:
+    code: 422
+    meaning: "reservation has null or invalid dates or depart <= arrive"
+  ERR-OVERLAP:
+    code: 409
+    meaning: "room already assigned to an overlapping reservation"
+  ERR-ROOMCOUNT:
+    code: 409
+    meaning: "reservation room_count cap reached"
+  ERR-INCOMPLETE:
+    code: 422
+    meaning: "reservation missing dates or room_count for invoicing"
+  ERR-VALIDATION:
+    code: 400
+    meaning: "invalid body, e.g. negative tax or both pricing fields set"
+  ERR-NOTFOUND:
+    code: 404
+    meaning: "resource not found"
+  ERR-UNAUTHORIZED:
+    code: 401
+    meaning: "no valid session"
+
+API:
+  "GET /api/settings":
+    input: none
+    output: PublicSettings
+    errors: []
+    auth: session-user
+  "POST /api/admin/settings":
+    input: "{ nightlyPrice, contactEmail, tps, tvq, accommodationTax }"
+    output: AdminSettings
+    errors: [ERR-VALIDATION]
+    auth: admin-only
+  "GET /api/admin/reservations/:id/free-rooms":
+    input: reservationId
+    output: "{ rooms }"
+    errors: [ERR-INELIGIBLE]
+    auth: admin-only
+  "POST /api/admin/reservations/:id/assignments":
+    input: "{ roomSlug }"
+    output: "{ assignment }"
+    errors: [ERR-INELIGIBLE, ERR-OVERLAP, ERR-ROOMCOUNT]
+    auth: admin-only
+  "DELETE /api/admin/reservations/:id/assignments/:roomSlug":
+    input: "reservationId, roomSlug"
+    output: "{ ok: true }"
+    errors: [ERR-NOTFOUND]
+    auth: admin-only
+  "POST /api/admin/reservations/:id/invoice":
+    input: "{ type, depositPercent }"
+    output: "{ ok: true, breakdown }"
+    errors: [ERR-INCOMPLETE]
+    auth: admin-only
+  "GET /api/admin/users/:id":
+    input: id
+    output: "{ user, hubspot }"
+    errors: [ERR-NOTFOUND]
+    auth: admin-only
+  "POST /api/admin/users/:id/pricing":
+    input: "{ discountPercent, fixedNightlyPrice }"
+    output: "{ user }"
+    errors: [ERR-VALIDATION]
+    auth: admin-only
+  "GET /api/auth/me":
+    input: none
+    output: "{ user with effectiveNightlyPrice }"
+    errors: [ERR-UNAUTHORIZED]
+    auth: session-user
+
+UI:
+  screen-admin-reservations:
+    actions: [format-dates, view-assignments, assign-room, unassign-room, create-invoice]
+    state: [loading, loaded, error]
+  screen-admin-settings:
+    actions: [edit-taxes, save-settings]
+    state: [loading, loaded, saving, error]
+  screen-admin-user-profile:
+    actions: [view-local-fields, view-hubspot, edit-pricing, back-to-users]
+    state: [loading, loaded, hubspot-missing, error]
+  screen-roomcard:
+    actions: [show-effective-price]
+    state: [default]
+
+DATA:
+  migration-0015: "ALTER TABLE users ADD COLUMN IF NOT EXISTS discount_percent, fixed_nightly_price"
+  migration-0016: "INSERT settings tps=5, tvq=9.975, accommodation_tax=3.5 ON CONFLICT DO NOTHING"
+  migration-0017: "CREATE TABLE IF NOT EXISTS reservation_room_assignments plus idx_rra_room_slug"
+
+TEST:
+  T-DATE-001a:
+    verifies: R-DATE-001
+    behaviour: "a populated arrive date renders the exact stored calendar day in fr-CA"
+    steps:
+      - "render the admin reservations table with a row whose arrive is a known date"
+      - "assert the cell shows that day with no off-by-one shift"
+  T-DATE-001b:
+    verifies: R-DATE-001
+    behaviour: "a null arrive date renders an em dash"
+    steps:
+      - "render a row with arrive null"
+      - "assert the cell shows a dash"
+  T-ASSIGN-001a:
+    verifies: R-ASSIGN-001
+    behaviour: "assigning a free room succeeds"
+    steps:
+      - "post an assignment for a room with no overlapping reservation"
+      - "assert status 201"
+  T-ASSIGN-001b:
+    verifies: R-ASSIGN-001
+    behaviour: "assigning an overlapping room is rejected"
+    steps:
+      - "assign a room to a reservation whose nights overlap another"
+      - "assert status 409"
+  T-ASSIGN-002a:
+    verifies: R-ASSIGN-002
+    behaviour: "free-rooms excludes overlapping rooms"
+    steps:
+      - "request free rooms for a range where one room is already booked"
+      - "assert the booked room is absent from the list"
+  T-ASSIGN-003a:
+    verifies: R-ASSIGN-003
+    behaviour: "ineligible reservation is blocked"
+    steps:
+      - "request assignment or free-rooms for a reservation with null or reversed dates"
+      - "assert status 422 with a French message"
+  T-TAX-001a:
+    verifies: R-TAX-001
+    behaviour: "settings schema accepts taxes including 0 and 9.975"
+    steps:
+      - "parse a settings body with tps 0, tvq 9.975, accommodationTax 3.5"
+      - "assert success"
+  T-TAX-001b:
+    verifies: R-TAX-001
+    behaviour: "negative tax is rejected"
+    steps:
+      - "parse a settings body with tps -1"
+      - "assert failure"
+  T-TAX-002a:
+    verifies: R-TAX-002
+    behaviour: "rowsToAdminSettings parses tax rows"
+    steps:
+      - "map settings rows including the three tax keys"
+      - "assert numeric tps, tvq and accommodationTax on the result"
+  T-INV-001a:
+    verifies: R-INV-001
+    behaviour: "computeInvoice full total has no tax compounding"
+    steps:
+      - "compute base 356 with tps 5, tvq 9.975, accommodation 3.5"
+      - "assert total 421.77"
+  T-INV-001b:
+    verifies: R-INV-001
+    behaviour: "deposit defaults to 30 percent of total"
+    steps:
+      - "compute a deposit invoice with no depositPercent"
+      - "assert amount is 30 percent of total"
+  T-INV-002a:
+    verifies: R-INV-002
+    behaviour: "registry parses an invoice.create envelope"
+    steps:
+      - "parse an envelope with kind invoice.create and a valid payload"
+      - "assert parse success"
+  T-INV-003a:
+    verifies: R-INV-003
+    behaviour: "invoice endpoint rejects incomplete reservations"
+    steps:
+      - "invoice a reservation with null dates or null room_count"
+      - "assert status 422"
+  T-PROF-001a:
+    verifies: R-PROF-001
+    behaviour: "user detail returns local fields plus hubspot when id resolves"
+    steps:
+      - "get a user whose hubspot_contact_id resolves"
+      - "assert local fields and a hubspot object are present"
+  T-PROF-002a:
+    verifies: R-PROF-002
+    behaviour: "user detail degrades gracefully without HubSpot"
+    steps:
+      - "get a user whose hubspot_contact_id is null or whose fetch fails"
+      - "assert hubspot is null and the response is not a 5xx"
+  T-PRICE-001a:
+    verifies: R-PRICE-001
+    behaviour: "fixed price wins precedence"
+    steps:
+      - "resolve effective nightly with fixed 70 and discount 10"
+      - "assert 70"
+  T-PRICE-001b:
+    verifies: R-PRICE-001
+    behaviour: "discount applies when no fixed price"
+    steps:
+      - "resolve effective nightly with discount 10 and public 89"
+      - "assert 80.10"
+  T-PRICE-002a:
+    verifies: R-PRICE-002
+    behaviour: "RoomCard shows the effective price when logged in"
+    steps:
+      - "set the auth store user with effectiveNightlyPrice 70"
+      - "assert the RoomCard price reflects 70"
+  T-PRICE-003a:
+    verifies: R-PRICE-003
+    behaviour: "invoice uses the resolved user effective price"
+    steps:
+      - "invoice a reservation whose email matches a user with a fixed price"
+      - "assert the base uses that fixed price"
+  T-PRICE-004a:
+    verifies: R-PRICE-004
+    behaviour: "setting both pricing fields is rejected"
+    steps:
+      - "post pricing with both discountPercent and fixedNightlyPrice non-null"
+      - "assert status 400"
+
+NFR:
+  security: "all new admin endpoints admin-gated; SQL parameterized; PII admin-only; no secrets in web"
+  idempotency: "migrations safe to re-run; invoice enqueue deduped by invoice-id-type key"
+  responsiveness: "new admin UI usable at 640px breakpoint with scrollable tables"
+  localization: "user-facing copy in Quebec French"
+  observability: "invoice enqueue failures logged; outbox tracks failed ops"
+
+FILE:
+  apps/api/migrations/0015_users_pricing.sql: TASK-migrations
+  apps/api/migrations/0016_settings_taxes.sql: TASK-migrations
+  apps/api/migrations/0017_reservation_room_assignments.sql: TASK-migrations
+  apps/api/src/pricing.ts: TASK-api-core
+  apps/api/src/assignments.ts: TASK-api-core
+  apps/api/src/settings.ts: TASK-api-core
+  apps/api/src/index.ts: TASK-api-endpoints
+  apps/api/test/pricing.test.ts: TASK-api-core
+  apps/api/test/settings.test.ts: TASK-api-core
+  apps/hubspot/src/ops/invoice.ts: TASK-hubspot
+  apps/hubspot/src/ops/contactGetById.ts: TASK-hubspot
+  apps/hubspot/src/ops/registry.ts: TASK-hubspot
+  apps/hubspot/test/ops.test.ts: TASK-hubspot
+  apps/web/src/lib/api.ts: TASK-web-shared
+  apps/web/src/lib/settings.svelte.ts: TASK-web-shared
+  apps/web/src/lib/content.ts: TASK-web-shared
+  apps/web/src/lib/components/RoomCard.svelte: TASK-web-ui
+  apps/web/src/routes/le-site/+page.svelte: TASK-web-ui
+  apps/web/src/routes/admin/+page.svelte: TASK-web-ui
+  apps/web/src/routes/profil/+page.svelte: TASK-web-ui
+  apps/web/src/routes/admin/utilisateurs/[id]/+page.svelte: TASK-web-profile
+  apps/web/src/routes/admin/utilisateurs/[id]/+page.ts: TASK-web-profile
+  apps/web/src/lib/components/admin/AdminUtilisateursTab.svelte: TASK-web-profile
+  apps/web/src/routes/__tests__/page-admin.test.ts: TASK-web-ui
+
+TASK:
+  TASK-migrations:
+    scope: [R-PRICE-001, R-TAX-001, R-ASSIGN-001]
+    files:
+      - apps/api/migrations/0015_users_pricing.sql
+      - apps/api/migrations/0016_settings_taxes.sql
+      - apps/api/migrations/0017_reservation_room_assignments.sql
+    must_preserve: [INV-pricing-exclusive, INV-no-overlap, INV-unique-assignment]
+    produce: [migrations]
+    verifies: [R-PRICE-001, R-TAX-001, R-ASSIGN-001]
+  TASK-api-core:
+    scope: [R-PRICE-001, R-TAX-001, R-TAX-002, R-INV-001, R-ASSIGN-001, R-ASSIGN-002, R-ASSIGN-003, T-INV-001a, T-INV-001b, T-TAX-001a, T-TAX-001b, T-TAX-002a, T-PRICE-001a, T-PRICE-001b]
+    files:
+      - apps/api/src/pricing.ts
+      - apps/api/src/assignments.ts
+      - apps/api/src/settings.ts
+      - apps/api/test/pricing.test.ts
+      - apps/api/test/settings.test.ts
+    must_preserve: [INV-tax-nonnegative, INV-no-overlap]
+    produce: [code, tests]
+    verifies: [R-PRICE-001, R-TAX-001, R-TAX-002, R-INV-001]
+  TASK-api-endpoints:
+    scope: [R-ASSIGN-001, R-ASSIGN-002, R-ASSIGN-003, R-INV-001, R-INV-003, R-PROF-001, R-PROF-002, R-PRICE-001, R-PRICE-003, R-PRICE-004, R-TAX-002, OP-Assignment.create, OP-Assignment.remove, OP-Assignment.freeRooms, OP-Invoice.create, OP-User.get, OP-User.setPricing, OP-Auth.me, OP-Settings.update, ERR-INELIGIBLE, ERR-OVERLAP, ERR-ROOMCOUNT, ERR-INCOMPLETE, ERR-VALIDATION, T-INV-003a, T-PROF-001a, T-PROF-002a, T-PRICE-003a, T-PRICE-004a]
+    files: [apps/api/src/index.ts]
+    must_preserve: [INV-pricing-exclusive, INV-no-overlap, INV-unique-assignment, INV-tax-nonnegative]
+    produce: [code]
+    verifies: [R-ASSIGN-001, R-ASSIGN-002, R-ASSIGN-003, R-INV-001, R-INV-003, R-PROF-001, R-PROF-002, R-PRICE-003, R-PRICE-004]
+  TASK-hubspot:
+    scope: [R-INV-002, R-PROF-001, T-INV-002a]
+    files:
+      - apps/hubspot/src/ops/invoice.ts
+      - apps/hubspot/src/ops/contactGetById.ts
+      - apps/hubspot/src/ops/registry.ts
+      - apps/hubspot/test/ops.test.ts
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-INV-002, R-PROF-001]
+  TASK-web-shared:
+    scope: [R-DATE-001, R-TAX-001, R-TAX-002, R-PRICE-001, R-PRICE-002]
+    files:
+      - apps/web/src/lib/api.ts
+      - apps/web/src/lib/settings.svelte.ts
+      - apps/web/src/lib/content.ts
+    must_preserve: []
+    produce: [code]
+    verifies: [R-DATE-001, R-TAX-002, R-PRICE-002]
+  TASK-web-ui:
+    scope: [R-DATE-001, R-ASSIGN-001, R-ASSIGN-002, R-INV-001, R-TAX-001, R-PRICE-002, T-DATE-001a, T-DATE-001b, T-PRICE-002a]
+    files:
+      - apps/web/src/lib/components/RoomCard.svelte
+      - apps/web/src/routes/le-site/+page.svelte
+      - apps/web/src/routes/admin/+page.svelte
+      - apps/web/src/routes/profil/+page.svelte
+      - apps/web/src/routes/__tests__/page-admin.test.ts
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-DATE-001, R-PRICE-002]
+  TASK-web-profile:
+    scope: [R-PROF-001, R-PROF-002, R-PRICE-004]
+    files:
+      - apps/web/src/routes/admin/utilisateurs/[id]/+page.svelte
+      - apps/web/src/routes/admin/utilisateurs/[id]/+page.ts
+      - apps/web/src/lib/components/admin/AdminUtilisateursTab.svelte
+    must_preserve: [INV-pricing-exclusive]
+    produce: [code]
+    verifies: [R-PROF-001, R-PROF-002, R-PRICE-004]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Frontend ReservationRow is corrected to arrive/depart/people; dates parsed date-only for fr-CA display"
+    rationale: "the API already returns this contract; the Invalid Date bug is a field-name mismatch, and UTC parsing shifts the day"
+  ST-02:
+    status: locked
+    decision: "Room assignment is keyed by room_slug with a SQL half-open overlap check"
+    rationale: "no numeric room id exists; the DB is the single source of truth against races"
+  ST-03:
+    status: locked
+    decision: "Tax percents stored raw as TEXT and validated with a non-negative decimal rule"
+    rationale: "settings table is text key/value; 9.975 round-trips as a string; 0 must be allowed"
+  ST-04:
+    status: locked
+    decision: "Invoice and effective-price math live in one pure unit-tested pricing helper with no tax compounding"
+    rationale: "endpoint and tests must agree byte-for-byte; brief mandates a shared helper"
+  ST-05:
+    status: locked
+    decision: "contact.getById runs synchronously via execute; invoice.create is enqueued via the outbox"
+    rationale: "reads are awaited by the admin; writes must survive portal rejection in the failed state"
+  ST-06:
+    status: locked
+    decision: "Pricing mutual exclusivity enforced in the API validator and admin UI, not a DB CHECK"
+    rationale: "keeps the migration trivially idempotent while still guaranteeing the invariant"
+  ST-07:
+    status: locked
+    decision: "The user profile route is client-only with ssr false and prerender false"
+    rationale: "it reads a session cookie and admin-only data that must never be prerendered"
