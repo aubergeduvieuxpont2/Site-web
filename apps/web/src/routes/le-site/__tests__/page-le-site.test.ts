@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { render } from 'svelte/server';
 import Page from '../+page.svelte';
-import { ROOMS, ATTRACTIONS } from '../../../lib/content';
+import { ATTRACTIONS, PROPERTY_AREAS } from '../../../lib/content';
 
 function renderPage() {
   const result = render(Page);
@@ -65,7 +65,7 @@ describe('page-le-site route', () => {
     });
   });
 
-  describe('chambres section', () => {
+  describe('chambres section (property overview)', () => {
     it('renders data-testid="section-chambres"', () => {
       const { html } = renderPage();
       expect(html).toContain('data-testid="section-chambres"');
@@ -76,25 +76,63 @@ describe('page-le-site route', () => {
       expect(html).toMatch(/id="chambres"/);
     });
 
-    it('renders data-testid="rooms-grid"', () => {
+    it('is a named region landmark', () => {
       const { html } = renderPage();
-      expect(html).toContain('data-testid="rooms-grid"');
+      expect(html).toMatch(/id="chambres"[^>]*aria-label="Aperçu de la propriété"/);
     });
 
-    it('renders one RoomCard per entry in ROOMS', () => {
+    it('no longer renders any RoomCard', () => {
       const { html } = renderPage();
-      const cards = html.match(/data-testid="room-card"/g) ?? [];
-      expect(cards).toHaveLength(ROOMS.length);
-    });
-
-    it('renders the chambres heading', () => {
-      const { html } = renderPage();
-      expect(html).toContain('Nos chambres');
+      expect(html).not.toContain('data-testid="room-card"');
+      expect(html).not.toContain('data-testid="rooms-grid"');
     });
 
     it('renders section label Hébergement', () => {
       const { html } = renderPage();
       expect(html).toContain('Hébergement');
+    });
+
+    it('retains the "assigned on arrival" intro copy', () => {
+      const { html } = renderPage();
+      expect(html).toContain('data-testid="property-overview-intro"');
+      expect(html).toContain('assignées à votre arrivée');
+    });
+
+    it('states the flat nightly price, defaulting to 89 $ under SSR', () => {
+      const { html } = renderPage();
+      expect(html).toMatch(/data-testid="property-overview-price"[^>]*>89 \$\/nuit</);
+    });
+
+    it('renders one area block per PROPERTY_AREAS entry', () => {
+      const { html } = renderPage();
+      for (const area of PROPERTY_AREAS) {
+        expect(html).toContain(`data-testid="area-${area.id}"`);
+      }
+    });
+
+    it('renders an ImagePanel wrapper for all 14 R2 image keys', () => {
+      const { html } = renderPage();
+      const keys = PROPERTY_AREAS.flatMap((a) => a.images.map((i) => i.key));
+      expect(keys).toHaveLength(14);
+      for (const key of keys) {
+        expect(html).toContain(`data-testid="area-image-${key}"`);
+      }
+    });
+
+    it('gives every property image a non-empty alt', () => {
+      const { html } = renderPage();
+      for (const area of PROPERTY_AREAS) {
+        for (const img of area.images) {
+          expect(img.alt.length).toBeGreaterThan(0);
+          expect(html).toContain(`alt="${img.alt}"`);
+        }
+      }
+    });
+
+    it('renders a /contact CTA in the section', () => {
+      const { html } = renderPage();
+      expect(html).toContain('data-testid="property-overview-cta"');
+      expect(html).toContain('Réserver votre séjour');
     });
   });
 

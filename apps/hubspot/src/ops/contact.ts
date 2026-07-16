@@ -11,6 +11,7 @@ export const ContactUpsertSchema = z.object({
   firstname: trimmedOptional,
   lastname: trimmedOptional,
   company: trimmedOptional,
+  contactId: trimmedOptional,
 });
 
 export type ContactUpsertPayload = z.infer<typeof ContactUpsertSchema>;
@@ -90,34 +91,37 @@ export async function executeContactUpsert(
   payload: ContactUpsertPayload,
   _dedupeKey?: string
 ): Promise<{ ok: true; hubspotId: string }> {
-  let existingId: string | null = null;
-  try {
-    const searchResult = (await hubspotFetch(
-      env,
-      `/crm/v3/objects/contacts/search`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          filterGroups: [
-            {
-              filters: [
-                {
-                  propertyName: "email",
-                  operator: "EQ",
-                  value: payload.email,
-                },
-              ],
-            },
-          ],
-          limit: 1,
-        }),
-      }
-    )) as any;
+  let existingId: string | null = payload.contactId || null;
 
-    if (searchResult?.results?.length > 0) {
-      existingId = searchResult.results[0].id;
-    }
-  } catch {}
+  if (!existingId) {
+    try {
+      const searchResult = (await hubspotFetch(
+        env,
+        `/crm/v3/objects/contacts/search`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            filterGroups: [
+              {
+                filters: [
+                  {
+                    propertyName: "email",
+                    operator: "EQ",
+                    value: payload.email,
+                  },
+                ],
+              },
+            ],
+            limit: 1,
+          }),
+        }
+      )) as any;
+
+      if (searchResult?.results?.length > 0) {
+        existingId = searchResult.results[0].id;
+      }
+    } catch {}
+  }
 
   if (existingId) {
     const updateProps = buildUpdateProperties(payload);

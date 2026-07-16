@@ -22,6 +22,13 @@ import {
   rowsToAdminSettings,
   toPublicSettings,
 } from "./settings";
+import type { RoomRow } from "./rooms";
+import {
+  RoomCreateSchema,
+  RoomUpdateSchema,
+  ROOM_IMAGE_KEYS,
+  slugify,
+} from "./rooms";
 
 type Bindings = {
   DB_CONN: string;
@@ -542,15 +549,26 @@ app.get("/api/profile", async (c) => {
     ORDER BY created_at DESC
   `) as ReservationRow[];
 
-  return c.json({ user, reservations });
+  const userResponse = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    hubspotContactId: user.hubspot_contact_id || null,
+  };
+
+  return c.json({ user: userResponse, reservations });
 });
 
 // Public rooms endpoint
 app.get("/api/rooms", async (c) => {
   const sql = neon(c.env.DB_CONN);
   const rows = (await sql`
-    SELECT slug, is_public FROM room_visibility ORDER BY slug
-  `) as RoomVisibilityRow[];
+    SELECT slug, name, capacity, image_key, is_public
+    FROM rooms
+    WHERE is_public = true
+    ORDER BY slug
+  `) as RoomRow[];
 
   return c.json(rows);
 });
@@ -594,9 +612,9 @@ app.get("/api/admin/outbox", async (c) => {
 
   let rows: OutboxRow[];
   if (status === "all") {
-    rows = (await sql`SELECT * FROM outbox ORDER BY updated_at DESC`) as OutboxRow[];
+    rows = (await sql`SELECT * FROM hubspot_outbox ORDER BY updated_at DESC`) as OutboxRow[];
   } else {
-    rows = (await sql`SELECT * FROM outbox WHERE status = ${status} ORDER BY updated_at DESC`) as OutboxRow[];
+    rows = (await sql`SELECT * FROM hubspot_outbox WHERE status = ${status} ORDER BY updated_at DESC`) as OutboxRow[];
   }
 
   return c.json({ rows });
@@ -615,11 +633,11 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
   const id = c.req.param("id");
 
   const rows = (await sql`
-    SELECT * FROM outbox WHERE id = ${id} AND status = 'failed'
+    SELECT * FROM hubspot_outbox WHERE id = ${id} AND status = 'failed'
   `) as OutboxRow[];
 
   if (rows.length === 0) {
-    const existing = (await sql`SELECT * FROM outbox WHERE id = ${id}`) as OutboxRow[];
+    const existing = (await sql`SELECT * FROM hubspot_outbox WHERE id = ${id}`) as OutboxRow[];
     if (existing.length === 0) {
       return c.json({ error: "Not found" }, 404);
     }
@@ -627,7 +645,7 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
   }
 
   const updated = (await sql`
-    UPDATE outbox
+    UPDATE hubspot_outbox
     SET status = 'pending', attempts = 0, last_error = NULL, next_attempt_at = now()
     WHERE id = ${id}
     RETURNING *
@@ -648,13 +666,50 @@ app.get("/api/admin/rooms", async (c) => {
 
   const sql = neon(c.env.DB_CONN);
   const rooms = (await sql`
-    SELECT slug, is_public FROM room_visibility ORDER BY slug
-  `) as RoomVisibilityRow[];
+    SELECT slug, name, capacity, image_key, is_public, created_at, updated_at
+    FROM rooms
+    ORDER BY slug
+  `) as RoomRow[];
 
   return c.json({ rooms });
 });
 
 app.post(
+  "/api/admin/rooms",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator("json", RoomCreateSchema),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+    const slug = slugify(data.name);
+
+    try {
+      const rows = (await sql`
+        INSERT INTO rooms (slug, name, capacity, image_key, is_public, created_at, updated_at)
+        VALUES (${slug}, ${data.name}, ${data.capacity}, ${data.imageKey}, ${data.isPublic}, now(), now())
+        RETURNING slug, name, capacity, image_key, is_public, created_at, updated_at
+      `) as RoomRow[];
+
+      return c.json({ room: rows[0] }, 201);
+    } catch (error: any) {
+      if (error.message?.includes("unique") || error.message?.includes("duplicate")) {
+        return c.json({ error: "A room with this slug already exists" }, 409);
+      }
+      throw error;
+    }
+  }
+);
+
+app.put(
   "/api/admin/rooms/:slug",
   async (c, next) => {
     const user = await getAuthUser(c);
@@ -666,24 +721,54 @@ app.post(
     }
     await next();
   },
-  zValidator("json", RoomVisibilitySchema),
+  zValidator("json", RoomUpdateSchema),
   async (c) => {
     const slug = c.req.param("slug");
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      UPDATE room_visibility
-      SET is_public = ${data.isPublic}, updated_at = now()
+      UPDATE rooms
+      SET name = ${data.name}, capacity = ${data.capacity}, image_key = ${data.imageKey}, is_public = ${data.isPublic}, updated_at = now()
       WHERE slug = ${slug}
-      RETURNING slug, is_public
-    `) as RoomVisibilityRow[];
+      RETURNING slug, name, capacity, image_key, is_public, created_at, updated_at
+    `) as RoomRow[];
 
     if (rows.length === 0) {
-      return c.json({ error: "Not found" }, 404);
+      return c.json({ error: "Room not found" }, 404);
     }
 
     return c.json({ room: rows[0] });
+  }
+);
+
+app.delete(
+  "/api/admin/rooms/:slug",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  async (c) => {
+    const slug = c.req.param("slug");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      DELETE FROM rooms
+      WHERE slug = ${slug}
+      RETURNING slug
+    `) as { slug: string }[];
+
+    if (rows.length === 0) {
+      return c.json({ error: "Room not found" }, 404);
+    }
+
+    return c.json({ ok: true });
   }
 );
 

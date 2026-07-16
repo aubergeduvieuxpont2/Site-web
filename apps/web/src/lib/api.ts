@@ -22,6 +22,7 @@ export interface User {
   email: string;
   name: string | null;
   role: "guest" | "admin";
+  hubspotContactId?: string | null;
 }
 
 export interface ReservationRow {
@@ -84,6 +85,32 @@ export interface AdminSettings extends PublicSettings {
 export interface RoomVisibility {
   slug: string;
   is_public: boolean;
+}
+
+/**
+ * A full room record as returned by the rooms API. `image_key` is nullable
+ * because a room may not yet have an R2 asset assigned. `slug` is the stable
+ * identifier; it is derived server-side from the name on create.
+ */
+export interface Room {
+  slug: string;
+  name: string;
+  capacity: number;
+  image_key: string | null;
+  is_public: boolean;
+}
+
+/**
+ * The admin-editable shape of a room (create + update share it). `imageKey`
+ * is camelCase on the wire and constrained server-side to the fixed R2 key
+ * allow-list; the slug is never part of the body (derived on create, taken
+ * from the path on update).
+ */
+export interface RoomInput {
+  name: string;
+  capacity: number;
+  imageKey: string;
+  isPublic: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -401,9 +428,50 @@ export async function getRooms(): Promise<RoomVisibility[] | ApiError> {
   return fetchJson<RoomVisibility[]>("/rooms");
 }
 
-/** Admin-gated: every room's visibility row. */
-export async function adminRooms(): Promise<{ rooms: RoomVisibility[] } | ApiError> {
-  return fetchJson<{ rooms: RoomVisibility[] }>("/admin/rooms");
+/** Admin-gated: every room's full record. */
+export async function adminRooms(): Promise<{ rooms: Room[] } | ApiError> {
+  return fetchJson<{ rooms: Room[] }>("/admin/rooms");
+}
+
+/**
+ * Admin-gated: create a room. The server derives the `slug` from `name`, so
+ * the body carries only the editable fields. `imageKey` is validated against
+ * the fixed R2 allow-list server-side; a duplicate slug surfaces as an error.
+ */
+export async function adminCreateRoom(
+  input: RoomInput,
+): Promise<{ room: Room } | ApiError> {
+  return fetchJson<{ room: Room }>("/admin/rooms", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Admin-gated: update one room in place. `slug` is encoded into the fixed
+ * `/admin/rooms/:slug` path so it cannot inject extra path segments; the body
+ * carries the full editable shape.
+ */
+export async function adminUpdateRoom(
+  slug: string,
+  input: RoomInput,
+): Promise<{ room: Room } | ApiError> {
+  return fetchJson<{ room: Room }>(`/admin/rooms/${encodeURIComponent(slug)}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+/**
+ * Admin-gated: delete one room. `slug` is encoded into the fixed path for the
+ * same path-safety reason as {@link adminUpdateRoom}.
+ */
+export async function adminDeleteRoom(
+  slug: string,
+): Promise<{ ok: true } | ApiError> {
+  return fetchJson<{ ok: true }>(`/admin/rooms/${encodeURIComponent(slug)}`, {
+    method: "DELETE",
+  });
 }
 
 /**

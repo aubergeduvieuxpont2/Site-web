@@ -3,6 +3,7 @@ export type User = {
   email: string;
   name: string | null;
   role: "guest" | "admin";
+  hubspot_contact_id?: string | null;
 };
 
 export async function createSession(
@@ -26,7 +27,7 @@ export async function validateSession(sql: any, token: string): Promise<User | n
   const tokenHash = await sha256hex(token);
 
   const rows = (await sql`
-    SELECT u.id, u.email, u.name, u.role
+    SELECT u.id, u.email, u.name, u.role, u.hubspot_contact_id
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ${tokenHash}

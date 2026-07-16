@@ -1,0 +1,461 @@
+REQ:
+  R-OUTBOX-001:
+    actor: Admin user
+    capability: load the File HubSpot tab without a 500
+    constraints: all index.ts outbox queries reference hubspot_outbox; empty table returns 200 rows []
+    priority: MUST
+    tests: [T-OUTBOX-001a]
+  R-ROOMS-001:
+    actor: System
+    capability: persist a rooms inventory table with seeds
+    constraints: idempotent migration 0011; capacities 2/2/5; ON CONFLICT DO NOTHING; no drop of room_visibility
+    priority: MUST
+    tests: [T-ROOMS-001a]
+  R-ROOMS-002:
+    actor: Admin user
+    capability: create list update delete rooms via admin-gated API
+    constraints: getAuthUser gate 401/403; slug derived from name; 409 on duplicate slug
+    priority: MUST
+    tests: [T-ROOMS-002a, T-ROOMS-002b, T-ROOMS-002c]
+  R-ROOMS-003:
+    actor: Admin user
+    capability: room input is validated
+    constraints: non-empty name; integer capacity >= 1; imageKey within ROOM_IMAGE_KEYS; French 400 messages
+    priority: MUST
+    tests: [T-ROOMS-003a]
+  R-ROOMS-004:
+    actor: Public visitor
+    capability: read public rooms
+    constraints: GET /api/rooms returns public rooms with slug name capacity image_key
+    priority: MUST
+    tests: [T-ROOMS-004a]
+  R-ROOMS-005:
+    actor: Admin user
+    capability: manage rooms in the admin rooms tab UI
+    constraints: list create edit delete; image-key select over ROOM_IMAGE_KEYS; French; responsive
+    priority: MUST
+    tests: [T-ROOMS-005a]
+  R-HSID-001:
+    actor: System
+    capability: store users.hubspot_contact_id
+    constraints: idempotent migration 0012 ADD COLUMN IF NOT EXISTS; own file
+    priority: MUST
+    tests: [T-HSID-001a]
+  R-HSID-002:
+    actor: System
+    capability: link delivered contact id onto matching user by email
+    constraints: gate on kind contact.upsert; case-insensitive email; no-op on no match; never fails delivery
+    priority: MUST
+    tests: [T-HSID-002a, T-HSID-002b]
+  R-HSID-003:
+    actor: System
+    capability: prefer stored contact id over email search
+    constraints: executeContactUpsert PATCHes payload.contactId with no search when present
+    priority: SHOULD
+    tests: [T-HSID-003a]
+  R-HSID-004:
+    actor: Authenticated user
+    capability: profile exposes stored hubspot contact id
+    constraints: GET /api/profile returns user.hubspotContactId value or null
+    priority: MUST
+    tests: [T-HSID-004a]
+  R-NAV-001:
+    actor: Any visitor
+    capability: Connexion link hidden when logged in
+    constraints: render Connexion only when user is null; desktop and mobile; Profil/Admin unchanged
+    priority: MUST
+    tests: [T-NAV-001a]
+  R-SITE-001:
+    actor: Public visitor
+    capability: le-site shows a property overview
+    constraints: PROPERTY_AREAS via ImagePanel for 14 R2 keys; no RoomCard; keep #chambres anchor; keep price/attraits/lieu/CTA/redirect; no overflow at 375px
+    priority: MUST
+    tests: [T-SITE-001a, T-SITE-001b]
+
+E:
+  E-Room:
+    fields:
+      slug: string (PK)
+      name: string
+      capacity: integer
+      image_key: string nullable
+      is_public: boolean
+      created_at: timestamptz
+      updated_at: timestamptz
+    invariants: [INV-capacity-positive, INV-imagekey-known]
+  E-User:
+    fields:
+      id: integer
+      email: string
+      hubspot_contact_id: string nullable
+    invariants: [INV-link-by-email]
+
+OP:
+  OP-Rooms.listPublic:
+    input: {}
+    auth: []
+    pre: []
+    err: []
+    out: { rooms: E-Room }
+  OP-Rooms.listAdmin:
+    input: {}
+    auth: [admin]
+    pre: []
+    err: [ERR-UNAUTH, ERR-FORBIDDEN]
+    out: { rooms: E-Room }
+  OP-Rooms.create:
+    input: { name: string, capacity: integer, imageKey: string, isPublic: boolean }
+    auth: [admin]
+    pre: []
+    err: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-VALIDATION, ERR-CONFLICT]
+    out: { room: E-Room }
+  OP-Rooms.update:
+    input: { slug: string, name: string, capacity: integer, imageKey: string, isPublic: boolean }
+    auth: [admin]
+    pre: []
+    err: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-VALIDATION, ERR-NOTFOUND]
+    out: { room: E-Room }
+  OP-Rooms.delete:
+    input: { slug: string }
+    auth: [admin]
+    pre: []
+    err: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-NOTFOUND]
+    out: { ok: boolean }
+  OP-Contact.linkUser:
+    input: { email: string, hubspotId: string }
+    auth: []
+    pre: []
+    err: []
+    out: {}
+  OP-Contact.upsertPreferId:
+    input: { email: string, contactId: string }
+    auth: []
+    pre: []
+    err: []
+    out: { ok: boolean, hubspotId: string }
+  OP-Profile.get:
+    input: {}
+    auth: [session]
+    pre: []
+    err: [ERR-UNAUTH]
+    out: { user: E-User, reservations: object }
+
+AUTH:
+  admin: user session with role == admin (getAuthUser then 401 if null, 403 if not admin)
+  session: any valid user session cookie
+
+INV:
+  INV-capacity-positive: room capacity is always an integer >= 1
+  INV-imagekey-known: room image_key is always a member of ROOM_IMAGE_KEYS
+  INV-link-by-email: a user is linked to a hubspot id only when payload email matches (case-insensitive)
+  INV-nondestructive-migration: migrations never drop room_visibility or existing user data
+
+ERR:
+  ERR-UNAUTH:
+    code: 401
+    meaning: no valid session
+  ERR-FORBIDDEN:
+    code: 403
+    meaning: session is not an admin
+  ERR-VALIDATION:
+    code: 400
+    meaning: invalid room input (name/capacity/imageKey)
+  ERR-NOTFOUND:
+    code: 404
+    meaning: room slug does not exist
+  ERR-CONFLICT:
+    code: 409
+    meaning: room slug already exists
+
+API:
+  GET /api/rooms:
+    input: {}
+    output: E-Room
+    errors: []
+    auth: public
+  GET /api/admin/rooms:
+    input: {}
+    output: { rooms: E-Room }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN]
+    auth: admin
+  POST /api/admin/rooms:
+    input: { name, capacity, imageKey, isPublic }
+    output: { room: E-Room }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-VALIDATION, ERR-CONFLICT]
+    auth: admin
+  PUT /api/admin/rooms/{slug}:
+    input: { name, capacity, imageKey, isPublic }
+    output: { room: E-Room }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-VALIDATION, ERR-NOTFOUND]
+    auth: admin
+  DELETE /api/admin/rooms/{slug}:
+    input: { slug }
+    output: { ok: boolean }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-NOTFOUND]
+    auth: admin
+  GET /api/admin/outbox:
+    input: { status }
+    output: { rows: object }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN]
+    auth: admin
+  GET /api/profile:
+    input: {}
+    output: { user: E-User, reservations: object }
+    errors: [ERR-UNAUTH]
+    auth: session
+
+UI:
+  screen-admin-rooms:
+    actions: [list, create, edit, toggleVisibility, delete]
+    state: { loading, loaded, error, creating, deleting }
+  screen-le-site:
+    actions: [browseAreas, scrollToSection, ctaContact]
+    state: { static }
+  component-nav:
+    actions: [showConnexionWhenAnonymous, showProfilOrAdminWhenAuthed]
+    state: { anonymous, authed-guest, authed-admin }
+
+DATA:
+  migration 0011_rooms.sql: "CREATE TABLE IF NOT EXISTS rooms (slug PK, name, capacity, image_key, is_public, created_at, updated_at); seed 3 rooms ON CONFLICT DO NOTHING"
+  migration 0012_users_hubspot_contact_id.sql: "ALTER TABLE users ADD COLUMN IF NOT EXISTS hubspot_contact_id TEXT"
+  schema.sql: documents rooms table and users.hubspot_contact_id
+
+TEST:
+  T-OUTBOX-001a:
+    verifies: R-OUTBOX-001
+    behaviour: "GET /api/admin/outbox on empty hubspot_outbox returns 200 with rows []"
+    steps:
+      - authenticate as admin
+      - GET /api/admin/outbox
+      - assert status 200 and body rows equals empty array
+  T-ROOMS-001a:
+    verifies: R-ROOMS-001
+    behaviour: "0011 migration is idempotent and seeds capacities 2/2/5"
+    steps:
+      - inspect migration file for CREATE TABLE IF NOT EXISTS and ON CONFLICT DO NOTHING
+      - assert seed rows chambre-quart 2, refuge-rider 2, gite-familial 5
+  T-ROOMS-002a:
+    verifies: R-ROOMS-002
+    behaviour: "POST /api/admin/rooms creates a room with slug derived from name"
+    steps:
+      - authenticate as admin
+      - POST /api/admin/rooms with valid body
+      - assert 201 and returned room slug equals slugified name
+      - GET /api/admin/rooms includes the new room
+  T-ROOMS-002b:
+    verifies: R-ROOMS-002
+    behaviour: "PUT and DELETE update and remove a room; unknown slug 404"
+    steps:
+      - PUT /api/admin/rooms/{slug} valid body asserts 200
+      - PUT unknown slug asserts 404
+      - DELETE /api/admin/rooms/{slug} asserts ok true
+      - DELETE unknown slug asserts 404
+  T-ROOMS-002c:
+    verifies: R-ROOMS-002
+    behaviour: "admin rooms routes reject non-admin and anonymous"
+    steps:
+      - call each route with no session asserts 401
+      - call each route with guest session asserts 403
+  T-ROOMS-003a:
+    verifies: R-ROOMS-003
+    behaviour: "room create validation rejects bad input"
+    steps:
+      - POST empty name asserts 400
+      - POST capacity 0 asserts 400
+      - POST imageKey not in ROOM_IMAGE_KEYS asserts 400
+      - POST duplicate slug asserts 409
+  T-ROOMS-004a:
+    verifies: R-ROOMS-004
+    behaviour: "GET /api/rooms returns public rooms with name capacity image_key"
+    steps:
+      - GET /api/rooms with no auth asserts 200 array with slug name capacity image_key
+  T-ROOMS-005a:
+    verifies: R-ROOMS-005
+    behaviour: "admin rooms tab renders CRUD controls including image-key select"
+    steps:
+      - render admin page rooms tab
+      - assert create form, image-key select, edit and delete controls present
+  T-HSID-001a:
+    verifies: R-HSID-001
+    behaviour: "0012 migration adds hubspot_contact_id idempotently in its own file"
+    steps:
+      - inspect file contains only ADD COLUMN IF NOT EXISTS hubspot_contact_id TEXT
+  T-HSID-002a:
+    verifies: R-HSID-002
+    behaviour: "linkContactToUser sets id on matching user"
+    steps:
+      - call linkContactToUser with email of an existing user and id X
+      - assert that user hubspot_contact_id equals X
+  T-HSID-002b:
+    verifies: R-HSID-002
+    behaviour: "linkContactToUser no-ops when no user matches"
+    steps:
+      - call linkContactToUser with unknown email
+      - assert no rows changed
+  T-HSID-003a:
+    verifies: R-HSID-003
+    behaviour: "executeContactUpsert prefers provided contactId"
+    steps:
+      - call executeContactUpsert with payload.contactId set
+      - assert no search request issued and a PATCH to that id
+      - assert returns ok true hubspotId equals that id
+  T-HSID-004a:
+    verifies: R-HSID-004
+    behaviour: "GET /api/profile returns hubspotContactId"
+    steps:
+      - authenticate as user
+      - GET /api/profile
+      - assert user.hubspotContactId present value or null
+  T-NAV-001a:
+    verifies: R-NAV-001
+    behaviour: "Nav hides Connexion when logged in"
+    steps:
+      - render Nav with user null asserts Connexion link present
+      - render Nav with user set asserts no Connexion link in desktop and mobile
+  T-SITE-001a:
+    verifies: R-SITE-001
+    behaviour: "le-site renders property overview not RoomCards"
+    steps:
+      - render le-site
+      - assert section-chambres id chambres present
+      - assert no RoomCard rendered
+      - assert PROPERTY_AREAS images rendered via ImagePanel for all 14 keys
+      - assert Attraits Le lieu and contact CTA retained
+  T-SITE-001b:
+    verifies: R-SITE-001
+    behaviour: "chambres redirect still targets le-site#chambres"
+    steps:
+      - inspect chambres/+page.ts redirect target equals /le-site#chambres
+
+NFR:
+  typecheck: npm run typecheck passes for apps/web apps/api apps/hubspot
+  tests: full Vitest suite green across all three workspaces
+  responsive: no horizontal overflow at 375px on le-site and admin rooms UI
+  security: admin rooms CRUD inline-gated; frontend holds no secrets; user link write is best-effort and guarded
+  reliability: migrations idempotent and re-runnable; hubspot linking never fails delivery
+
+FILE:
+  apps/api/migrations/0011_rooms.sql: TASK-api
+  apps/api/migrations/0012_users_hubspot_contact_id.sql: TASK-api
+  apps/api/schema.sql: TASK-api
+  apps/api/src/rooms.ts: TASK-api
+  apps/api/src/index.ts: TASK-api
+  apps/api/test/**: TASK-api
+  apps/hubspot/src/ops/contact.ts: TASK-hubspot
+  apps/hubspot/src/userLink.ts: TASK-hubspot
+  apps/hubspot/src/scheduled.ts: TASK-hubspot
+  apps/hubspot/test/**: TASK-hubspot
+  apps/web/src/lib/api.ts: TASK-web
+  apps/web/src/lib/content.ts: TASK-web
+  apps/web/src/routes/admin/+page.svelte: TASK-web
+  apps/web/src/lib/components/Nav.svelte: TASK-web
+  apps/web/src/routes/le-site/+page.svelte: TASK-web
+  apps/web/src/**/__tests__/**: TASK-web
+
+TASK:
+  TASK-api:
+    scope:
+      - R-OUTBOX-001
+      - R-ROOMS-001
+      - R-ROOMS-002
+      - R-ROOMS-003
+      - R-ROOMS-004
+      - R-HSID-001
+      - R-HSID-004
+      - OP-Rooms.listPublic
+      - OP-Rooms.listAdmin
+      - OP-Rooms.create
+      - OP-Rooms.update
+      - OP-Rooms.delete
+      - OP-Profile.get
+      - ERR-UNAUTH
+      - ERR-FORBIDDEN
+      - ERR-VALIDATION
+      - ERR-NOTFOUND
+      - ERR-CONFLICT
+      - T-OUTBOX-001a
+      - T-ROOMS-001a
+      - T-ROOMS-002a
+      - T-ROOMS-002b
+      - T-ROOMS-002c
+      - T-ROOMS-003a
+      - T-ROOMS-004a
+      - T-HSID-001a
+      - T-HSID-004a
+    files:
+      - apps/api/migrations/0011_rooms.sql
+      - apps/api/migrations/0012_users_hubspot_contact_id.sql
+      - apps/api/schema.sql
+      - apps/api/src/rooms.ts
+      - apps/api/src/index.ts
+      - apps/api/test/**
+    must_preserve:
+      - INV-capacity-positive
+      - INV-imagekey-known
+      - INV-nondestructive-migration
+    produce: [code, migrations, tests]
+    verifies: [R-OUTBOX-001, R-ROOMS-001, R-ROOMS-002, R-ROOMS-003, R-ROOMS-004, R-HSID-001, R-HSID-004]
+  TASK-hubspot:
+    scope:
+      - R-HSID-002
+      - R-HSID-003
+      - OP-Contact.linkUser
+      - OP-Contact.upsertPreferId
+      - T-HSID-002a
+      - T-HSID-002b
+      - T-HSID-003a
+    files:
+      - apps/hubspot/src/ops/contact.ts
+      - apps/hubspot/src/userLink.ts
+      - apps/hubspot/src/scheduled.ts
+      - apps/hubspot/test/**
+    must_preserve:
+      - INV-link-by-email
+    produce: [code, tests]
+    verifies: [R-HSID-002, R-HSID-003]
+  TASK-web:
+    scope:
+      - R-ROOMS-005
+      - R-NAV-001
+      - R-SITE-001
+      - T-ROOMS-005a
+      - T-NAV-001a
+      - T-SITE-001a
+      - T-SITE-001b
+    files:
+      - apps/web/src/lib/api.ts
+      - apps/web/src/lib/content.ts
+      - apps/web/src/routes/admin/+page.svelte
+      - apps/web/src/lib/components/Nav.svelte
+      - apps/web/src/routes/le-site/+page.svelte
+      - apps/web/src/**/__tests__/**
+    must_preserve:
+      - INV-imagekey-known
+    produce: [code, tests]
+    verifies: [R-ROOMS-005, R-NAV-001, R-SITE-001]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: rooms primary key is slug TEXT, derived server-side via slugify(name)
+    rationale: preserves /api/admin/rooms/:slug and /api/rooms slug contracts; admins never hand-craft slugs
+  ST-02:
+    status: locked
+    decision: validate room image_key against a fixed ROOM_IMAGE_KEYS allow-list, not img/utils validateKey
+    rationale: validateKey regex rejects dashes, which most real R2 keys contain; allow-list is stricter and matches the admin select
+  ST-03:
+    status: locked
+    decision: room_visibility is retired at the code level but not dropped by any migration
+    rationale: CLAUDE.md prefers non-destructive migrations; the new rooms table re-seeds all defaults
+  ST-04:
+    status: locked
+    decision: link hubspot id to users in scheduled.ts after markDelivered, gated on kind contact.upsert, best-effort
+    rationale: the delivery path already holds kind, payload email, and result hubspotId; guard so linking never fails delivery
+  ST-05:
+    status: locked
+    decision: preserve the #chambres anchor id on le-site while replacing its content with the property overview
+    rationale: keeps the /chambres redirect and in-page nav working with no extra changes
+  ST-06:
+    status: locked
+    decision: model the le-site overview as a static PROPERTY_AREAS constant in content.ts, decoupled from the rooms inventory
+    rationale: public imagery is editorial and no longer maps 1:1 to internal inventory
