@@ -46,3 +46,19 @@ describe("sitemap.xml", () => {
     }
   });
 });
+
+describe("llms.txt", () => {
+  const llms = readStatic("llms.txt");
+
+  it("leads with the business name and a summary", () => {
+    expect(llms).toContain("# L'Auberge du Vieux Pont");
+    expect(llms).toContain("> ");
+  });
+
+  it("carries the core NAP facts for answer engines", () => {
+    expect(llms).toContain("111, avenue Saint-Michel");
+    expect(llms).toContain("418 655-1212");
+    expect(llms).toContain("info@aubergeduvieuxpont.ca");
+    expect(llms).toContain("304542");
+  });
+});
