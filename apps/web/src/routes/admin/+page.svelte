@@ -3,6 +3,7 @@
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
   import Button from "$lib/components/Button.svelte";
+  import AdminUtilisateursTab from "$lib/components/admin/AdminUtilisateursTab.svelte";
   import {
     getMe,
     adminReservations,
@@ -10,17 +11,22 @@
     requeueOutbox,
     adminGetSettings,
     adminUpdateSettings,
+    adminRooms,
+    adminSetRoomVisibility,
+    changePassword,
     isError,
     type AdminSettings,
   } from "$lib/api";
   import type { ReservationRow, OutboxRow } from "$lib/api";
+  import { ROOMS } from "$lib/content";
 
   // ─── Auth state ───
   let loading = $state(true);
   let denied = $state(false);
+  let currentUserId = $state<number | null>(null);
 
   // ─── Tab state ───
-  let activeTab = $state<"reservations" | "outbox" | "settings">("reservations");
+  let activeTab = $state<"reservations" | "outbox" | "settings" | "rooms" | "users">("reservations");
 
   // ─── Reservations ───
   let searchQuery = $state("");
@@ -49,6 +55,28 @@
     assignableRoomCount: 12,
   });
   let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
+
+  // ─── Change password (in Paramètres tab) ───
+  let pwCurrent = $state("");
+  let pwNew = $state("");
+  let pwChanging = $state(false);
+  let pwError = $state<string | null>(null);
+  let pwSuccess = $state(false);
+  let pwTimer: ReturnType<typeof setTimeout>;
+
+  // ─── Rooms (visibility) ───
+  type RoomVisRow = {
+    slug: string;
+    name: string;
+    code: string;
+    capacity: string;
+    is_public: boolean;
+  };
+  let rooms = $state<RoomVisRow[]>([]);
+  let roomsLoading = $state(false);
+  let roomsError = $state<string | null>(null);
+  let pendingToggles = $state(new Set<string>());
+  let toggleErrors = $state(new Map<string, string>());
 
   // ─── Helpers ───
   function formatDate(iso: string): string {
@@ -120,12 +148,6 @@
     if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
       errors.contactEmail = "Courriel invalide";
     }
-    if (!Number.isInteger(settings.marketingRoomCount) || settings.marketingRoomCount <= 0) {
-      errors.marketingRoomCount = "Le nombre doit être positif";
-    }
-    if (!Number.isInteger(settings.assignableRoomCount) || settings.assignableRoomCount <= 0) {
-      errors.assignableRoomCount = "La capacité doit être positive";
-    }
 
     if (Object.keys(errors).length > 0) {
       settingsErrors = errors;
@@ -147,6 +169,37 @@
     }
   }
 
+  // ─── Change password (Paramètres tab) ───
+  async function changePasswordInPanel() {
+    pwError = null;
+    pwSuccess = false;
+
+    if (!pwCurrent) {
+      pwError = "Veuillez saisir votre mot de passe actuel.";
+      return;
+    }
+    if (pwNew.length < 8) {
+      pwError = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
+      return;
+    }
+
+    pwChanging = true;
+    const res = await changePassword(pwCurrent, pwNew);
+    pwChanging = false;
+
+    if (isError(res)) {
+      pwError = res.error;
+    } else {
+      pwSuccess = true;
+      pwCurrent = "";
+      pwNew = "";
+      clearTimeout(pwTimer);
+      pwTimer = setTimeout(() => {
+        pwSuccess = false;
+      }, 5000);
+    }
+  }
+
   // ─── Debounced search ───
   function onSearchInput() {
     clearTimeout(searchTimer);
@@ -157,7 +210,7 @@
 
   // ─── Tab keyboard nav (ARIA tabs pattern) ───
   function onTablistKeydown(e: KeyboardEvent) {
-    const order = ["reservations", "outbox", "settings"] as const;
+    const order = ["reservations", "outbox", "settings", "rooms", "users"] as const;
     const idx = order.indexOf(activeTab);
     let next = idx;
     if (e.key === "ArrowRight") {
@@ -221,12 +274,70 @@
     }
   }
 
+  // ─── Rooms: load visibility and merge with static ROOMS content ───
+  async function loadRooms() {
+    roomsLoading = true;
+    roomsError = null;
+    const res = await adminRooms();
+    roomsLoading = false;
+    if (isError(res)) {
+      roomsError = "Impossible de charger les chambres.";
+      return;
+    }
+    const vis = res.rooms;
+    rooms = ROOMS.map((room) => {
+      const match = vis.find((r) => r.slug === room.slug);
+      return {
+        slug: room.slug,
+        name: room.name,
+        code: room.code,
+        capacity: room.capacity,
+        is_public: match?.is_public ?? true,
+      };
+    });
+  }
+
+  // ─── Rooms: optimistic visibility toggle with rollback on error ───
+  async function toggleRoom(slug: string) {
+    if (pendingToggles.has(slug)) return;
+    const idx = rooms.findIndex((r) => r.slug === slug);
+    if (idx === -1) return;
+
+    const prev = rooms[idx].is_public;
+    const next = !prev;
+
+    // Optimistic update
+    rooms[idx] = { ...rooms[idx], is_public: next };
+    const clearedErrors = new Map(toggleErrors);
+    clearedErrors.delete(slug);
+    toggleErrors = clearedErrors;
+    pendingToggles = new Set([...pendingToggles, slug]);
+
+    const res = await adminSetRoomVisibility(slug, next);
+
+    const stillPending = new Set(pendingToggles);
+    stillPending.delete(slug);
+    pendingToggles = stillPending;
+
+    if (isError(res)) {
+      // Rollback
+      rooms[idx] = { ...rooms[idx], is_public: prev };
+      const withError = new Map(toggleErrors);
+      withError.set(slug, "Impossible de modifier la visibilité. Veuillez réessayer.");
+      toggleErrors = withError;
+    } else {
+      rooms[idx] = { ...rooms[idx], is_public: res.room.is_public };
+    }
+  }
+
   // ─── Reactive data reload when tab changes ───
   $effect(() => {
     if (activeTab === "outbox") {
       loadOutbox(statusFilter);
     } else if (activeTab === "settings") {
       loadSettings();
+    } else if (activeTab === "rooms") {
+      loadRooms();
     }
   });
 
@@ -238,6 +349,7 @@
       loading = false;
       return;
     }
+    currentUserId = me.user.id;
     loading = false;
     loadReservations();
   });
@@ -318,6 +430,36 @@
               data-testid="tab-settings"
             >
               Paramètres
+            </button>
+            <button
+              role="tab"
+              id="tab-rooms"
+              aria-controls="panel-rooms"
+              aria-selected={activeTab === "rooms"}
+              tabindex={activeTab === "rooms" ? 0 : -1}
+              class="page-admin__tab {activeTab === 'rooms' ? 'page-admin__tab--active' : ''}"
+              onclick={() => {
+                activeTab = "rooms";
+              }}
+              onkeydown={onTablistKeydown}
+              data-testid="tab-rooms"
+            >
+              Chambres
+            </button>
+            <button
+              role="tab"
+              id="tab-utilisateurs"
+              aria-controls="panel-utilisateurs"
+              aria-selected={activeTab === "users"}
+              tabindex={activeTab === "users" ? 0 : -1}
+              class="page-admin__tab {activeTab === 'users' ? 'page-admin__tab--active' : ''}"
+              onclick={() => {
+                activeTab = "users";
+              }}
+              onkeydown={onTablistKeydown}
+              data-testid="tab-users"
+            >
+              Utilisateurs
             </button>
           </div>
         </div>
@@ -546,94 +688,263 @@
               {settingsError}
             </div>
           {:else}
-            <div class="page-admin__settings-form">
-              <div class="page-admin__field">
-                <label class="page-admin__field-label" for="input-nightly-price">
-                  Prix par nuit ($)
-                </label>
-                <input
-                  id="input-nightly-price"
-                  type="number"
-                  min="1"
-                  bind:value={settings.nightlyPrice}
-                  class="page-admin__search-input"
-                  data-testid="input-nightly-price"
-                />
-                {#if settingsErrors.nightlyPrice}
-                  <span class="page-admin__field-error" role="alert" data-testid="error-nightly-price">{settingsErrors.nightlyPrice}</span>
-                {/if}
-              </div>
+            <!-- ── Sub-section 1: General settings ── -->
+            <section class="page-admin__settings-section" aria-labelledby="settings-heading">
+              <h2 class="page-admin__settings-heading" id="settings-heading">Paramètres généraux</h2>
 
-              <div class="page-admin__field">
-                <label class="page-admin__field-label" for="input-contact-email">
-                  Courriel de contact
-                </label>
-                <input
-                  id="input-contact-email"
-                  type="email"
-                  bind:value={settings.contactEmail}
-                  class="page-admin__search-input"
-                  data-testid="input-contact-email"
-                />
-                {#if settingsErrors.contactEmail}
-                  <span class="page-admin__field-error" role="alert" data-testid="error-contact-email">{settingsErrors.contactEmail}</span>
-                {/if}
-              </div>
-
-              <div class="page-admin__field">
-                <label class="page-admin__field-label" for="input-marketing-rooms">
-                  Chambres affichées (marketing)
-                </label>
-                <input
-                  id="input-marketing-rooms"
-                  type="number"
-                  min="1"
-                  bind:value={settings.marketingRoomCount}
-                  class="page-admin__search-input"
-                  data-testid="input-marketing-rooms"
-                />
-                {#if settingsErrors.marketingRoomCount}
-                  <span class="page-admin__field-error" role="alert" data-testid="error-marketing-rooms">{settingsErrors.marketingRoomCount}</span>
-                {/if}
-              </div>
-
-              <div class="page-admin__field">
-                <label class="page-admin__field-label" for="input-assignable-rooms">
-                  Capacité assignable (opérations)
-                </label>
-                <input
-                  id="input-assignable-rooms"
-                  type="number"
-                  min="1"
-                  bind:value={settings.assignableRoomCount}
-                  class="page-admin__search-input"
-                  data-testid="input-assignable-rooms"
-                />
-                {#if settingsErrors.assignableRoomCount}
-                  <span class="page-admin__field-error" role="alert" data-testid="error-assignable-rooms">{settingsErrors.assignableRoomCount}</span>
-                {/if}
-              </div>
-
-              {#if settingsSaved}
-                <div class="page-admin__success-message" role="status" data-testid="settings-saved">
-                  Paramètres enregistrés.
+              <div class="page-admin__settings-form">
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-nightly-price">
+                    Prix par nuit ($)
+                  </label>
+                  <input
+                    id="input-nightly-price"
+                    type="number"
+                    min="1"
+                    bind:value={settings.nightlyPrice}
+                    class="page-admin__search-input"
+                    data-testid="input-nightly-price"
+                    aria-describedby={settingsErrors.nightlyPrice ? "err-nightly-price" : undefined}
+                    aria-invalid={!!settingsErrors.nightlyPrice}
+                  />
+                  {#if settingsErrors.nightlyPrice}
+                    <span
+                      class="page-admin__field-error"
+                      id="err-nightly-price"
+                      role="alert"
+                      data-testid="error-nightly-price">{settingsErrors.nightlyPrice}</span
+                    >
+                  {/if}
                 </div>
-              {/if}
 
-              <button
-                class="page-admin__requeue-btn"
-                onclick={saveSettings}
-                disabled={settingsSaving}
-                data-testid="settings-save-btn"
-              >
-                {#if settingsSaving}
-                  <span class="page-admin__spinner" aria-hidden="true"></span>
-                  Enregistrement…
-                {:else}
-                  Enregistrer
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-contact-email">
+                    Courriel de contact
+                  </label>
+                  <input
+                    id="input-contact-email"
+                    type="email"
+                    bind:value={settings.contactEmail}
+                    class="page-admin__search-input"
+                    data-testid="input-contact-email"
+                    aria-describedby={settingsErrors.contactEmail ? "err-contact-email" : undefined}
+                    aria-invalid={!!settingsErrors.contactEmail}
+                  />
+                  {#if settingsErrors.contactEmail}
+                    <span
+                      class="page-admin__field-error"
+                      id="err-contact-email"
+                      role="alert"
+                      data-testid="error-contact-email">{settingsErrors.contactEmail}</span
+                    >
+                  {/if}
+                </div>
+
+                {#if settingsSaved}
+                  <div class="page-admin__save-success" role="status" data-testid="settings-saved">
+                    Paramètres enregistrés.
+                  </div>
                 {/if}
-              </button>
+
+                <button
+                  type="button"
+                  class="page-admin__requeue-btn"
+                  onclick={saveSettings}
+                  disabled={settingsSaving}
+                  aria-label="Enregistrer les paramètres généraux"
+                  data-testid="settings-save-btn"
+                >
+                  {#if settingsSaving}
+                    <span class="page-admin__btn-spinner" aria-hidden="true"></span>
+                    Enregistrement…
+                  {:else}
+                    Enregistrer
+                  {/if}
+                </button>
+              </div>
+            </section>
+
+            <!-- ── Divider ── -->
+            <hr class="page-admin__settings-divider" aria-hidden="true" />
+
+            <!-- ── Sub-section 2: Change password ── -->
+            <section class="page-admin__settings-section" aria-labelledby="pw-heading">
+              <h2 class="page-admin__settings-heading" id="pw-heading">Changer le mot de passe</h2>
+
+              <div class="page-admin__settings-form">
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-current-password">
+                    Mot de passe actuel
+                  </label>
+                  <input
+                    id="input-current-password"
+                    type="password"
+                    autocomplete="current-password"
+                    bind:value={pwCurrent}
+                    class="page-admin__search-input"
+                    data-testid="input-current-password"
+                    aria-describedby={pwError ? "pw-error-msg" : undefined}
+                    aria-invalid={!!pwError}
+                  />
+                </div>
+
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-new-password">
+                    Nouveau mot de passe
+                    <span class="page-admin__field-hint">(minimum 8 caractères)</span>
+                  </label>
+                  <input
+                    id="input-new-password"
+                    type="password"
+                    autocomplete="new-password"
+                    bind:value={pwNew}
+                    class="page-admin__search-input"
+                    data-testid="input-new-password"
+                    aria-describedby={pwError ? "pw-error-msg" : undefined}
+                    aria-invalid={!!pwError}
+                  />
+                </div>
+
+                {#if pwError}
+                  <div
+                    class="page-admin__error-banner"
+                    id="pw-error-msg"
+                    role="alert"
+                    data-testid="pw-error"
+                  >
+                    {pwError}
+                  </div>
+                {/if}
+
+                {#if pwSuccess}
+                  <div class="page-admin__pw-success" role="status" data-testid="pw-success">
+                    Mot de passe mis à jour.
+                  </div>
+                {/if}
+
+                <button
+                  type="button"
+                  class="page-admin__requeue-btn"
+                  onclick={changePasswordInPanel}
+                  disabled={pwChanging}
+                  aria-label="Enregistrer le nouveau mot de passe"
+                  data-testid="pw-change-btn"
+                >
+                  {#if pwChanging}
+                    <span class="page-admin__btn-spinner" aria-hidden="true"></span>
+                    Enregistrement…
+                  {:else}
+                    Mettre à jour
+                  {/if}
+                </button>
+              </div>
+            </section>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Chambres panel -->
+      <div
+        role="tabpanel"
+        id="panel-rooms"
+        aria-labelledby="tab-rooms"
+        hidden={activeTab !== "rooms"}
+        data-testid="admin-chambres-tab"
+        class="admin-chambres-tab"
+      >
+        <div class="page-admin__panel-inner">
+          {#if roomsLoading}
+            <div
+              class="admin-chambres-tab__loading"
+              role="status"
+              aria-live="polite"
+              aria-label="Chargement des chambres"
+              data-testid="chambres-loading"
+            >
+              <span class="admin-chambres-tab__spinner" aria-hidden="true"></span>
+              <span class="admin-chambres-tab__loading-text">Chargement…</span>
             </div>
+          {:else if roomsError}
+            <p class="admin-chambres-tab__fetch-error" role="alert" data-testid="chambres-error">
+              {roomsError}
+            </p>
+          {:else}
+            <ul
+              class="admin-chambres-tab__list"
+              aria-label="Visibilité des chambres"
+              data-testid="chambres-list"
+            >
+              {#each rooms as room (room.slug)}
+                <li
+                  class="admin-chambres-tab__card"
+                  data-testid="chambre-card-{room.slug}"
+                  data-public={room.is_public}
+                >
+                  <div class="admin-chambres-tab__card-row">
+                    <div class="admin-chambres-tab__room-info">
+                      <span
+                        class="admin-chambres-tab__room-name"
+                        data-testid="chambre-name-{room.slug}">{room.name}</span
+                      >
+                      <span class="admin-chambres-tab__room-meta">
+                        <span
+                          class="admin-chambres-tab__room-code"
+                          data-testid="chambre-code-{room.slug}">{room.code}</span
+                        >
+                        <span
+                          class="admin-chambres-tab__room-capacity"
+                          data-testid="chambre-capacity-{room.slug}">{room.capacity} pers.</span
+                        >
+                      </span>
+                    </div>
+
+                    <div class="admin-chambres-tab__control">
+                      <span
+                        class="admin-chambres-tab__visibility-label"
+                        data-testid="chambre-visibility-{room.slug}"
+                        aria-hidden="true">{room.is_public ? "Publique" : "Masquée"}</span
+                      >
+                      <button
+                        type="button"
+                        class="admin-chambres-tab__toggle"
+                        role="switch"
+                        aria-checked={room.is_public}
+                        aria-label="Rendre {room.name} publique"
+                        data-testid="toggle-{room.slug}"
+                        data-pending={pendingToggles.has(room.slug) ? "" : undefined}
+                        disabled={pendingToggles.has(room.slug)}
+                        onclick={() => toggleRoom(room.slug)}
+                      >
+                        <span class="admin-chambres-tab__toggle-track" aria-hidden="true">
+                          <span class="admin-chambres-tab__toggle-thumb"></span>
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p
+                    class="admin-chambres-tab__card-error"
+                    role="alert"
+                    data-testid="chambre-error-{room.slug}"
+                  >
+                    {toggleErrors.get(room.slug) ?? ""}
+                  </p>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Utilisateurs panel -->
+      <div
+        id="panel-utilisateurs"
+        hidden={activeTab !== "users"}
+        data-testid="panel-users"
+      >
+        <div class="page-admin__panel-inner">
+          {#if currentUserId !== null && activeTab === "users"}
+            <AdminUtilisateursTab {currentUserId} />
           {/if}
         </div>
       </div>
@@ -647,6 +958,10 @@
     min-height: 100dvh;
     background-color: var(--color-surface);
     font-family: var(--font-sans);
+
+    /* New admin colour tokens — success accent borrowed from the boreal work-site */
+    --color-forest: #1a5c2d;
+    --color-forest-surface: #d4ede0;
   }
 
   /* ─── Loading state ─── */
@@ -1180,7 +1495,52 @@
     gap: var(--space-sm);
   }
 
-  .page-admin__success-message {
+  /* ─── Settings sub-section wrapper ─── */
+  .page-admin__settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  /* Section heading ("Paramètres généraux" / "Changer le mot de passe") */
+  .page-admin__settings-heading {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-variant);
+    margin: 0;
+  }
+
+  /* Divider between the two sub-sections */
+  .page-admin__settings-divider {
+    border: none;
+    border-top: 1px solid var(--color-hairline);
+    margin: var(--space-xl) 0 0;
+  }
+
+  /* Field hint text (e.g., "minimum 8 caractères") */
+  .page-admin__field-hint {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--color-ink-variant);
+    margin-left: var(--space-xs);
+  }
+
+  /* Inline field-level validation error */
+  .page-admin__field-error {
+    font-family: var(--font-sans);
+    font-size: 12px;
+    color: var(--color-error);
+    margin-top: calc(-1 * var(--space-xs));
+  }
+
+  /* Settings saved — neutral stamp */
+  .page-admin__save-success {
     font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 400;
@@ -1189,7 +1549,36 @@
     color: var(--color-ink-variant);
     padding: var(--space-md);
     background-color: var(--color-surface-container-low);
-    border-radius: var(--radius);
+    border-radius: var(--radius, 0.25rem);
+  }
+
+  /* Password change success — forest green semantic accent */
+  .page-admin__pw-success {
+    padding: var(--space-md);
+    background-color: var(--color-forest-surface);
+    border-radius: var(--radius, 0.25rem);
+    font-size: 14px;
+    color: var(--color-forest);
+  }
+
+  /* Inline spinner inside buttons */
+  .page-admin__btn-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1.5px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: admin-spin 700ms linear infinite;
+    margin-right: var(--space-xs);
+    vertical-align: middle;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-admin__btn-spinner {
+      animation: none;
+      opacity: 0.5;
+    }
   }
 
   /* ─── Screen-reader only utility ─── */
@@ -1234,6 +1623,232 @@
 
     .page-admin__err-detail {
       max-width: calc(100vw - var(--space-2xl));
+    }
+  }
+
+  /* ─── Chambres tab (room visibility) ─── */
+  .admin-chambres-tab {
+    width: 100%;
+  }
+
+  .admin-chambres-tab__loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) 0;
+  }
+
+  .admin-chambres-tab__spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--color-outline-variant);
+    border-top-color: var(--color-terracotta);
+    border-radius: 50%;
+    animation: admin-spin 750ms linear infinite;
+    flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-chambres-tab__spinner {
+      animation: none;
+      opacity: 0.6;
+    }
+  }
+
+  .admin-chambres-tab__loading-text {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--color-ink-variant);
+  }
+
+  .admin-chambres-tab__fetch-error {
+    margin: 0;
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--color-error);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--color-error);
+    background: color-mix(in srgb, var(--color-error) 6%, var(--color-surface));
+    border-radius: 0 4px 4px 0;
+  }
+
+  .admin-chambres-tab__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .admin-chambres-tab__card {
+    background: var(--color-surface-container-lowest);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .admin-chambres-tab__card-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .admin-chambres-tab__room-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .admin-chambres-tab__room-name {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .admin-chambres-tab__room-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .admin-chambres-tab__room-code {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--color-ink-variant);
+    background: var(--color-url-surface, #eceef0);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+
+  .admin-chambres-tab__room-capacity {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-ink-variant);
+  }
+
+  .admin-chambres-tab__control {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-shrink: 0;
+  }
+
+  .admin-chambres-tab__visibility-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    min-width: 56px;
+    text-align: right;
+    transition: color 180ms ease;
+  }
+
+  .admin-chambres-tab__card[data-public="true"] .admin-chambres-tab__visibility-label {
+    color: var(--color-forest, #1a5c2d);
+  }
+
+  .admin-chambres-tab__card[data-public="false"] .admin-chambres-tab__visibility-label {
+    color: var(--color-toggle-off, #c6c6cd);
+  }
+
+  .admin-chambres-tab__toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 9px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    flex-shrink: 0;
+    transition: opacity 150ms;
+  }
+
+  .admin-chambres-tab__toggle:focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 3px;
+  }
+
+  .admin-chambres-tab__toggle[data-pending] {
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .admin-chambres-tab__toggle-track {
+    position: relative;
+    width: 48px;
+    height: 26px;
+    border-radius: 13px;
+    background: var(--color-toggle-off, #c6c6cd);
+    transition: background 200ms ease;
+    flex-shrink: 0;
+  }
+
+  .admin-chambres-tab__toggle[aria-checked="true"] .admin-chambres-tab__toggle-track {
+    background: var(--color-toggle-on, #1a5c2d);
+  }
+
+  .admin-chambres-tab__toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+    transition: transform 200ms ease;
+  }
+
+  .admin-chambres-tab__toggle[aria-checked="true"] .admin-chambres-tab__toggle-thumb {
+    transform: translateX(22px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .admin-chambres-tab__toggle-track,
+    .admin-chambres-tab__toggle-thumb,
+    .admin-chambres-tab__visibility-label {
+      transition: none;
+    }
+  }
+
+  .admin-chambres-tab__card-error {
+    margin: 0;
+    padding: 0 var(--space-md) var(--space-sm);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    color: var(--color-error);
+  }
+
+  .admin-chambres-tab__card-error:empty {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .admin-chambres-tab__card-row {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: var(--space-sm);
+    }
+
+    .admin-chambres-tab__control {
+      align-self: flex-end;
     }
   }
 </style>

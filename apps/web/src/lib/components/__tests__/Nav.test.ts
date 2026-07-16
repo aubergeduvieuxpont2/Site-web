@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
 
 // Nav reads `$page.url.pathname` from the SvelteKit `page` store. Outside a
@@ -18,6 +18,20 @@ import Nav from "../Nav.svelte";
 import { NAV, SITE } from "$lib/content";
 
 afterEach(() => cleanup());
+
+// Helper: stub global fetch so the onMount `/api/auth/me` call resolves with a
+// given user (or no user). The component sets `user` from `data.user`.
+function stubAuthMe(user: unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() =>
+      Promise.resolve({
+        ok: user != null,
+        json: () => Promise.resolve(user != null ? { user } : {}),
+      }),
+    ),
+  );
+}
 
 describe("Nav", () => {
   describe("structure", () => {
@@ -129,6 +143,58 @@ describe("Nav", () => {
 
       expect(toggle.getAttribute("aria-expanded")).toBe("false");
       expect(toggle.getAttribute("aria-label")).toBe("Ouvrir le menu");
+    });
+  });
+
+  describe("authenticated user link (role-based)", () => {
+    beforeEach(() => vi.unstubAllGlobals());
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("shows neither Admin nor Profil for an unauthenticated visitor", async () => {
+      stubAuthMe(null);
+      const { queryByTestId } = render(Nav);
+      // Allow the mocked fetch microtasks to settle.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(queryByTestId("nav-admin-link")).toBeNull();
+      expect(queryByTestId("nav-profil-link")).toBeNull();
+      expect(queryByTestId("nav-admin-link-mobile")).toBeNull();
+      expect(queryByTestId("nav-profil-link-mobile")).toBeNull();
+    });
+
+    it("shows the Admin link (desktop + mobile) for an admin user", async () => {
+      stubAuthMe({ role: "admin" });
+      const { findByTestId, queryByTestId } = render(Nav);
+
+      const desktop = await findByTestId("nav-admin-link");
+      expect(desktop.getAttribute("href")).toBe("/admin");
+      const mobile = await findByTestId("nav-admin-link-mobile");
+      expect(mobile.getAttribute("href")).toBe("/admin");
+
+      // Guests' Profil link must be absent for admins.
+      expect(queryByTestId("nav-profil-link")).toBeNull();
+      expect(queryByTestId("nav-profil-link-mobile")).toBeNull();
+    });
+
+    it("shows the Profil link (desktop + mobile) for a guest user", async () => {
+      stubAuthMe({ role: "guest" });
+      const { findByTestId, queryByTestId } = render(Nav);
+
+      const desktop = await findByTestId("nav-profil-link");
+      expect(desktop.getAttribute("href")).toBe("/profil");
+      const mobile = await findByTestId("nav-profil-link-mobile");
+      expect(mobile.getAttribute("href")).toBe("/profil");
+
+      // Admin link must be absent for guests.
+      expect(queryByTestId("nav-admin-link")).toBeNull();
+      expect(queryByTestId("nav-admin-link-mobile")).toBeNull();
+    });
+
+    it("treats a user with a non-admin role as a guest", async () => {
+      stubAuthMe({ role: "something-else" });
+      const { findByTestId, queryByTestId } = render(Nav);
+      await findByTestId("nav-profil-link");
+      expect(queryByTestId("nav-admin-link")).toBeNull();
     });
   });
 

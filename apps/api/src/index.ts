@@ -10,6 +10,9 @@ import {
   deleteSession,
   getSessionCookieHeader,
   getClearSessionCookieHeader,
+  generateToken,
+  sha256hex,
+  invalidateUserSessions,
   type User,
 } from "./auth/session";
 import { authRateLimiter } from "./auth/middleware";
@@ -21,11 +24,7 @@ import {
 } from "./settings";
 
 type Bindings = {
-  // Neon Postgres connection string. In dev it is loaded from the repo-root
-  // `.dev.env` (via `wrangler dev --env-file`); in production set it with
-  // `wrangler secret put DB_CONN`.
   DB_CONN: string;
-  // Internal service binding to the HubSpot gateway Worker.
   HUBSPOT: Fetcher;
   ADMIN_EMAIL: string;
 };
@@ -47,6 +46,19 @@ type ReservationRow = {
   people: number;
   message: string | null;
   created_at: string;
+};
+
+export interface AdminUserRow {
+  id: number;
+  email: string;
+  name: string | null;
+  role: "guest" | "admin";
+  created_at: string;
+}
+
+type RoomVisibilityRow = {
+  slug: string;
+  is_public: boolean;
 };
 
 const MessageRequestSchema = z.object({
@@ -91,11 +103,37 @@ const RegisterSchema = z.object({
   email: z.string().trim().email("email invalide"),
   password: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
   name: trimToNull,
+  firstName: trimToNull,
+  lastName: trimToNull,
+  phone: trimToNull,
+  company: trimToNull,
 });
 
 const LoginSchema = z.object({
   email: z.string().trim().min(1, "email requis"),
   password: z.string().min(1, "mot de passe requis"),
+});
+
+const PasswordChangeSchema = z.object({
+  currentPassword: z.string().min(1, "mot de passe actuel requis"),
+  newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+});
+
+const ForgotPasswordSchema = z.object({
+  email: z.string().trim().email("email invalide"),
+});
+
+const ResetPasswordSchema = z.object({
+  token: z.string().min(1, "token requis"),
+  newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+});
+
+const RoomVisibilitySchema = z.object({
+  isPublic: z.boolean(),
+});
+
+const RoleSchema = z.object({
+  role: z.enum(["guest", "admin"]),
 });
 
 const authHook = (result: any, c: any) =>
@@ -171,13 +209,8 @@ const rateLimitMiddleware = async (c: Context, next: () => Promise<void>) => {
   await next();
 };
 
-// CORS for the API surface.
-// The SPA is served same-origin (www.aubergeduvieuxpont.ca/* → web Worker,
-// /api/* → this Worker), so we scope CORS to that origin rather than "*".
-// Add more origins to this array if other front-ends need to call the API.
 const ALLOWED_ORIGINS = [
   "https://www.aubergeduvieuxpont.ca",
-  // A/B concept-testing surfaces (served same-origin, so this is defensive).
   "https://dev.aubergeduvieuxpont.ca",
   "https://a.aubergeduvieuxpont.ca",
   "https://b.aubergeduvieuxpont.ca",
@@ -300,11 +333,17 @@ app.post(
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
+    // Derive name from firstName + lastName if not explicitly provided
+    const derivedName =
+      [data.firstName, data.lastName].filter(Boolean).join(" ") ||
+      data.name ||
+      null;
+
     try {
       const passwordHash = await hashPassword(data.password);
       const rows = (await sql`
-        INSERT INTO users (email, password_hash, name, role)
-        VALUES (${data.email}, ${passwordHash}, ${data.name}, 'guest')
+        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company)
+        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null})
         RETURNING id, email, name, role
       `) as User[];
 
@@ -314,6 +353,32 @@ app.post(
       }
 
       const token = await createSession(sql, user.id);
+
+      // Enqueue HubSpot contact upsert (fire-and-forget; failure never blocks registration)
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            const contactPayload: Record<string, string> = { email: data.email };
+            if (derivedName) contactPayload.name = derivedName;
+            if (data.firstName) contactPayload.firstname = data.firstName;
+            if (data.lastName) contactPayload.lastname = data.lastName;
+            if (data.phone) contactPayload.phone = data.phone;
+            if (data.company) contactPayload.company = data.company;
+
+            await c.env.HUBSPOT.fetch(
+              new Request("http://hubspot/ops/enqueue", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  kind: "contact.upsert",
+                  payload: contactPayload,
+                }),
+              })
+            );
+          } catch {}
+        })()
+      );
+
       return c.json({ user }, 201, {
         "Set-Cookie": getSessionCookieHeader(token),
       });
@@ -373,7 +438,96 @@ app.post("/api/auth/logout", async (c) => {
   });
 });
 
-// Profile route (requires auth, enriched with HubSpot data)
+// Password change (session-authed)
+app.post(
+  "/api/auth/password",
+  zValidator("json", PasswordChangeSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      SELECT password_hash FROM users WHERE id = ${user.id}
+    `) as { password_hash: string }[];
+
+    const row = rows[0];
+    if (!row || !(await verifyPassword(data.currentPassword, row.password_hash))) {
+      return c.json({ error: "Mot de passe actuel incorrect" }, 400);
+    }
+
+    const newHash = await hashPassword(data.newPassword);
+    await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${user.id}`;
+
+    return c.json({ ok: true });
+  }
+);
+
+// Forgot password (always 200, rate-limited, no enumeration)
+app.post(
+  "/api/auth/forgot",
+  authRateLimiter,
+  zValidator("json", ForgotPasswordSchema, authHook),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      SELECT id FROM users WHERE lower(email) = lower(${data.email})
+    `) as { id: number }[];
+
+    if (rows[0]) {
+      const rawToken = generateToken();
+      const tokenHash = await sha256hex(rawToken);
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+      await sql`
+        INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
+        VALUES (${tokenHash}, ${rows[0].id}, ${expiresAt})
+      `;
+    }
+
+    return c.json({ ok: true });
+  }
+);
+
+// Reset password (consumes token, invalidates sessions)
+app.post(
+  "/api/auth/reset",
+  zValidator("json", ResetPasswordSchema, authHook),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const tokenHash = await sha256hex(data.token);
+
+    const rows = (await sql`
+      SELECT user_id FROM password_reset_tokens
+      WHERE token_hash = ${tokenHash}
+        AND used_at IS NULL
+        AND expires_at > now()
+    `) as { user_id: number }[];
+
+    if (!rows[0]) {
+      return c.json({ error: "Lien invalide ou expiré" }, 400);
+    }
+
+    const userId = rows[0].user_id;
+    const newHash = await hashPassword(data.newPassword);
+
+    await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${userId}`;
+    await sql`UPDATE password_reset_tokens SET used_at = now() WHERE token_hash = ${tokenHash}`;
+    await invalidateUserSessions(sql, userId);
+
+    return c.json({ ok: true });
+  }
+);
+
+// Profile route (no HubSpot enrichment)
 app.get("/api/profile", async (c) => {
   const user = await getAuthUser(c);
   if (!user) {
@@ -388,42 +542,17 @@ app.get("/api/profile", async (c) => {
     ORDER BY created_at DESC
   `) as ReservationRow[];
 
-  let hubspot: { contact: unknown; deals: unknown[] } = { contact: null, deals: [] };
-  try {
-    const contactRes = await c.env.HUBSPOT.fetch(
-      new Request("http://hubspot/ops/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "contact.get",
-          payload: { email: user.email },
-        }),
-      })
-    );
-    const contactData = (await contactRes.json()) as any;
-    if (contactData.ok && contactData.data) {
-      hubspot.contact = contactData.data;
-    }
+  return c.json({ user, reservations });
+});
 
-    const dealsRes = await c.env.HUBSPOT.fetch(
-      new Request("http://hubspot/ops/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "deal.listByContact",
-          payload: { email: user.email },
-        }),
-      })
-    );
-    const dealsData = (await dealsRes.json()) as any;
-    if (dealsData.ok && Array.isArray(dealsData.data)) {
-      hubspot.deals = dealsData.data;
-    }
-  } catch {
-    // Degrade gracefully if HubSpot is unreachable
-  }
+// Public rooms endpoint
+app.get("/api/rooms", async (c) => {
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`
+    SELECT slug, is_public FROM room_visibility ORDER BY slug
+  `) as RoomVisibilityRow[];
 
-  return c.json({ user, reservations, hubspot });
+  return c.json(rows);
 });
 
 // Admin routes (require admin role)
@@ -507,6 +636,158 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
   return c.json({ row: updated[0] }, 200);
 });
 
+// Admin rooms endpoints
+app.get("/api/admin/rooms", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const rooms = (await sql`
+    SELECT slug, is_public FROM room_visibility ORDER BY slug
+  `) as RoomVisibilityRow[];
+
+  return c.json({ rooms });
+});
+
+app.post(
+  "/api/admin/rooms/:slug",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator("json", RoomVisibilitySchema),
+  async (c) => {
+    const slug = c.req.param("slug");
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      UPDATE room_visibility
+      SET is_public = ${data.isPublic}, updated_at = now()
+      WHERE slug = ${slug}
+      RETURNING slug, is_public
+    `) as RoomVisibilityRow[];
+
+    if (rows.length === 0) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    return c.json({ room: rows[0] });
+  }
+);
+
+// Admin users endpoints
+app.get("/api/admin/users", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const q = c.req.query("q") || "";
+
+  const users = (await sql`
+    SELECT id, email, name, role, created_at
+    FROM users
+    WHERE email ILIKE ${"%" + q + "%"}
+    ORDER BY created_at DESC
+    LIMIT 200
+  `) as AdminUserRow[];
+
+  return c.json({ users });
+});
+
+app.post(
+  "/api/admin/users/:id/role",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    if (user.role !== "admin") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  },
+  zValidator("json", RoleSchema),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const targetId = Number(c.req.param("id"));
+    if (targetId === user.id) {
+      return c.json({ error: "Vous ne pouvez pas modifier votre propre rôle" }, 400);
+    }
+
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      UPDATE users
+      SET role = ${data.role}
+      WHERE id = ${targetId}
+      RETURNING id, email, name, role, created_at
+    `) as AdminUserRow[];
+
+    if (rows.length === 0) {
+      return c.json({ error: "Not found" }, 404);
+    }
+
+    return c.json({ user: rows[0] });
+  }
+);
+
+app.post("/api/admin/users/:id/reset-link", async (c) => {
+  const admin = await getAuthUser(c);
+  if (!admin) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (admin.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const targetId = Number(c.req.param("id"));
+  const sql = neon(c.env.DB_CONN);
+
+  const rows = (await sql`
+    SELECT id FROM users WHERE id = ${targetId}
+  `) as { id: number }[];
+
+  if (!rows[0]) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const rawToken = generateToken();
+  const tokenHash = await sha256hex(rawToken);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  await sql`
+    INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
+    VALUES (${tokenHash}, ${targetId}, ${expiresAt})
+  `;
+
+  const origin = new URL(c.req.url).origin;
+  const url = `${origin}/reinitialisation?token=${rawToken}`;
+
+  return c.json({ url });
+});
+
 // Public settings endpoint
 app.get("/api/settings", async (c) => {
   const sql = neon(c.env.DB_CONN);
@@ -559,8 +840,6 @@ app.post(
     await Promise.all([
       sql`INSERT INTO settings (key, value) VALUES ('nightly_price', ${data.nightlyPrice.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('contact_email', ${data.contactEmail}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      sql`INSERT INTO settings (key, value) VALUES ('marketing_room_count', ${data.marketingRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      sql`INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${data.assignableRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];

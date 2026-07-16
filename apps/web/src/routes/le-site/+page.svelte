@@ -7,6 +7,7 @@
   import Button from '$lib/components/Button.svelte';
   import { reveal, revealStagger } from '$lib/motion';
   import { ROOMS, ATTRACTIONS } from '$lib/content';
+  import { getRooms, isError } from '$lib/api';
 
   const NAV_SECTIONS = [
     { id: 'chambres', label: 'Chambres' },
@@ -16,6 +17,11 @@
 
   let activeSection = $state<string>('chambres');
   let sectionObserver: IntersectionObserver | undefined;
+
+  // Reactive room list — initial value is the full ROOMS array so SSR / the
+  // static prerender output is identical to today. The visibility filter
+  // silently narrows this after getRooms() resolves on the client.
+  let visibleRooms = $state(ROOMS);
 
   onMount(() => {
     const sections = NAV_SECTIONS
@@ -35,6 +41,21 @@
     );
 
     sections.forEach(el => sectionObserver!.observe(el));
+
+    // Silent room visibility filter — never blocks render, degrades to
+    // showing every room on any API error or unexpected payload.
+    getRooms().then((result) => {
+      if (isError(result)) return; // API error → keep all rooms visible
+
+      // Map slug → is_public. Slugs absent from the response are treated as
+      // public (graceful fallback for content added ahead of the API).
+      const visibilityMap = new Map(result.map(r => [r.slug, r.is_public]));
+      const filtered = ROOMS.filter(r => visibilityMap.get(r.slug) !== false);
+
+      // If the filter hides everything (all slugs masked or an unexpected
+      // payload), fall back to the full list rather than an empty grid.
+      visibleRooms = filtered.length === 0 ? ROOMS : filtered;
+    });
   });
 
   onDestroy(() => {
@@ -88,7 +109,7 @@
         Les chambres sont assignées à votre arrivée selon les besoins de votre équipe.
       </p>
       <div class="page-le-site__rooms-grid" data-testid="rooms-grid" use:revealStagger={{ y: 24, each: 0.07 }}>
-        {#each ROOMS as room}
+        {#each visibleRooms as room (room.slug)}
           <RoomCard {room} />
         {/each}
       </div>

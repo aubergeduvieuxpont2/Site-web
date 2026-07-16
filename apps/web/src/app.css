@@ -53,6 +53,17 @@
   --color-inverse-on-surface: #eff1f3;
   --color-error: #ba1a1a;
 
+  /* Admin + auth surfaces ("Operator's Logbook") — see global design strategy */
+  --color-forest: #1a5c2d;
+  --color-forest-surface: #d4ede0;
+  --color-badge-admin-bg: #ffdbca;
+  --color-badge-admin-fg: #5c2400;
+  --color-badge-guest-bg: #e6e8ea;
+  --color-badge-guest-fg: #45464d;
+  --color-toggle-on: #1a5c2d;
+  --color-toggle-off: #c6c6cd;
+  --color-url-surface: #eceef0;
+
   --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace;
   --font-serif: "IBM Plex Serif", ui-serif, Georgia, serif;
