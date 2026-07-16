@@ -49,7 +49,7 @@
           class="block font-sans text-[0.95rem] font-semibold tracking-[-0.01em] text-ink"
           >L'Auberge du Vieux Pont</span
         >
-        <span class="tech-label mt-0.5 block text-ink-mute"
+        <span class="tech-label mt-0.5 block whitespace-nowrap text-ink-mute"
           >EST. {SITE.established} · Saint-Raymond</span
         >
       </span>
@@ -67,7 +67,7 @@
               : 'text-ink-mute'}">{item.code}</span
           >
           <span
-            class="text-sm font-medium {isActive(item.href, $page.url.pathname)
+            class="text-sm font-medium whitespace-nowrap {isActive(item.href, $page.url.pathname)
               ? 'text-terracotta'
               : 'text-ink hover:text-terracotta'} transition-colors"
             >{item.label}</span
@@ -86,7 +86,7 @@
           data-testid="nav-connexion-link"
           class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
         >
-          <span class="text-sm font-medium text-ink hover:text-terracotta transition-colors"
+          <span class="text-sm font-medium whitespace-nowrap text-ink hover:text-terracotta transition-colors"
             >Connexion</span
           >
         </a>
@@ -99,7 +99,7 @@
             class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
           >
             <span
-              class="text-sm font-medium {isActive('/admin', $page.url.pathname)
+              class="text-sm font-medium whitespace-nowrap {isActive('/admin', $page.url.pathname)
                 ? 'text-terracotta'
                 : 'text-ink hover:text-terracotta'} transition-colors"
               >Admin</span
@@ -118,7 +118,7 @@
             class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
           >
             <span
-              class="text-sm font-medium {isActive('/profil', $page.url.pathname)
+              class="text-sm font-medium whitespace-nowrap {isActive('/profil', $page.url.pathname)
                 ? 'text-terracotta'
                 : 'text-ink hover:text-terracotta'} transition-colors"
               >Profil</span
@@ -138,7 +138,7 @@
           aria-label="Se déconnecter"
           onclick={handleLogout}
         >
-          <span class="text-sm font-medium text-ink hover:text-error transition-colors">
+          <span class="text-sm font-medium whitespace-nowrap text-ink hover:text-error transition-colors">
             Déconnexion
           </span>
         </button>
@@ -148,7 +148,7 @@
     <div class="flex items-center gap-3">
       <a
         href={SITE.phoneHref}
-        class="tech-label hidden text-ink-soft transition-colors hover:text-terracotta xl:block"
+        class="tech-label hidden whitespace-nowrap text-ink-soft transition-colors hover:text-terracotta xl:block"
         >{SITE.phone}</a
       >
       <a
