@@ -81,12 +81,6 @@ export interface AdminSettings extends PublicSettings {
   assignableRoomCount: number;
 }
 
-/** A single room's public-visibility flag, keyed by its content slug. */
-export interface RoomVisibility {
-  slug: string;
-  is_public: boolean;
-}
-
 /**
  * A full room record as returned by the rooms API. `image_key` is nullable
  * because a room may not yet have an R2 asset assigned. `slug` is the stable
@@ -416,17 +410,8 @@ export async function adminUpdateSettings(
 }
 
 // ---------------------------------------------------------------------------
-// Rooms (visibility)
+// Rooms
 // ---------------------------------------------------------------------------
-
-/**
- * Public: every room's visibility flag, keyed by content slug. Used by the
- * public site to silently hide rooms an admin has masked. Exposes only the
- * slug and a boolean — no sensitive data — so it needs no authentication.
- */
-export async function getRooms(): Promise<RoomVisibility[] | ApiError> {
-  return fetchJson<RoomVisibility[]>("/rooms");
-}
 
 /** Admin-gated: every room's full record. */
 export async function adminRooms(): Promise<{ rooms: Room[] } | ApiError> {
@@ -472,19 +457,4 @@ export async function adminDeleteRoom(
   return fetchJson<{ ok: true }>(`/admin/rooms/${encodeURIComponent(slug)}`, {
     method: "DELETE",
   });
-}
-
-/**
- * Admin-gated: flip one room's public visibility. `slug` is encoded into the
- * fixed `/admin/rooms/:slug` path so it cannot inject extra path segments, and
- * `isPublic` is coerced to a strict boolean before it enters the request body.
- */
-export async function adminSetRoomVisibility(
-  slug: string,
-  isPublic: boolean,
-): Promise<{ room: RoomVisibility } | ApiError> {
-  return fetchJson<{ room: RoomVisibility }>(
-    `/admin/rooms/${encodeURIComponent(slug)}`,
-    { method: "POST", body: JSON.stringify({ isPublic: Boolean(isPublic) }) },
-  );
 }

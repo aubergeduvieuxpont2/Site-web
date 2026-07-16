@@ -153,17 +153,17 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Cuisine complète et coin repas partagés — de quoi préparer un souper d'équipe ou une boîte à lunch avant le départ.",
     images: [
       {
-        key: "dining",
+        key: "dining.jpg",
         alt: "Coin repas commun avec grande table de bois",
         caption: "Salle à manger commune",
       },
       {
-        key: "kitchen",
+        key: "kitchen.jpg",
         alt: "Cuisine partagée entièrement équipée",
         caption: "Cuisine partagée · accès libre",
       },
       {
-        key: "living-dining",
+        key: "living-dining.jpg",
         alt: "Espace ouvert reliant la cuisine et le coin repas",
         caption: "Aire ouverte cuisine-repas",
       },
@@ -176,7 +176,7 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Un salon commun pour décompresser entre deux quarts, radio et outils rangés au vestiaire.",
     images: [
       {
-        key: "lounge",
+        key: "lounge.jpg",
         alt: "Salon commun avec fauteuils et éclairage tamisé",
         caption: "Salon commun",
       },
@@ -189,7 +189,7 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Chambres insonorisées et rideaux occultants — pensées pour ceux qui dorment le jour.",
     images: [
       {
-        key: "bedroom",
+        key: "bedroom.jpg",
         alt: "Chambre privée avec lit queen et rideaux occultants",
         caption: "Chambre type · insonorisée",
       },
@@ -202,17 +202,17 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Salles de bain entretenues, calibrées pour un va-et-vient d'équipe aux heures de pointe.",
     images: [
       {
-        key: "bathroom-1",
+        key: "bathroom-1.jpg",
         alt: "Salle de bain avec douche et lavabo",
         caption: "Salle de bain · douche",
       },
       {
-        key: "bathroom-2",
+        key: "bathroom-2.jpg",
         alt: "Salle de bain avec baignoire",
         caption: "Salle de bain · baignoire",
       },
       {
-        key: "bathroom-3",
+        key: "bathroom-3.jpg",
         alt: "Salle d'eau compacte avec lavabo",
         caption: "Salle d'eau",
       },
@@ -225,7 +225,7 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Buanderie et salle de séchage à l'arrière pour les vêtements et les bottes de travail.",
     images: [
       {
-        key: "laundry",
+        key: "laundry.jpg",
         alt: "Buanderie avec laveuse, sécheuse et espace de séchage",
         caption: "Buanderie · salle de séchage",
       },
@@ -238,27 +238,27 @@ export const PROPERTY_AREAS: PropertyArea[] = [
       "Sur la rivière Sainte-Anne, au pied du vieux pont — pierre, bois et fer forgé depuis 1972.",
     images: [
       {
-        key: "auberge-exterior",
+        key: "auberge-exterior.jpg",
         alt: "Vue extérieure de l'Auberge du Vieux Pont",
         caption: "L'auberge sur la Sainte-Anne",
       },
       {
-        key: "auberge-porch",
+        key: "auberge-porch.jpg",
         alt: "Galerie couverte à l'entrée de l'auberge",
         caption: "Galerie d'entrée",
       },
       {
-        key: "balcony",
+        key: "balcony.jpg",
         alt: "Terrasse privée donnant sur la rivière",
         caption: "Terrasse · vue rivière",
       },
       {
-        key: "bridge",
+        key: "bridge.jpg",
         alt: "Le vieux pont enjambant la rivière Sainte-Anne",
         caption: "Le vieux pont · Saint-Raymond",
       },
       {
-        key: "village-river",
+        key: "village-river.jpg",
         alt: "Le village de Saint-Raymond au bord de la rivière",
         caption: "Saint-Raymond · Portneuf",
       },
