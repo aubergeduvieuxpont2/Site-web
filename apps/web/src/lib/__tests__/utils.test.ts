@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDateOnly, datesOutOfOrder, nightsBetween } from "$lib/utils";
+import { formatDateOnly, datesOutOfOrder, nightsBetween, estimateStay } from "$lib/utils";
 
 describe("formatDateOnly", () => {
   it("formats a YYYY-MM-DD string in fr-CA locale", () => {
@@ -111,5 +111,69 @@ describe("nightsBetween", () => {
 
   it("returns 0 for a malformed check-out", () => {
     expect(nightsBetween("2026-08-01", "invalid")).toBe(0);
+  });
+});
+
+const DEFAULT_RATES = { accommodationTax: 3.5, tps: 5, tvq: 9.975 };
+
+describe("estimateStay", () => {
+  it("returns correct breakdown for 1 night, 1 room, $100, default rates", () => {
+    const e = estimateStay(1, 1, 100, DEFAULT_RATES);
+    expect(e.base).toBe(100);
+    expect(e.hebergementTax).toBe(3.5);
+    expect(e.tps).toBe(5.18);
+    expect(e.tvq).toBe(10.84);
+    expect(e.total).toBe(119.52);
+    expect(Math.round((e.base + e.hebergementTax + e.tps + e.tvq) * 100) / 100).toBe(e.total);
+  });
+
+  it("lines sum exactly to total for multi-night/multi-room (nights 2, rooms 3, rate 89)", () => {
+    const e = estimateStay(2, 3, 89, DEFAULT_RATES);
+    const summed = Math.round((e.base + e.hebergementTax + e.tps + e.tvq) * 100) / 100;
+    expect(summed).toBe(e.total);
+    expect(e.base).toBe(Math.round(2 * 3 * 89 * 100) / 100);
+  });
+
+  it("returns total === base when all tax rates are zero", () => {
+    const e = estimateStay(2, 1, 89, { accommodationTax: 0, tps: 0, tvq: 0 });
+    expect(e.hebergementTax).toBe(0);
+    expect(e.tps).toBe(0);
+    expect(e.tvq).toBe(0);
+    expect(e.total).toBe(e.base);
+  });
+
+  it("returns all zeros for zero nights", () => {
+    const e = estimateStay(0, 2, 89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for zero rooms", () => {
+    const e = estimateStay(3, 0, 89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for negative nights", () => {
+    const e = estimateStay(-1, 2, 89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for negative rooms", () => {
+    const e = estimateStay(2, -1, 89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for negative nightlyRate", () => {
+    const e = estimateStay(2, 1, -89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for NaN nights", () => {
+    const e = estimateStay(NaN, 1, 89, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
+  });
+
+  it("returns all zeros for NaN nightlyRate", () => {
+    const e = estimateStay(1, 1, NaN, DEFAULT_RATES);
+    expect(e).toEqual({ base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 });
   });
 });

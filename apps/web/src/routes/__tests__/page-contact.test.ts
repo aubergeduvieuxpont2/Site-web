@@ -164,13 +164,47 @@ describe("page-contact", () => {
       );
     });
 
-    it("computes the estimate total as nights × rooms × rate", () => {
+    it("computes the estimate using estimateStay with tax breakdown", () => {
       const content = read();
-      expect(content).toContain(
-        "const estimateTotal = $derived(nights * rooms * nightlyRate)"
-      );
-      expect(content).toContain("formatRate(estimateTotal)");
-      expect(content).toContain("(avant taxes)");
+      expect(content).toContain("estimateStay");
+      expect(content).toContain("const estimate = $derived(");
+      expect(content).toContain("settings.accommodationTax");
+      expect(content).toContain("settings.tps");
+      expect(content).toContain("settings.tvq");
+      expect(content).toContain("formatRate(estimate.total)");
+      expect(content).not.toContain("estimateTotal");
+      expect(content).not.toContain("(avant taxes)");
+    });
+
+    it("renders five breakdown rows with data-testid attributes", () => {
+      const content = read();
+      expect(content).toContain('data-testid="estimate-base"');
+      expect(content).toContain('data-testid="estimate-hebergement"');
+      expect(content).toContain('data-testid="estimate-tps"');
+      expect(content).toContain('data-testid="estimate-tvq"');
+      expect(content).toContain('data-testid="estimate-total"');
+    });
+
+    it("uses dl/dt/dd semantics for the estimate breakdown", () => {
+      const content = read();
+      expect(content).toContain("<dl ");
+      expect(content).toContain("<dt ");
+      expect(content).toContain("<dd ");
+      expect(content).toContain("Total estimé");
+    });
+
+    it("renders percent labels using formatPct for each tax row", () => {
+      const content = read();
+      expect(content).toContain("formatPct(settings.accommodationTax)");
+      expect(content).toContain("formatPct(settings.tps)");
+      expect(content).toContain("formatPct(settings.tvq)");
+    });
+
+    it("defines formatPct using Intl.NumberFormat with fr-CA locale", () => {
+      const content = read();
+      expect(content).toContain("function formatPct");
+      expect(content).toContain('new Intl.NumberFormat("fr-CA"');
+      expect(content).toContain("maximumFractionDigits: 3");
     });
 
     it("formats currency with fr-CA CAD via Intl.NumberFormat", () => {

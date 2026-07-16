@@ -53,3 +53,50 @@ export function datesOutOfOrder(
   if (!from || !to) return false;
   return to <= from;
 }
+
+export type StayTaxRates = {
+  accommodationTax: number; // percent, e.g. 3.5
+  tps: number;              // percent, e.g. 5
+  tvq: number;              // percent, e.g. 9.975
+};
+
+export type StayEstimate = {
+  base: number;           // nights × rooms × nightlyRate, rounded to cents
+  hebergementTax: number; // base × accommodationTax/100, rounded to cents
+  tps: number;            // (base + hebergementTax) × tps/100, rounded to cents
+  tvq: number;            // (base + hebergementTax + tps) × tvq/100, rounded to cents
+  total: number;          // sum of all rounded lines
+};
+
+function round2(x: number): number {
+  return Math.round(x * 100) / 100;
+}
+
+/**
+ * Computes a compounding tax cascade for a stay estimate.
+ * Each line is independently rounded to cents; the total is the sum of rounded lines.
+ * Non-finite, NaN, or negative inputs for nights/rooms/nightlyRate return all zeros.
+ */
+export function estimateStay(
+  nights: number,
+  rooms: number,
+  nightlyRate: number,
+  rates: StayTaxRates
+): StayEstimate {
+  const zero: StayEstimate = { base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 };
+  if (
+    !isFinite(nights) || nights < 0 ||
+    !isFinite(rooms) || rooms < 0 ||
+    !isFinite(nightlyRate) || nightlyRate < 0
+  ) {
+    return zero;
+  }
+
+  const base = round2(nights * rooms * nightlyRate);
+  const hebergementTax = round2(base * rates.accommodationTax / 100);
+  const tps = round2((base + hebergementTax) * rates.tps / 100);
+  const tvq = round2((base + hebergementTax + tps) * rates.tvq / 100);
+  const total = round2(base + hebergementTax + tps + tvq);
+
+  return { base, hebergementTax, tps, tvq, total };
+}

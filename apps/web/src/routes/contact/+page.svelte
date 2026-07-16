@@ -4,7 +4,7 @@
   import { createReservation, isError } from "$lib/api";
   import { SITE } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
-  import { datesOutOfOrder, nightsBetween } from "$lib/utils";
+  import { datesOutOfOrder, nightsBetween, estimateStay } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
@@ -53,7 +53,13 @@
   const nights = $derived(nightsBetween(form.checkIn, form.checkOut));
   const rooms = $derived(Math.max(0, Math.trunc(Number(form.roomCount) || 0)));
   const estimateVisible = $derived(nights >= 1 && rooms >= 1);
-  const estimateTotal = $derived(nights * rooms * nightlyRate);
+  const estimate = $derived(
+    estimateStay(nights, rooms, nightlyRate, {
+      accommodationTax: settings.accommodationTax,
+      tps: settings.tps,
+      tvq: settings.tvq,
+    })
+  );
 
   function formatRate(value: number): string {
     return new Intl.NumberFormat("fr-CA", {
@@ -62,6 +68,12 @@
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
+  }
+
+  function formatPct(value: number): string {
+    return (
+      new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 3 }).format(value) + " %"
+    );
   }
 
   function splitName(full: string | null | undefined): {
@@ -412,9 +424,42 @@
                   aria-live="polite"
                   transition:fade={{ duration: 200 }}
                 >
-                  Estimation : {nights} nuit(s) × {rooms} chambre(s) × {formatRate(nightlyRate)} =&nbsp;<span
-                    class="page-contact__estimate-total"
-                  >{formatRate(estimateTotal)}</span> (avant taxes)
+                  <dl class="page-contact__estimate-rows">
+                    <div class="page-contact__estimate-row" data-testid="estimate-base">
+                      <dt class="page-contact__estimate-label">
+                        Base ({nights} nuit(s) × {rooms} chambre(s) × {formatRate(nightlyRate)})
+                      </dt>
+                      <dd class="page-contact__estimate-amount">{formatRate(estimate.base)}</dd>
+                    </div>
+
+                    <div class="page-contact__estimate-row" data-testid="estimate-hebergement">
+                      <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
+                        Taxe d'hébergement ({formatPct(settings.accommodationTax)})
+                      </dt>
+                      <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.hebergementTax)}</dd>
+                    </div>
+
+                    <div class="page-contact__estimate-row" data-testid="estimate-tps">
+                      <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
+                        TPS ({formatPct(settings.tps)})
+                      </dt>
+                      <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.tps)}</dd>
+                    </div>
+
+                    <div class="page-contact__estimate-row" data-testid="estimate-tvq">
+                      <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
+                        TVQ ({formatPct(settings.tvq)})
+                      </dt>
+                      <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.tvq)}</dd>
+                    </div>
+
+                    <div class="page-contact__estimate-row page-contact__estimate-row--total" data-testid="estimate-total">
+                      <dt class="page-contact__estimate-label page-contact__estimate-label--total">
+                        Total estimé
+                      </dt>
+                      <dd class="page-contact__estimate-amount page-contact__estimate-total">{formatRate(estimate.total)}</dd>
+                    </div>
+                  </dl>
                 </div>
               {/if}
 
@@ -771,6 +816,67 @@
     color: var(--color-ink, #191c1e);
   }
 
+  /* Breakdown rows — extend .page-contact__estimate */
+  .page-contact__estimate-rows {
+    margin: 0;
+    padding: 0;
+  }
+
+  .page-contact__estimate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--color-outline-variant, #c6c6cd);
+  }
+
+  .page-contact__estimate-row:last-child {
+    border-bottom: none;
+  }
+
+  .page-contact__estimate-row--total {
+    border-top: 2px solid var(--color-ember);
+    border-bottom: none;
+  }
+
+  .page-contact__estimate-label {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--color-ink, #191c1e);
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .page-contact__estimate-label--tax {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ink-soft);
+  }
+
+  .page-contact__estimate-label--total {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-ink, #191c1e);
+  }
+
+  .page-contact__estimate-amount {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink, #191c1e);
+    text-align: right;
+    flex-shrink: 0;
+    margin: 0;
+  }
+
+  .page-contact__estimate-amount--tax {
+    color: var(--color-ink-soft);
+  }
+
   @media (max-width: 480px) {
     .page-contact__estimate {
       font-size: 13px;
@@ -780,6 +886,14 @@
 
     .page-contact__estimate-total {
       font-size: 14px;
+    }
+
+    .page-contact__estimate-label--tax {
+      font-size: 11px;
+    }
+
+    .page-contact__estimate-amount {
+      font-size: 12px;
     }
   }
 

@@ -1,0 +1,187 @@
+REQ:
+  R-EST-001:
+    actor: Reservation guest
+    capability: see a detailed compounding tax breakdown for their stay estimate
+    constraints: "cascade base -> hebergement -> TPS -> TVQ -> total; each line rounded to cents; lines sum to total"
+    priority: MUST
+    tests:
+      - T-EST-001a
+      - T-EST-001b
+  R-EST-002:
+    actor: Reservation guest
+    capability: read percent labels that reflect the actual configured tax rates
+    constraints: "labels formatted fr-CA from the settings store, not hardcoded"
+    priority: MUST
+    tests:
+      - T-EST-002a
+  R-EST-003:
+    actor: Reservation guest
+    capability: have the breakdown appear only for a valid stay and update live
+    constraints: "gated by nights>=1 and rooms>=1; recomputes via Svelte 5 derived state"
+    priority: MUST
+    tests:
+      - T-EST-003a
+      - T-EST-003b
+  R-EST-004:
+    actor: Developer
+    capability: rely on a pure, guarded estimate helper
+    constraints: "zero/negative/NaN inputs yield all-zero; no side effects"
+    priority: MUST
+    tests:
+      - T-EST-004a
+
+E:
+  E-StayEstimate:
+    fields:
+      base: number (cents-rounded)
+      hebergementTax: number (cents-rounded)
+      tps: number (cents-rounded)
+      tvq: number (cents-rounded)
+      total: number (cents-rounded)
+    tenancy: none
+    invariants:
+      - INV-lines-sum-to-total
+      - INV-non-negative
+  E-StayTaxRates:
+    fields:
+      accommodationTax: number (percent)
+      tps: number (percent)
+      tvq: number (percent)
+    tenancy: none
+    invariants: []
+
+OP:
+  OP-Estimate.compute:
+    input: "{ nights: number, rooms: number, nightlyRate: number, rates: E-StayTaxRates }"
+    auth: []
+    pre:
+      - INV-non-negative
+    err: []
+    out: E-StayEstimate
+
+AUTH:
+  public-read: no authentication required; the contact reservation form is public
+
+INV:
+  INV-lines-sum-to-total: "round2(base + hebergementTax + tps + tvq) equals total"
+  INV-non-negative: "no returned estimate field is ever negative or NaN"
+  INV-frontend-only: "no API endpoint, pricing.ts, InvoiceCreator, or DB schema is modified"
+
+ERR: {}
+
+API: {}
+
+UI:
+  screen-contact-estimate:
+    actions: [edit-dates, edit-rooms]
+    state: { hidden, visible }
+    notes: "block data-testid contact-estimate; rows estimate-base, estimate-hebergement, estimate-tps, estimate-tvq, estimate-total"
+
+DATA:
+  none: no schema change; tax rates read from existing public settings (tps, tvq, accommodationTax)
+
+TEST:
+  T-EST-001a:
+    verifies: R-EST-001
+    behaviour: "estimateStay(1,1,100,{accommodationTax:3.5,tps:5,tvq:9.975}) returns base 100, hebergementTax 3.50, tps 5.18, tvq 10.84, total 119.52"
+    steps:
+      - "call estimateStay(1, 1, 100, default rates)"
+      - "assert base===100, hebergementTax===3.5, tps===5.18, tvq===10.84, total===119.52"
+  T-EST-001b:
+    verifies: R-EST-001
+    behaviour: "helper rounded lines sum exactly to total for multi-night multi-room input"
+    steps:
+      - "call estimateStay(2, 3, 89, default rates)"
+      - "assert round2(base+hebergementTax+tps+tvq)===total"
+  T-EST-002a:
+    verifies: R-EST-002
+    behaviour: "contact page renders percent labels from settings store in fr-CA (3,5 %, 5 %, 9,975 %)"
+    steps:
+      - "render contact page with valid stay"
+      - "assert estimate-hebergement label contains 3,5 %, estimate-tps contains 5 %, estimate-tvq contains 9,975 %"
+  T-EST-003a:
+    verifies: R-EST-003
+    behaviour: "breakdown block renders with valid ordered dates and roomCount>=1"
+    steps:
+      - "render contact page, set checkIn/checkOut in order and roomCount 1"
+      - "assert contact-estimate present with rows estimate-base, estimate-hebergement, estimate-tps, estimate-tvq, estimate-total"
+  T-EST-003b:
+    verifies: R-EST-003
+    behaviour: "breakdown block absent when dates missing/reversed or roomCount<1"
+    steps:
+      - "render contact page with no dates"
+      - "assert contact-estimate not present"
+  T-EST-004a:
+    verifies: R-EST-004
+    behaviour: "zero-rate yields total==base; zero-nights and negative/NaN yield all-zero"
+    steps:
+      - "estimateStay(1,1,100,{accommodationTax:0,tps:0,tvq:0}) => total===base===100"
+      - "estimateStay(0,1,100,default) => all fields 0; estimateStay(-1,1,100,default) => all fields 0"
+
+NFR:
+  typecheck: "npm run typecheck passes"
+  build: "npm run build:web passes"
+  tests: "all existing vitest suites pass plus new helper and page tests"
+  responsive: "breakdown rows do not overflow at <=400px; label left, amount right"
+  purity: "estimateStay has no side effects and does not mutate inputs"
+
+FILE:
+  apps/web/src/lib/utils.ts: TASK-helper
+  apps/web/src/lib/__tests__/utils.test.ts: TASK-helper
+  apps/web/src/routes/contact/+page.svelte: TASK-frontend
+  apps/web/src/routes/__tests__/page-contact.test.ts: TASK-frontend
+
+TASK:
+  TASK-helper:
+    scope:
+      - R-EST-001
+      - R-EST-004
+      - OP-Estimate.compute
+      - INV-lines-sum-to-total
+      - INV-non-negative
+      - T-EST-001a
+      - T-EST-001b
+      - T-EST-004a
+    files:
+      - apps/web/src/lib/utils.ts
+      - apps/web/src/lib/__tests__/utils.test.ts
+    must_preserve:
+      - INV-lines-sum-to-total
+      - INV-non-negative
+      - INV-frontend-only
+    produce: [code, tests]
+    verifies: [R-EST-001, R-EST-004]
+  TASK-frontend:
+    scope:
+      - R-EST-002
+      - R-EST-003
+      - OP-Estimate.compute
+      - T-EST-002a
+      - T-EST-003a
+      - T-EST-003b
+    files:
+      - apps/web/src/routes/contact/+page.svelte
+      - apps/web/src/routes/__tests__/page-contact.test.ts
+    must_preserve:
+      - INV-non-negative
+      - INV-frontend-only
+    produce: [code, tests]
+    verifies: [R-EST-002, R-EST-003]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Round each cascade line to cents and compute each tax from the already-rounded running total"
+    rationale: "guarantees displayed lines sum exactly to the displayed total, matching the owner worked example (5.175 -> 5.18; TVQ on 108.68)"
+  ST-02:
+    status: locked
+    decision: "Put the cascade in a pure exported helper estimateStay in utils.ts, not inline in the component"
+    rationale: "keeps arithmetic unit-testable in isolation, mirroring nightsBetween and datesOutOfOrder"
+  ST-03:
+    status: locked
+    decision: "Bind percent labels to the settings store and format with Intl.NumberFormat fr-CA"
+    rationale: "rates are admin-configurable; hardcoded percent strings would drift from the real charged rate"
+  ST-04:
+    status: locked
+    decision: "Keep the existing wrapper data-testid contact-estimate and the nights>=1 && rooms>=1 gating"
+    rationale: "preserves backward-compatible tests and existing reveal/fade behaviour while only swapping inner content"
