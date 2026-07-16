@@ -539,3 +539,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Réinitialisation du mot de passe — Auberge du Vieux Pont</title>
+</svelte:head>

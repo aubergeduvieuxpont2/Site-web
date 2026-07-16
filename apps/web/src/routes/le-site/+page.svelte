@@ -695,3 +695,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Le site — Auberge du Vieux Pont</title>
+</svelte:head>

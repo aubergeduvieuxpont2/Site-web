@@ -86,8 +86,9 @@ describe('+page.svelte (page-accueil SSR)', () => {
     it('stat value spans are aria-hidden (animation is visual only)', () => {
       const html = renderPage();
       expect(html).toContain('data-testid="stat-number"');
-      // Verify the aria-label is on the parent for AT to read
-      expect(html).toContain('aria-label="30 min"');
+      // Verify the accessible value is exposed via a visually-hidden span
+      // (aria-label is prohibited on generic divs).
+      expect(html).toMatch(/sr-only[^"]*">30 min<\/span>/);
     });
 
     it('renders stat labels from STATS content', () => {
@@ -108,24 +109,24 @@ describe('+page.svelte (page-accueil SSR)', () => {
 
     it('renders the default publicRoomCount (12) with the rooms label', () => {
       const html = renderPage();
-      expect(html).toContain('aria-label="12 chambres"');
+      expect(html).toMatch(/sr-only[^"]*">12 chambres<\/span>/);
       expect(html).toContain("disponibles pour l'équipe");
     });
 
     it('reflects a changed publicRoomCount in the rooms stat', () => {
       settings.publicRoomCount = 7;
       const html = renderPage();
-      expect(html).toContain('aria-label="7 chambres"');
+      expect(html).toMatch(/sr-only[^"]*">7 chambres<\/span>/);
       // The other stats are unaffected.
-      expect(html).toContain('aria-label="30 min"');
+      expect(html).toMatch(/sr-only[^"]*">30 min<\/span>/);
     });
 
     it('does not couple the rooms stat to marketingRoomCount', () => {
       settings.publicRoomCount = 5;
       settings.marketingRoomCount = 99;
       const html = renderPage();
-      expect(html).toContain('aria-label="5 chambres"');
-      expect(html).not.toContain('aria-label="99 chambres"');
+      expect(html).toMatch(/sr-only[^"]*">5 chambres<\/span>/);
+      expect(html).not.toMatch(/sr-only[^"]*">99 chambres<\/span>/);
       settings.marketingRoomCount = 12;
     });
   });

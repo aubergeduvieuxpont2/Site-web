@@ -69,10 +69,8 @@
           data-testid="stat-item"
           use:reveal={{ y: 12, delay: i * 0.08 }}
         >
-          <div
-            class="page-accueil__stat-value"
-            aria-label="{stat.value}{stat.suffix}"
-          >
+          <div class="page-accueil__stat-value">
+            <span class="sr-only">{`${stat.value}${stat.suffix}`}</span>
             <span
               class="page-accueil__stat-number"
               data-testid="stat-number"
@@ -558,3 +556,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Auberge du Vieux Pont — hébergement pour travailleurs de terrain</title>
+</svelte:head>

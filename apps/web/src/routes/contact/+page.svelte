@@ -958,3 +958,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Contact — Auberge du Vieux Pont</title>
+</svelte:head>

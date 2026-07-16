@@ -727,3 +727,7 @@
     outline-offset: 2px;
   }
 </style>
+
+<svelte:head>
+  <title>Profil utilisateur — Auberge du Vieux Pont</title>
+</svelte:head>

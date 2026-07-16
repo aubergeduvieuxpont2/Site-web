@@ -458,7 +458,10 @@ app.post(
 app.get("/api/auth/me", async (c) => {
   const user = await getAuthUser(c);
   if (!user) {
-    return c.json({ error: "Unauthorized" }, 401);
+    // 200 rather than 401: this endpoint is polled on every page view and an
+    // anonymous visitor is not an error (a 401 logs a console error in every
+    // logged-out browser session).
+    return c.json({ user: null });
   }
 
   const sql = neon(c.env.DB_CONN);

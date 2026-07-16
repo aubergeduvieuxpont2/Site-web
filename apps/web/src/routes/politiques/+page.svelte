@@ -168,3 +168,7 @@
     color: var(--color-ink-variant);
   }
 </style>
+
+<svelte:head>
+  <title>Politiques — Auberge du Vieux Pont</title>
+</svelte:head>

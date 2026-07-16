@@ -664,3 +664,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>À propos — Auberge du Vieux Pont</title>
+</svelte:head>

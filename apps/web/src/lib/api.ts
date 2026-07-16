@@ -188,7 +188,13 @@ export function isError(response: unknown): response is ApiError {
 // ---------------------------------------------------------------------------
 
 export async function getMe(): Promise<{ user: User } | ApiError> {
-  return fetchJson<{ user: User }>("/auth/me");
+  // Anonymous sessions get 200 { user: null } (a 401 here would log a console
+  // error on every logged-out page view); normalize to ApiError for callers.
+  const result = await fetchJson<{ user: User | null }>("/auth/me");
+  if (!isError(result) && result.user === null) {
+    return { error: "Unauthorized" };
+  }
+  return result as { user: User } | ApiError;
 }
 
 export async function login(
