@@ -5,7 +5,10 @@ export const AssignRoomSchema = z.object({
   roomSlug: z.string().min(1),
 });
 
-export function reservationDatesValid(arrive: string | null, depart: string | null): boolean {
+export function reservationDatesValid(
+  arrive: string | Date | null,
+  depart: string | Date | null
+): boolean {
   if (!arrive || !depart) return false;
   const arriveDate = parseDate(arrive);
   const departDate = parseDate(depart);
@@ -13,8 +16,13 @@ export function reservationDatesValid(arrive: string | null, depart: string | nu
   return departDate > arriveDate;
 }
 
-function parseDate(dateStr: string): Date | null {
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+// The neon driver returns Postgres DATE columns as JS Date objects; accept
+// both forms so a raw (non-to_char) SELECT can never throw here.
+function parseDate(date: string | Date): Date | null {
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   const [, y, m, d] = match;
   return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));

@@ -952,7 +952,8 @@ app.get("/api/admin/reservations/:id/free-rooms", async (c) => {
   const sql = neon(c.env.DB_CONN);
 
   const res = (await sql`
-    SELECT arrive, depart FROM reservations WHERE id = ${reservationId}
+    SELECT to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart
+    FROM reservations WHERE id = ${reservationId}
   `) as { arrive: string | null; depart: string | null }[];
 
   if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart)) {
@@ -982,7 +983,8 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const res = (await sql`
-      SELECT arrive, depart, room_count FROM reservations WHERE id = ${reservationId}
+      SELECT to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count
+      FROM reservations WHERE id = ${reservationId}
     `) as { arrive: string | null; depart: string | null; room_count: number | null }[];
 
     if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
@@ -1068,7 +1070,8 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const res = (await sql`
-      SELECT email, arrive, depart, room_count FROM reservations WHERE id = ${reservationId}
+      SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count
+      FROM reservations WHERE id = ${reservationId}
     `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null }[];
 
     if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
