@@ -104,6 +104,41 @@ describe("UserPricingForm — initial mode from props", () => {
   });
 });
 
+describe("UserPricingForm — string prop coercion", () => {
+  it("derives discount mode from a string discount prop", () => {
+    expect(initialPricingMode("10.00" as unknown as number, null)).toBe("discount");
+  });
+
+  it("computes a discounted effective price (89 − 10% = 80.10)", () => {
+    expect(computeEffectivePrice("discount", 89, 10, 0)).toBe(80.1);
+  });
+
+  it("renders a discounted preview when seeded with a string discount prop", () => {
+    const { getByTestId } = render(UserPricingForm, {
+      props: baseProps({ initialDiscount: "10.00", publicNightlyPrice: 89 }),
+    });
+    expect((getByTestId("upf-mode-discount") as HTMLInputElement).checked).toBe(true);
+    // 89 − 10% = 80.10, not the public 89.00
+    expect(getByTestId("upf-preview-amount").textContent).toMatch(/80[.,]10/);
+    expect(getByTestId("upf-preview-amount").textContent).not.toMatch(/89[.,]00/);
+  });
+
+  it("renders a fixed preview when seeded with a string fixed prop", () => {
+    const { getByTestId } = render(UserPricingForm, {
+      props: baseProps({ initialFixed: "75.5", publicNightlyPrice: 89 }),
+    });
+    expect((getByTestId("upf-mode-fixed") as HTMLInputElement).checked).toBe(true);
+    expect(getByTestId("upf-preview-amount").textContent).toMatch(/75[.,]50/);
+  });
+
+  it("keeps public mode for null props", () => {
+    const { getByTestId } = render(UserPricingForm, {
+      props: baseProps({ initialDiscount: null, initialFixed: null }),
+    });
+    expect((getByTestId("upf-mode-public") as HTMLInputElement).checked).toBe(true);
+  });
+});
+
 describe("UserPricingForm — mode toggle", () => {
   it("shows the discount row when discount is selected", async () => {
     const { getByTestId, queryByTestId } = render(UserPricingForm, { props: baseProps() });

@@ -56,15 +56,23 @@
   }: {
     userId: number | string;
     publicNightlyPrice: number;
-    initialDiscount?: number | null;
-    initialFixed?: number | null;
+    initialDiscount?: number | string | null;
+    initialFixed?: number | string | null;
     onSavePricing: (body: PricingRequest) => Promise<PricingResult>;
   } = $props();
 
+  // ─── Defensive coercion (props → numbers, preserving null) ───
+  // A caller may hand us string values straight from an API response that
+  // bypassed backend normalization (e.g. Postgres NUMERIC serialized as a
+  // string). Coerce through Number() so the preview and initial mode compute
+  // correctly, while keeping `null`/`undefined` as `null`.
+  const coercedDiscount = initialDiscount == null ? null : Number(initialDiscount);
+  const coercedFixed = initialFixed == null ? null : Number(initialFixed);
+
   // ─── Form state (initialised once from props) ───
-  let mode = $state<PricingMode>(initialPricingMode(initialDiscount, initialFixed));
-  let discountValue = $state<number>(initialDiscount ?? 0);
-  let fixedValue = $state<number>(initialFixed ?? 0);
+  let mode = $state<PricingMode>(initialPricingMode(coercedDiscount, coercedFixed));
+  let discountValue = $state<number>(coercedDiscount ?? 0);
+  let fixedValue = $state<number>(coercedFixed ?? 0);
   let dirty = $state(false);
   let loading = $state(false);
   let discountError = $state<string | null>(null);

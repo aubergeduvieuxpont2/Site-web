@@ -9,6 +9,14 @@ export interface InvoiceBreakdown {
   amount: number;
 }
 
+// The neon driver returns Postgres NUMERIC columns (discount_percent,
+// fixed_nightly_price) as JSON strings (e.g. "10.00"). Number.isFinite("10.00")
+// is false, which silently defeats discount/fixed-price logic downstream. Apply
+// this at every DB-read boundary so those columns leave the API as numbers.
+export function toNumberOrNull(v: unknown): number | null {
+  return v == null ? null : Number(v);
+}
+
 export function resolveEffectiveNightly(
   userPricing: { fixedNightlyPrice?: number | null; discountPercent?: number | null },
   publicPrice: number
