@@ -1608,3 +1608,7 @@
   }
 
 </style>
+
+<svelte:head>
+  <title>Administration — Auberge du Vieux Pont</title>
+</svelte:head>

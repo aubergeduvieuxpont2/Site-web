@@ -713,3 +713,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Mon profil — Auberge du Vieux Pont</title>
+</svelte:head>

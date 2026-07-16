@@ -767,3 +767,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Connexion — Auberge du Vieux Pont</title>
+</svelte:head>

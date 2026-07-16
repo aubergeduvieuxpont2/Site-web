@@ -250,3 +250,7 @@
     }
   }
 </style>
+
+<svelte:head>
+  <title>Confidentialité — Auberge du Vieux Pont</title>
+</svelte:head>

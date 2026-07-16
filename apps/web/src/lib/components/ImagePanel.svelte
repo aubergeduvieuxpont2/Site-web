@@ -18,6 +18,17 @@
   let el: HTMLElement | undefined = $state();
   let observer: IntersectionObserver | undefined;
 
+  // Each `<base>.jpg` original in R2 has WebP variants at these widths,
+  // stored as `<base>-<width>.webp`.
+  const VARIANT_WIDTHS = [480, 960, 1440];
+  const srcset = $derived(
+    imgKey.endsWith('.jpg')
+      ? VARIANT_WIDTHS.map(
+          (w) => `/img/${imgKey.replace(/\.jpg$/, '')}-${w}.webp ${w}w`
+        ).join(', ')
+      : undefined
+  );
+
   onMount(() => {
     if (!el) return;
 
@@ -27,6 +38,8 @@
       img.addEventListener('error', () => {
         const fallback = img.dataset.picsumSrc;
         if (fallback && img.src !== fallback) {
+          img.removeAttribute('srcset');
+          img.removeAttribute('sizes');
           img.src = fallback;
         }
       });
@@ -61,6 +74,8 @@
     <img
       class="image-panel__img"
       src="/img/{imgKey}"
+      {srcset}
+      sizes={srcset ? '(min-width: 768px) 640px, 100vw' : undefined}
       {alt}
       loading="lazy"
       data-picsum-src="https://picsum.photos/seed/{picsumSeed}/1200/800"
