@@ -5,6 +5,8 @@
   import Button from "$lib/components/Button.svelte";
   import AdminUtilisateursTab from "$lib/components/admin/AdminUtilisateursTab.svelte";
   import AdminChambresTab from "$lib/components/admin/AdminChambresTab.svelte";
+  import ReservationTableRow from "$lib/components/admin/ReservationTableRow.svelte";
+  import type { InvoiceRequest, InvoiceResult } from "$lib/components/admin/InvoiceCreator.svelte";
   import {
     getMe,
     adminReservations,
@@ -12,6 +14,7 @@
     requeueOutbox,
     adminGetSettings,
     adminUpdateSettings,
+    adminCreateInvoice,
     changePassword,
     isError,
     type AdminSettings,
@@ -86,6 +89,10 @@
   }
 
   // ─── Data loaders ───
+  async function createInvoice(reservationId: number, req: InvoiceRequest): Promise<InvoiceResult> {
+    return adminCreateInvoice(reservationId, req.type, req.depositPercent);
+  }
+
   async function loadReservations(q?: string) {
     reservationsLoading = true;
     reservationsError = null;
@@ -473,27 +480,23 @@
                   <tr>
                     <th scope="col">Nom</th>
                     <th scope="col">Courriel</th>
+                    <th scope="col">Téléphone</th>
+                    <th scope="col">Pers.</th>
                     <th scope="col">Arrivée</th>
                     <th scope="col">Départ</th>
-                    <th scope="col">Pers.</th>
-                    <th scope="col">Créée le</th>
+                    <th scope="col">Chambres</th>
+                    <th scope="col">Message</th>
+                    <th scope="col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {#if reservations.length === 0 && !reservationsLoading}
                     <tr>
-                      <td colspan="6" class="page-admin__empty">Aucune réservation trouvée.</td>
+                      <td colspan="9" class="page-admin__empty">Aucune réservation trouvée.</td>
                     </tr>
                   {:else}
                     {#each reservations as row (row.id)}
-                      <tr class="page-admin__row" data-testid="reservation-row">
-                        <td>{row.name}</td>
-                        <td class="page-admin__email">{row.email}</td>
-                        <td class="page-admin__date">{formatDate(row.arrive ?? "")}</td>
-                        <td class="page-admin__date">{formatDate(row.depart ?? "")}</td>
-                        <td class="page-admin__num">{row.people}</td>
-                        <td class="page-admin__date">{formatDate(row.created_at)}</td>
-                      </tr>
+                      <ReservationTableRow {row} onCreateInvoice={createInvoice} />
                     {/each}
                   {/if}
                 </tbody>
