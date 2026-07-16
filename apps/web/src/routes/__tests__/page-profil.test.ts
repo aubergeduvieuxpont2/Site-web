@@ -16,10 +16,12 @@ vi.mock("$app/navigation", () => ({
 const getMe = vi.fn();
 const getProfile = vi.fn();
 const logout = vi.fn();
+const changePassword = vi.fn();
 vi.mock("$lib/api", () => ({
   getMe: (...a: unknown[]) => getMe(...a),
   getProfile: (...a: unknown[]) => getProfile(...a),
   logout: (...a: unknown[]) => logout(...a),
+  changePassword: (...a: unknown[]) => changePassword(...a),
   isError: (r: unknown): r is ApiError =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
 }));
@@ -59,10 +61,12 @@ beforeEach(() => {
   getMe.mockReset();
   getProfile.mockReset();
   logout.mockReset();
+  changePassword.mockReset();
   // Sensible defaults; individual tests override.
   getMe.mockResolvedValue({ user: GUEST });
   getProfile.mockResolvedValue(profile());
   logout.mockResolvedValue({ ok: true });
+  changePassword.mockResolvedValue({ ok: true });
 });
 
 afterEach(() => {
@@ -129,16 +133,12 @@ describe("page-profil user card", () => {
     expect((await findByTestId("profil-title")).textContent).toContain("guest@example.com");
   });
 
-  it("marks an admin with the admin badge and dashboard shortcut", async () => {
+  it("redirects an admin to /admin and never fetches the guest profile", async () => {
     getMe.mockResolvedValue({ user: ADMIN });
-    getProfile.mockResolvedValue(profile({ user: ADMIN }));
-    const { findByTestId } = render(Page);
-    const badge = await findByTestId("profil-role-badge");
-    expect(badge.textContent).toContain("Administrateur");
-    expect(badge.className).toContain("profil__role-badge--admin");
-    const link = await findByTestId("profil-admin-link");
-    expect(link.getAttribute("href")).toBe("/admin");
-    expect((await findByTestId("profil-role-label")).textContent).toContain("ADMINISTRATEUR");
+    render(Page);
+    await waitFor(() => expect(goto).toHaveBeenCalledWith("/admin"));
+    // Admins manage everything in /admin; the profil profile is never loaded.
+    expect(getProfile).not.toHaveBeenCalled();
   });
 });
 
@@ -186,35 +186,69 @@ describe("page-profil reservations", () => {
   });
 });
 
-describe("page-profil HubSpot enrichment", () => {
-  it("shows the unavailable state when no contact and no deals", async () => {
-    const { findByTestId } = render(Page);
-    expect((await findByTestId("profil-hs-empty")).textContent).toContain("Données non disponibles");
+describe("page-profil change password", () => {
+  async function fillAndSubmit(
+    findByTestId: (id: string) => Promise<HTMLElement>,
+    current: string,
+    next: string,
+  ): Promise<void> {
+    const cur = (await findByTestId("profil-pwd-current-input")) as HTMLInputElement;
+    const nw = (await findByTestId("profil-pwd-new-input")) as HTMLInputElement;
+    await fireEvent.input(cur, { target: { value: current } });
+    await fireEvent.input(nw, { target: { value: next } });
+    await fireEvent.submit(await findByTestId("profil-pwd-form"));
+  }
+
+  it("renders the change-password form with both fields once loaded", async () => {
+    const utils = render(Page);
+    expect(await utils.findByTestId("profil-pwd-heading")).toBeTruthy();
+    expect(await utils.findByTestId("profil-pwd-current-input")).toBeTruthy();
+    expect(await utils.findByTestId("profil-pwd-new-input")).toBeTruthy();
+    // The removed HubSpot section leaves no trace.
+    expect(utils.queryByTestId("profil-hs-heading")).toBeNull();
   });
 
-  it("renders contact properties and deals when present", async () => {
-    getProfile.mockResolvedValue(
-      profile({
-        hubspot: {
-          contact: { lifecyclestage: "customer", country: "Canada" },
-          deals: [{ dealname: "Séjour août", amount: "450" }],
-        },
-      }),
-    );
-    const { findByTestId, getByTestId } = render(Page);
-    expect(await findByTestId("profil-hs-grid")).toBeTruthy();
-    expect(getByTestId("profil-hs-prop-lifecyclestage").textContent).toContain("customer");
-    expect(getByTestId("profil-hs-deal-0").textContent).toContain("Séjour août");
+  it("rejects a too-short new password client-side without calling the API", async () => {
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "current-pass", "short");
+    const err = await utils.findByTestId("profil-pwd-error");
+    expect(err.getAttribute("role")).toBe("alert");
+    expect(err.textContent).toContain("au moins 8 caractères");
+    expect(changePassword).not.toHaveBeenCalled();
   });
 
-  it("renders HubSpot property values as text, never as HTML", async () => {
-    getProfile.mockResolvedValue(
-      profile({ hubspot: { contact: { note: "<img src=x onerror=alert(1)>" }, deals: [] } }),
+  it("submits valid input and shows a success confirmation", async () => {
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "current-pass", "brand-new-pass");
+    await waitFor(() =>
+      expect(changePassword).toHaveBeenCalledWith("current-pass", "brand-new-pass"),
     );
-    const { findByTestId } = render(Page);
-    const val = await findByTestId("profil-hs-prop-note");
-    expect(val.textContent).toContain("<img src=x onerror=alert(1)>");
-    expect(val.querySelector("img")).toBeNull();
+    const ok = await utils.findByTestId("profil-pwd-success");
+    expect(ok.getAttribute("role")).toBe("status");
+    expect(ok.textContent).toContain("Mot de passe modifié avec succès");
+    // Fields are cleared on success.
+    const cur = (await utils.findByTestId("profil-pwd-current-input")) as HTMLInputElement;
+    const nw = (await utils.findByTestId("profil-pwd-new-input")) as HTMLInputElement;
+    expect(cur.value).toBe("");
+    expect(nw.value).toBe("");
+  });
+
+  it("surfaces the API error and does not show success", async () => {
+    changePassword.mockResolvedValue({ error: "Mot de passe actuel incorrect." });
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "wrong-pass", "brand-new-pass");
+    const err = await utils.findByTestId("profil-pwd-error");
+    expect(err.textContent).toContain("Mot de passe actuel incorrect.");
+    expect(utils.queryByTestId("profil-pwd-success")).toBeNull();
+  });
+
+  it("renders the API error as text, never as HTML", async () => {
+    changePassword.mockResolvedValue({ error: "<img src=x onerror=alert(1)>" });
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "current-pass", "brand-new-pass");
+    const err = await utils.findByTestId("profil-pwd-error");
+    expect(err.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(err.querySelector("img")).toBeNull();
   });
 });
 

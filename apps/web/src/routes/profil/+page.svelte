@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { getMe, getProfile, logout, isError } from "$lib/api";
+  import { getMe, getProfile, logout, changePassword, isError } from "$lib/api";
   import type { User, ReservationRow } from "$lib/api";
 
   // ── State ────────────────────────────────────────────────────────────
@@ -11,16 +11,45 @@
   let errorMessage = $state("");
   let user = $state<User | null>(null);
   let reservations = $state<ReservationRow[]>([]);
-  let hubspot = $state<{
-    contact: Record<string, unknown> | null;
-    deals: Record<string, unknown>[];
-  }>({ contact: null, deals: [] });
 
   // Which reservation row is expanded (by id), or null.
   let expandedId = $state<number | null>(null);
 
   // Guard against a double logout click.
   let loggingOut = $state(false);
+
+  // ── Change password state ─────────────────────────────────────────────
+  let currentPassword = $state("");
+  let newPassword = $state("");
+  let pwdSubmitting = $state(false);
+  let pwdError = $state<string | null>(null);
+  let pwdSuccess = $state(false);
+
+  async function handlePasswordChange(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    if (pwdSubmitting) return;
+
+    pwdError = null;
+    pwdSuccess = false;
+
+    if (newPassword.length < 8) {
+      pwdError = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
+      return;
+    }
+
+    pwdSubmitting = true;
+    const result = await changePassword(currentPassword, newPassword);
+    pwdSubmitting = false;
+
+    if (isError(result)) {
+      pwdError = result.error;
+      return;
+    }
+
+    pwdSuccess = true;
+    currentPassword = "";
+    newPassword = "";
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -56,7 +85,13 @@
     }
     user = meResult.user;
 
-    // Step 2 — full profile (reservations + HubSpot enrichment).
+    // Admin redirect — admins manage settings in /admin, not here.
+    if (user.role === "admin") {
+      await goto("/admin");
+      return;
+    }
+
+    // Step 2 — full profile (reservations).
     const profileResult = await getProfile();
     if (isError(profileResult)) {
       errorMessage = profileResult.error;
@@ -66,7 +101,6 @@
 
     user = profileResult.user;
     reservations = profileResult.reservations;
-    hubspot = profileResult.hubspot;
     phase = "loaded";
   });
 
@@ -257,58 +291,91 @@
 
       <div class="profil__hairline" role="separator" aria-hidden="true"></div>
 
-      <!-- ── HubSpot enrichment ── -->
-      <section class="profil__section profil__section--hubspot" aria-labelledby="profil-hs-heading">
-        <h2 id="profil-hs-heading" class="profil__section-heading" data-testid="profil-hs-heading">
-          Enrichissement
+      <!-- ── Change password ── -->
+      <section
+        class="profil__section profil__section--pwd"
+        aria-labelledby="profil-pwd-heading"
+      >
+        <h2
+          id="profil-pwd-heading"
+          class="profil__section-heading"
+          data-testid="profil-pwd-heading"
+        >
+          Changer le mot de passe
         </h2>
-        <span class="profil__tech-label">DONNÉES HUBSPOT</span>
 
-        {#if hubspot.contact === null && hubspot.deals.length === 0}
-          <p class="profil__empty" data-testid="profil-hs-empty">Données non disponibles.</p>
-        {:else}
-          <div class="profil__hs-grid" data-testid="profil-hs-grid">
-            <!-- Contact properties -->
-            <div class="profil__hs-card" data-testid="profil-hs-contact">
-              <span class="profil__tech-label">CONTACT</span>
-              {#if hubspot.contact}
-                <dl class="profil__hs-dl">
-                  {#each Object.entries(hubspot.contact) as [k, v] (k)}
-                    <div class="profil__hs-field">
-                      <dt class="profil__hs-key">{k}</dt>
-                      <dd class="profil__hs-val" data-testid="profil-hs-prop-{k}">
-                        {String(v ?? "—")}
-                      </dd>
-                    </div>
-                  {/each}
-                </dl>
-              {:else}
-                <p class="profil__empty">Aucun contact trouvé.</p>
-              {/if}
-            </div>
-
-            <!-- Deals -->
-            <div class="profil__hs-card" data-testid="profil-hs-deals">
-              <span class="profil__tech-label">TRANSACTIONS</span>
-              {#if hubspot.deals.length === 0}
-                <p class="profil__empty">Aucune transaction.</p>
-              {:else}
-                <ul class="profil__hs-deal-list">
-                  {#each hubspot.deals as deal, di (di)}
-                    <li class="profil__hs-deal" data-testid="profil-hs-deal-{di}">
-                      {#each Object.entries(deal) as [k, v] (k)}
-                        <span class="profil__hs-deal-prop">
-                          <span class="profil__hs-key">{k}</span>
-                          <span class="profil__hs-val">{String(v ?? "—")}</span>
-                        </span>
-                      {/each}
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            </div>
+        <form
+          class="profil__pwd-form"
+          data-testid="profil-pwd-form"
+          onsubmit={handlePasswordChange}
+          novalidate
+        >
+          <div class="profil__pwd-field">
+            <label class="profil__pwd-label" for="profil-pwd-current">
+              Mot de passe actuel
+            </label>
+            <input
+              id="profil-pwd-current"
+              class="profil__pwd-input"
+              type="password"
+              autocomplete="current-password"
+              required
+              disabled={pwdSubmitting}
+              bind:value={currentPassword}
+              data-testid="profil-pwd-current-input"
+            />
           </div>
-        {/if}
+
+          <div class="profil__pwd-field">
+            <label class="profil__pwd-label" for="profil-pwd-new">
+              Nouveau mot de passe
+              <span class="profil__pwd-hint" aria-hidden="true">(8 caractères minimum)</span>
+            </label>
+            <input
+              id="profil-pwd-new"
+              class="profil__pwd-input"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              required
+              disabled={pwdSubmitting}
+              bind:value={newPassword}
+              data-testid="profil-pwd-new-input"
+            />
+          </div>
+
+          {#if pwdError}
+            <div
+              class="profil__pwd-feedback profil__pwd-feedback--error"
+              role="alert"
+              data-testid="profil-pwd-error"
+            >
+              {pwdError}
+            </div>
+          {/if}
+
+          {#if pwdSuccess}
+            <div
+              class="profil__pwd-feedback profil__pwd-feedback--success"
+              role="status"
+              data-testid="profil-pwd-success"
+            >
+              Mot de passe modifié avec succès.
+            </div>
+          {/if}
+
+          <div class="profil__pwd-actions">
+            <button
+              class="button button--action"
+              type="submit"
+              disabled={pwdSubmitting}
+              aria-label="Modifier le mot de passe"
+              data-testid="profil-pwd-submit"
+            >
+              {pwdSubmitting ? "Modification…" : "Modifier le mot de passe"}
+            </button>
+          </div>
+        </form>
       </section>
     </div>
     <!-- /.profil__content -->
@@ -603,93 +670,97 @@
     word-break: break-word;
   }
 
-  /* ── HubSpot section ── */
-  .profil__section--hubspot .profil__section-heading {
-    margin-bottom: var(--space-xs, 4px);
+  /* ── Change-password section ── */
+  .profil__section--pwd {
+    max-width: 480px;
   }
 
-  .profil__section--hubspot > .profil__tech-label {
-    margin-bottom: var(--space-lg, 24px);
-  }
-
-  .profil__hs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  .profil__pwd-form {
+    display: flex;
+    flex-direction: column;
     gap: var(--space-lg, 24px);
   }
 
-  .profil__hs-card {
-    background-color: var(--color-surface-container-lowest, #ffffff);
-    border: 1px solid var(--color-outline-variant, #c6c6cd);
-    border-radius: var(--radius-lg, 0.5rem);
-    padding: var(--space-xl, 40px);
-  }
-
-  .profil__hs-card > .profil__tech-label {
-    margin-bottom: var(--space-md, 16px);
-  }
-
-  .profil__hs-dl {
+  .profil__pwd-field {
     display: flex;
     flex-direction: column;
-    gap: var(--space-sm, 8px);
+    gap: var(--space-xs, 4px);
   }
 
-  .profil__hs-field {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-sm, 8px);
-    padding: var(--space-sm, 8px) 0;
-    border-bottom: 1px solid var(--color-surface-container, #eceef0);
-  }
-
-  .profil__hs-field:last-child {
-    border-bottom: none;
-  }
-
-  .profil__hs-key {
-    font-family: var(--font-mono);
+  .profil__pwd-label {
+    font-family: var(--font-mono, "IBM Plex Mono", monospace);
     font-size: 11px;
+    font-weight: 400;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     color: var(--color-ink-variant, #45464d);
-    word-break: break-all;
-  }
-
-  .profil__hs-val {
-    font-family: var(--font-sans);
-    font-size: 13px;
-    color: var(--color-ink, #191c1e);
-    word-break: break-all;
-  }
-
-  .profil__hs-deal-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md, 16px);
-  }
-
-  .profil__hs-deal {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-sm, 8px);
-    padding-bottom: var(--space-md, 16px);
-    border-bottom: 1px solid var(--color-surface-container, #eceef0);
-  }
-
-  .profil__hs-deal:last-child {
-    border-bottom: none;
-    padding-bottom: 0;
-  }
-
-  .profil__hs-deal-prop {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    min-width: 80px;
+  }
+
+  .profil__pwd-hint {
+    font-family: var(--font-sans, "IBM Plex Sans", sans-serif);
+    font-size: 12px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--color-ink-variant, #45464d);
+    opacity: 0.75;
+  }
+
+  .profil__pwd-input {
+    display: block;
+    width: 100%;
+    height: 44px;
+    padding: 0 var(--space-md, 16px);
+    border: 1px solid var(--color-hairline, #c6c6cd);
+    border-radius: var(--radius, 0.25rem);
+    background-color: var(--color-surface-container-lowest, #ffffff);
+    font-family: var(--font-sans, "IBM Plex Sans", sans-serif);
+    font-size: 15px;
+    color: var(--color-ink, #191c1e);
+    transition: border-color 150ms ease;
+    box-sizing: border-box;
+  }
+
+  .profil__pwd-input:focus {
+    outline: 2px solid var(--color-terracotta, #9d4300);
+    outline-offset: 3px;
+    border-color: var(--color-terracotta, #9d4300);
+  }
+
+  .profil__pwd-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: var(--color-surface-container, #eceef0);
+  }
+
+  .profil__pwd-feedback {
+    padding: var(--space-sm, 12px) var(--space-md, 16px);
+    border-radius: var(--radius, 0.25rem);
+    font-family: var(--font-sans, "IBM Plex Sans", sans-serif);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .profil__pwd-feedback--error {
+    background-color: color-mix(in srgb, var(--color-error, #ba1a1a) 10%, white);
+    border: 1px solid color-mix(in srgb, var(--color-error, #ba1a1a) 40%, white);
+    color: var(--color-error, #ba1a1a);
+  }
+
+  .profil__pwd-feedback--success {
+    background-color: var(--color-forest-surface, #d4ede0);
+    border: 1px solid color-mix(in srgb, var(--color-forest, #1a5c2d) 40%, white);
+    color: var(--color-forest, #1a5c2d);
+  }
+
+  .profil__pwd-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md, 16px);
+    padding-top: var(--space-xs, 4px);
   }
 
   /* ── Skeleton loading ── */
@@ -866,12 +937,18 @@
       align-self: flex-start;
     }
 
-    .profil__hs-grid {
-      grid-template-columns: 1fr;
+    .profil__section--pwd {
+      max-width: 100%;
     }
 
-    .profil__hs-field {
-      grid-template-columns: 1fr;
+    .profil__pwd-actions {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .profil__pwd-actions .button {
+      justify-content: center;
+      width: 100%;
     }
   }
 

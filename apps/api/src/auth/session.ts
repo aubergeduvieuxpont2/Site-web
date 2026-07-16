@@ -64,17 +64,21 @@ export function getClearSessionCookieHeader(): string {
   return "session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0";
 }
 
-function generateToken(): string {
+export function generateToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
-async function sha256hex(data: string): Promise<string> {
+export async function sha256hex(data: string): Promise<string> {
   const encoded = new TextEncoder().encode(data);
   const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+export async function invalidateUserSessions(sql: any, userId: number): Promise<void> {
+  await sql`DELETE FROM sessions WHERE user_id = ${userId}`;
 }

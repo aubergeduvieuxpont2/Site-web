@@ -271,7 +271,7 @@ describe("Operations", () => {
         );
       });
 
-      it("finds existing contact by email", async () => {
+      it("finds existing contact by email (no update properties → no PATCH)", async () => {
         const mockFetch = global.fetch as any;
         mockFetch.mockResolvedValueOnce(
           new Response(
@@ -311,6 +311,109 @@ describe("Operations", () => {
             }),
           })
         );
+        // No PATCH since no non-empty update properties
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      it("create path sends firstname/lastname/phone/company", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v3/objects/contacts") && init?.method === "POST") {
+            return Promise.resolve(
+              new Response(JSON.stringify({ id: "new-contact-789" }), {
+                status: 201,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        const result = await executeContactUpsert(mockEnv, {
+          email: "new@example.com",
+          firstname: "Jane",
+          lastname: "Doe",
+          phone: "555-4321",
+          company: "Acme Inc",
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.hubspotId).toBe("new-contact-789");
+
+        const createCall = mockFetch.mock.calls.find(
+          (call: any) =>
+            call[0].includes("/crm/v3/objects/contacts") &&
+            !call[0].includes("/search") &&
+            call[1]?.method === "POST"
+        );
+        expect(createCall).toBeDefined();
+        const body = JSON.parse(createCall[1].body);
+        expect(body.properties).toEqual({
+          email: "new@example.com",
+          firstname: "Jane",
+          lastname: "Doe",
+          phone: "555-4321",
+          company: "Acme Inc",
+        });
+      });
+
+      it("update path PATCHes existing contact, omits empty properties", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(
+                JSON.stringify({ results: [{ id: "existing-contact-456" }] }),
+                { status: 200, headers: { "Content-Type": "application/json" } }
+              )
+            );
+          }
+          if (
+            url.includes("/crm/v3/objects/contacts/existing-contact-456") &&
+            init?.method === "PATCH"
+          ) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ id: "existing-contact-456" }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        const result = await executeContactUpsert(mockEnv, {
+          email: "existing@example.com",
+          firstname: "Jane",
+          lastname: "",
+          phone: "555-9999",
+          company: "",
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.hubspotId).toBe("existing-contact-456");
+
+        const patchCall = mockFetch.mock.calls.find(
+          (call: any) =>
+            call[0].includes("/crm/v3/objects/contacts/existing-contact-456") &&
+            call[1]?.method === "PATCH"
+        );
+        expect(patchCall).toBeDefined();
+        const body = JSON.parse(patchCall[1].body);
+        expect(body.properties).toEqual({
+          firstname: "Jane",
+          phone: "555-9999",
+        });
+        expect(body.properties).not.toHaveProperty("lastname");
+        expect(body.properties).not.toHaveProperty("company");
       });
     });
 

@@ -91,23 +91,45 @@
         >
       </a>
       {#if user}
-        <a
-          href="/profil"
-          class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
-        >
-          <span
-            class="text-sm font-medium {isActive("/profil", $page.url.pathname)
-              ? 'text-terracotta'
-              : 'text-ink hover:text-terracotta'} transition-colors"
-            >Profil</span
+        {#if user.role === "admin"}
+          <a
+            href="/admin"
+            data-testid="nav-admin-link"
+            class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
           >
-          {#if isActive("/profil", $page.url.pathname)}
             <span
-              class="absolute inset-x-3 -bottom-px h-[3px] bg-terracotta"
-              aria-hidden="true"
-            ></span>
-          {/if}
-        </a>
+              class="text-sm font-medium {isActive('/admin', $page.url.pathname)
+                ? 'text-terracotta'
+                : 'text-ink hover:text-terracotta'} transition-colors"
+              >Admin</span
+            >
+            {#if isActive('/admin', $page.url.pathname)}
+              <span
+                class="absolute inset-x-3 -bottom-px h-[3px] bg-terracotta"
+                aria-hidden="true"
+              ></span>
+            {/if}
+          </a>
+        {:else}
+          <a
+            href="/profil"
+            data-testid="nav-profil-link"
+            class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
+          >
+            <span
+              class="text-sm font-medium {isActive('/profil', $page.url.pathname)
+                ? 'text-terracotta'
+                : 'text-ink hover:text-terracotta'} transition-colors"
+              >Profil</span
+            >
+            {#if isActive('/profil', $page.url.pathname)}
+              <span
+                class="absolute inset-x-3 -bottom-px h-[3px] bg-terracotta"
+                aria-hidden="true"
+              ></span>
+            {/if}
+          </a>
+        {/if}
       {/if}
     </nav>
 
@@ -179,18 +201,35 @@
         <span class="text-ink-mute">→</span>
       </a>
       {#if user}
-        <a
-          href="/profil"
-          class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
-        >
-          <span
-            class="text-lg font-medium {isActive("/profil", $page.url.pathname)
-              ? 'text-terracotta'
-              : 'text-ink'}"
-            >Profil</span
+        {#if user.role === "admin"}
+          <a
+            href="/admin"
+            data-testid="nav-admin-link-mobile"
+            class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
           >
-          <span class="text-ink-mute">→</span>
-        </a>
+            <span
+              class="text-lg font-medium {isActive('/admin', $page.url.pathname)
+                ? 'text-terracotta'
+                : 'text-ink'}"
+              >Admin</span
+            >
+            <span class="text-ink-mute">→</span>
+          </a>
+        {:else}
+          <a
+            href="/profil"
+            data-testid="nav-profil-link-mobile"
+            class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
+          >
+            <span
+              class="text-lg font-medium {isActive('/profil', $page.url.pathname)
+                ? 'text-terracotta'
+                : 'text-ink'}"
+              >Profil</span
+            >
+            <span class="text-ink-mute">→</span>
+          </a>
+        {/if}
       {/if}
       <a
         href="/contact"

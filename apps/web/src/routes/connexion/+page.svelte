@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { login, register, isError } from "$lib/api";
+  import { login, register, forgotPassword, isError } from "$lib/api";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
 
@@ -10,10 +10,20 @@
   let loginError = $state("");
   let loginStatus = $state<"idle" | "sending">("idle");
 
+  // ── Forgot-password state ──
+  let forgotOpen = $state(false);
+  let forgotEmail = $state("");
+  let forgotError = $state("");
+  let forgotStatus = $state<"idle" | "sending">("idle");
+  let forgotSent = $state(false);
+
   // ── Register state ──
-  let regName = $state("");
+  let regFirstName = $state("");
+  let regLastName = $state("");
   let regEmail = $state("");
   let regPassword = $state("");
+  let regPhone = $state("");
+  let regCompany = $state("");
   let regError = $state("");
   let regStatus = $state<"idle" | "sending">("idle");
 
@@ -39,6 +49,30 @@
     }
   }
 
+  function toggleForgot() {
+    forgotOpen = !forgotOpen;
+    forgotError = "";
+  }
+
+  async function handleForgot(e: SubmitEvent) {
+    e.preventDefault();
+    if (forgotStatus === "sending") return;
+    forgotError = "";
+    forgotStatus = "sending";
+
+    const result = await forgotPassword(forgotEmail.trim());
+
+    // The API always returns 200 { ok: true } — it never reveals whether the
+    // address exists (no user enumeration). Only a transport failure surfaces;
+    // any success swaps the whole zone for a generic confirmation.
+    if (isError(result)) {
+      forgotError = "Connexion impossible. Veuillez réessayer.";
+      forgotStatus = "idle";
+    } else {
+      forgotSent = true;
+    }
+  }
+
   async function handleRegister(e: SubmitEvent) {
     e.preventDefault();
     if (regStatus === "sending") return;
@@ -53,7 +87,12 @@
 
     regStatus = "sending";
 
-    const result = await register(regEmail, regPassword, regName.trim() || null);
+    const result = await register(regEmail, regPassword, {
+      firstName: regFirstName.trim() || null,
+      lastName: regLastName.trim() || null,
+      phone: regPhone.trim() || null,
+      company: regCompany.trim() || null,
+    });
 
     if (isError(result)) {
       regError =
@@ -133,6 +172,84 @@
           </Button>
         </div>
       </form>
+
+      <!-- ── FORGOT-PASSWORD ZONE ── -->
+      {#if !forgotSent}
+        <div class="connexion__forgot-zone">
+          <button
+            class="connexion__forgot-trigger"
+            type="button"
+            aria-expanded={forgotOpen}
+            aria-controls="forgot-drawer"
+            data-testid="forgot-toggle"
+            onclick={toggleForgot}
+          >
+            <span class="connexion__forgot-chevron" aria-hidden="true">›</span>
+            Mot de passe oublié ?
+          </button>
+
+          <!-- Drawer: grid-rows collapse trick; inert removes it from tab order
+               and the a11y tree while hidden. -->
+          <div
+            class="connexion__forgot-drawer"
+            class:is-open={forgotOpen}
+            id="forgot-drawer"
+            role="region"
+            aria-label="Réinitialisation du mot de passe"
+            inert={!forgotOpen}
+          >
+            <div class="connexion__forgot-drawer-inner">
+              <form
+                class="connexion__forgot-form"
+                novalidate
+                aria-label="Formulaire de réinitialisation"
+                data-testid="forgot-form"
+                onsubmit={handleForgot}
+              >
+                <div class="connexion__field">
+                  <label class="connexion__label" for="forgot-email">
+                    Votre adresse courriel
+                  </label>
+                  <input
+                    class="connexion__input"
+                    id="forgot-email"
+                    type="email"
+                    autocomplete="email"
+                    aria-required="true"
+                    data-testid="forgot-email"
+                    bind:value={forgotEmail}
+                    placeholder="vous@exemple.com"
+                  />
+                </div>
+
+                <div
+                  class="connexion__form-error"
+                  role="alert"
+                  aria-live="assertive"
+                  data-testid="forgot-error"
+                  data-visible={forgotError ? "true" : "false"}
+                >
+                  <span class="connexion__error-text">{forgotError}</span>
+                </div>
+
+                <div class="connexion__actions">
+                  <Button type="submit" variant="primary" disabled={forgotStatus === "sending"}>
+                    {forgotStatus === "sending" ? "Envoi…" : "Envoyer"}
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      {:else}
+        <div class="connexion__forgot-success" data-testid="forgot-success">
+          <span class="connexion__forgot-success-icon" aria-hidden="true">✓</span>
+          <p class="connexion__forgot-success-text">
+            Si cette adresse est associée à un compte, un administrateur pourra
+            vous transmettre un lien de réinitialisation.
+          </p>
+        </div>
+      {/if}
     </section>
 
     <!-- ── REGISTER PANEL ── -->
@@ -154,17 +271,32 @@
         data-testid="form-register"
         onsubmit={handleRegister}
       >
-        <div class="connexion__field">
-          <label class="connexion__label" for="reg-name">Nom (optionnel)</label>
-          <input
-            class="connexion__input"
-            id="reg-name"
-            type="text"
-            autocomplete="name"
-            data-testid="register-name"
-            bind:value={regName}
-            placeholder="Votre nom"
-          />
+        <!-- Name row: first + last side-by-side on ≥480px -->
+        <div class="connexion__name-row">
+          <div class="connexion__field">
+            <label class="connexion__label" for="reg-first-name">Prénom</label>
+            <input
+              class="connexion__input"
+              id="reg-first-name"
+              type="text"
+              autocomplete="given-name"
+              data-testid="register-first-name"
+              bind:value={regFirstName}
+              placeholder="Ada"
+            />
+          </div>
+          <div class="connexion__field">
+            <label class="connexion__label" for="reg-last-name">Nom de famille</label>
+            <input
+              class="connexion__input"
+              id="reg-last-name"
+              type="text"
+              autocomplete="family-name"
+              data-testid="register-last-name"
+              bind:value={regLastName}
+              placeholder="Lovelace"
+            />
+          </div>
         </div>
 
         <div class="connexion__field">
@@ -196,6 +328,38 @@
           <span class="connexion__field-hint" id="reg-password-hint">
             8 caractères minimum
           </span>
+        </div>
+
+        <div class="connexion__field">
+          <label class="connexion__label" for="reg-phone">
+            Téléphone
+            <span class="connexion__field-optional" aria-label="optionnel">(optionnel)</span>
+          </label>
+          <input
+            class="connexion__input"
+            id="reg-phone"
+            type="tel"
+            autocomplete="tel"
+            data-testid="register-phone"
+            bind:value={regPhone}
+            placeholder="+1 418 555-0100"
+          />
+        </div>
+
+        <div class="connexion__field">
+          <label class="connexion__label" for="reg-company">
+            Employeur / entreprise
+            <span class="connexion__field-optional" aria-label="optionnel">(optionnel)</span>
+          </label>
+          <input
+            class="connexion__input"
+            id="reg-company"
+            type="text"
+            autocomplete="organization"
+            data-testid="register-company"
+            bind:value={regCompany}
+            placeholder="Hydro-Québec"
+          />
         </div>
 
         <div
@@ -439,11 +603,150 @@
     justify-content: center;
   }
 
+  /* ── Name row (first + last name side-by-side) ── */
+  .connexion__name-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md);
+  }
+
+  @media (max-width: 479px) {
+    .connexion__name-row {
+      grid-template-columns: 1fr;
+      gap: var(--space-lg);
+    }
+  }
+
+  /* ── Optional field label suffix ── */
+  .connexion__field-optional {
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--color-outline);
+    margin-left: var(--space-xs);
+  }
+
+  /* ── Forgot-password zone ── */
+  .connexion__forgot-zone {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-outline-variant);
+  }
+
+  /* Trigger — unstyled base, presented as a subdued text link. */
+  .connexion__forgot-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--color-ink-variant);
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition:
+      color 150ms ease,
+      text-decoration-color 150ms ease;
+    min-height: 44px; /* 44px touch target */
+  }
+
+  .connexion__forgot-trigger:hover {
+    color: var(--color-ink);
+    text-decoration-color: var(--color-outline);
+  }
+
+  .connexion__forgot-trigger:focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* Chevron rotates 90° when the drawer is expanded. */
+  .connexion__forgot-chevron {
+    display: inline-block;
+    font-style: normal;
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .connexion__forgot-trigger[aria-expanded="true"] .connexion__forgot-chevron {
+    transform: rotate(90deg);
+  }
+
+  /* ── Drawer: grid-rows collapse trick (0fr → 1fr) ── */
+  .connexion__forgot-drawer {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 0;
+  }
+
+  .connexion__forgot-drawer.is-open {
+    grid-template-rows: 1fr;
+    margin-top: var(--space-md);
+  }
+
+  /* min-height: 0 is required for the collapse to reach 0fr. */
+  .connexion__forgot-drawer-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .connexion__forgot-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding-bottom: var(--space-xs);
+  }
+
+  /* ── Forgot-password success state ── */
+  .connexion__forgot-success {
+    margin-top: var(--space-lg);
+    padding-top: var(--space-md);
+    border-top: 1px solid var(--color-outline-variant);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .connexion__forgot-success-icon {
+    flex-shrink: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--color-forest);
+    font-family: var(--font-mono);
+    font-weight: 700;
+  }
+
+  .connexion__forgot-success-text {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.6;
+    color: var(--color-ink);
+    margin: 0;
+  }
+
   /* ── Reduced motion: kill the accent bar transition ── */
   @media (prefers-reduced-motion: reduce) {
     .connexion__panel::before,
-    .connexion__input {
+    .connexion__input,
+    .connexion__forgot-trigger,
+    .connexion__forgot-chevron,
+    .connexion__forgot-drawer {
       transition: none;
+    }
+    /* Instant show/hide instead of the collapse animation. */
+    .connexion__forgot-drawer:not(.is-open) {
+      display: none;
     }
   }
 

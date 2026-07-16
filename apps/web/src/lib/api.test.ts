@@ -5,7 +5,10 @@ import {
   getMe,
   login,
   register,
+  forgotPassword,
+  resetPassword,
   logout,
+  changePassword,
   getProfile,
   adminReservations,
   adminOutbox,
@@ -122,21 +125,67 @@ describe("auth helpers", () => {
     expect(lastCall(calls).url).toBe("/api/auth/login");
   });
 
-  it("register sends name (defaulting to null) and maps 409 to an error", async () => {
+  it("register sends null profile fields by default and maps 409 to an error", async () => {
     const { calls } = stubFetch({ error: "Un compte existe déjà" }, 409);
     const res = await register("dup@ex.com", "longenough");
     expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
       email: "dup@ex.com",
       password: "longenough",
-      name: null,
+      firstName: null,
+      lastName: null,
+      phone: null,
+      company: null,
     });
     expect(res).toEqual({ error: "Un compte existe déjà" });
   });
 
-  it("register forwards an explicit name", async () => {
+  it("register forwards explicit profile fields", async () => {
     const { calls } = stubFetch({ user: { id: 2 } }, 201);
-    await register("new@ex.com", "longenough", "Marie");
-    expect(JSON.parse(lastCall(calls).init.body as string).name).toBe("Marie");
+    await register("new@ex.com", "longenough", {
+      firstName: "Marie",
+      lastName: "Curie",
+      company: "Hydro-Québec",
+    });
+    expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
+      email: "new@ex.com",
+      password: "longenough",
+      firstName: "Marie",
+      lastName: "Curie",
+      phone: null,
+      company: "Hydro-Québec",
+    });
+  });
+
+  it("forgotPassword POSTs only the email to /api/auth/forgot", async () => {
+    const { calls } = stubFetch({ ok: true });
+    const res = await forgotPassword("who@ex.com");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/auth/forgot");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({ email: "who@ex.com" });
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("resetPassword POSTs the token and new password to /api/auth/reset", async () => {
+    const { calls } = stubFetch({ ok: true });
+    const res = await resetPassword("tok-123", "newpass34");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/auth/reset");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({
+      token: "tok-123",
+      newPassword: "newpass34",
+    });
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("resetPassword surfaces an invalid/expired token error", async () => {
+    stubFetch({ error: "Lien invalide ou expiré" }, 400);
+    const res = await resetPassword("bad-token", "newpass34");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Lien invalide ou expiré" });
   });
 
   it("logout POSTs to /api/auth/logout", async () => {
@@ -146,6 +195,33 @@ describe("auth helpers", () => {
     expect(url).toBe("/api/auth/logout");
     expect(init.method).toBe("POST");
     expect(res).toEqual({ ok: true });
+  });
+
+  it("changePassword POSTs both passwords in the body to /api/auth/password", async () => {
+    const { calls } = stubFetch({ ok: true });
+    const res = await changePassword("oldpass12", "newpass34");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/auth/password");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({
+      currentPassword: "oldpass12",
+      newPassword: "newpass34",
+    });
+    expect(res).toEqual({ ok: true });
+  });
+
+  it("changePassword surfaces a 400 wrong-current-password error", async () => {
+    stubFetch({ error: "Mot de passe actuel incorrect" }, 400);
+    const res = await changePassword("wrong", "newpass34");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Mot de passe actuel incorrect" });
+  });
+
+  it("changePassword surfaces a 401 when unauthenticated", async () => {
+    stubFetch({ error: "Non authentifié" }, 401);
+    const res = await changePassword("oldpass12", "newpass34");
+    expect(isError(res)).toBe(true);
   });
 });
 

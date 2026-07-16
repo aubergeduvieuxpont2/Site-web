@@ -1,0 +1,662 @@
+REQ:
+  R-PROF-001:
+    actor: Guest user
+    capability: register with first name, last name, phone, company persisted on users
+    constraints: name is derived "First Last" and still written; new columns nullable
+    priority: MUST
+    tests:
+      - T-PROF-001a
+      - T-PROF-001b
+  R-PROF-002:
+    actor: API
+    capability: enqueue a contact.upsert to the HubSpot gateway on registration
+    constraints: inside executionCtx.waitUntil; enqueue failure never fails registration
+    priority: MUST
+    tests:
+      - T-PROF-002a
+      - T-PROF-002b
+  R-HS-001:
+    actor: HubSpot gateway
+    capability: true upsert of a contact (create if absent else PATCH)
+    constraints: send only non-empty properties; never blank existing values
+    priority: MUST
+    tests:
+      - T-HS-001a
+      - T-HS-001b
+  R-PROF-003:
+    actor: Authenticated user
+    capability: fetch profile without any HubSpot data
+    constraints: response has no hubspot field; page renders no HubSpot DOM
+    priority: MUST
+    tests:
+      - T-PROF-003a
+  R-SET-001:
+    actor: Public client
+    capability: read public settings limited to price and email
+    constraints: "GET /api/settings returns exactly nightlyPrice and contactEmail"
+    priority: MUST
+    tests:
+      - T-SET-001a
+      - T-SET-001b
+  R-ROOM-001:
+    actor: Public client
+    capability: read room visibility list
+    constraints: "each element has exactly slug and is_public"
+    priority: MUST
+    tests:
+      - T-ROOM-001a
+  R-ROOM-002:
+    actor: Admin user
+    capability: toggle a room card visibility
+    constraints: admin-gated; unknown slug returns 404; controls rendering only
+    priority: MUST
+    tests:
+      - T-ROOM-002a
+      - T-ROOM-002b
+  R-PWD-001:
+    actor: Authenticated user
+    capability: change own password
+    constraints: verify current with verifyPassword; new min 8; French errors
+    priority: MUST
+    tests:
+      - T-PWD-001a
+      - T-PWD-001b
+  R-PWD-002:
+    actor: Any user
+    capability: request a password reset without revealing account existence
+    constraints: always 200 identical body; rate-limited; token only if account exists
+    priority: MUST
+    tests:
+      - T-PWD-002a
+      - T-PWD-002b
+  R-PWD-003:
+    actor: Any user
+    capability: reset password using a single-use expiring token
+    constraints: consumes token; invalidates all sessions for that user; 1 hour TTL
+    priority: MUST
+    tests:
+      - T-PWD-003a
+      - T-PWD-003b
+  R-ADM-001:
+    actor: Admin user
+    capability: list and search users by email
+    constraints: admin-gated; returns email, name, role, created_at
+    priority: MUST
+    tests:
+      - T-ADM-001a
+  R-ADM-002:
+    actor: Admin user
+    capability: promote or demote another user role
+    constraints: admin-gated; server refuses changing own role; role enum guest or admin
+    priority: MUST
+    tests:
+      - T-ADM-002a
+      - T-ADM-002b
+  R-ADM-003:
+    actor: Admin user
+    capability: generate a one-time reset link for manual delivery
+    constraints: admin-gated; returns a reinitialisation URL with a token
+    priority: MUST
+    tests:
+      - T-ADM-003a
+  R-NAV-001:
+    actor: Admin user
+    capability: be routed to admin console instead of a profile page
+    constraints: "/profil redirects admins to /admin; nav shows admin link for admins"
+    priority: MUST
+    tests:
+      - T-NAV-001a
+      - T-NAV-001b
+
+E:
+  E-User:
+    fields:
+      id: bigint
+      email: text
+      password_hash: text
+      name: text nullable
+      first_name: text nullable
+      last_name: text nullable
+      phone: text nullable
+      company: text nullable
+      role: text default guest
+      created_at: timestamptz
+    invariants:
+      - INV-name-derived
+  E-RoomVisibility:
+    fields:
+      slug: text primary key
+      is_public: boolean not null default true
+      updated_at: timestamptz
+    invariants:
+      - INV-rooms-public-shape
+  E-PasswordResetToken:
+    fields:
+      token_hash: text primary key
+      user_id: bigint fk users
+      expires_at: timestamptz
+      used_at: timestamptz nullable
+      created_at: timestamptz
+    invariants:
+      - INV-token-hashed
+      - INV-token-single-use
+  E-Settings:
+    fields:
+      key: text primary key
+      value: text
+      updated_at: timestamptz
+    invariants:
+      - INV-settings-two-keys
+
+OP:
+  OP-Auth.register:
+    input: { email: string, password: string, firstName: string, lastName: string, phone: string, company: string }
+    auth: []
+    pre: []
+    err:
+      - ERR-DUPLICATE
+    out: { user: object }
+  OP-Auth.changePassword:
+    input: { currentPassword: string, newPassword: string }
+    auth: [user-session]
+    pre: []
+    err:
+      - ERR-UNAUTH
+      - ERR-BADPWD
+    out: { ok: boolean }
+  OP-Auth.forgot:
+    input: { email: string }
+    auth: []
+    pre: []
+    err: []
+    out: { ok: boolean }
+  OP-Auth.reset:
+    input: { token: string, newPassword: string }
+    auth: []
+    pre: []
+    err:
+      - ERR-BADTOKEN
+    out: { ok: boolean }
+  OP-Rooms.listPublic:
+    input: {}
+    auth: []
+    pre: []
+    err: []
+    out: { rooms: array }
+  OP-Rooms.setVisibility:
+    input: { slug: string, isPublic: boolean }
+    auth: [admin]
+    pre: []
+    err:
+      - ERR-UNAUTH
+      - ERR-FORBIDDEN
+      - ERR-NOTFOUND
+    out: { room: object }
+  OP-Users.list:
+    input: { q: string }
+    auth: [admin]
+    pre: []
+    err:
+      - ERR-UNAUTH
+      - ERR-FORBIDDEN
+    out: { users: array }
+  OP-Users.setRole:
+    input: { id: string, role: string }
+    auth: [admin]
+    pre: []
+    err:
+      - ERR-UNAUTH
+      - ERR-FORBIDDEN
+      - ERR-SELFROLE
+      - ERR-NOTFOUND
+    out: { user: object }
+  OP-Users.resetLink:
+    input: { id: string }
+    auth: [admin]
+    pre: []
+    err:
+      - ERR-UNAUTH
+      - ERR-FORBIDDEN
+      - ERR-NOTFOUND
+    out: { url: string }
+  OP-Contact.upsert:
+    input: { email: string, name: string, firstname: string, lastname: string, phone: string, company: string }
+    auth: []
+    pre: []
+    err: []
+    out: { ok: boolean, hubspotId: string }
+
+ERR:
+  ERR-DUPLICATE:
+    code: 409
+    meaning: an account already exists for this email
+  ERR-UNAUTH:
+    code: 401
+    meaning: no valid session
+  ERR-FORBIDDEN:
+    code: 403
+    meaning: authenticated but not an admin
+  ERR-BADPWD:
+    code: 400
+    meaning: current password incorrect or new password too short
+  ERR-BADTOKEN:
+    code: 400
+    meaning: reset token invalid, expired, or already used
+  ERR-SELFROLE:
+    code: 400
+    meaning: an admin may not change their own role
+  ERR-NOTFOUND:
+    code: 404
+    meaning: target user or room slug does not exist
+
+AUTH:
+  user-session: any authenticated user acting on their own account
+  admin: user whose role equals admin, enforced by inline getAuthUser gate
+
+INV:
+  INV-name-derived: users.name is always the derived First Last full name when first or last present
+  INV-rooms-public-shape: the public rooms endpoint returns only slug and is_public per element
+  INV-token-hashed: password reset tokens are stored only as their SHA-256 hash
+  INV-token-single-use: a reset token validates only while used_at is null and not expired
+  INV-settings-two-keys: public and admin settings expose only nightlyPrice and contactEmail
+  INV-no-enumeration: the forgot endpoint returns an identical response regardless of account existence
+  INV-secret-free-frontend: no secret is ever present in apps/web
+
+API:
+  POST /api/auth/register:
+    input: OP-Auth.register
+    output: E-User
+    errors: [ERR-DUPLICATE]
+    auth: null
+  POST /api/auth/password:
+    input: OP-Auth.changePassword
+    output: { ok: boolean }
+    errors: [ERR-UNAUTH, ERR-BADPWD]
+    auth: user-session
+  POST /api/auth/forgot:
+    input: OP-Auth.forgot
+    output: { ok: boolean }
+    errors: []
+    auth: null
+  POST /api/auth/reset:
+    input: OP-Auth.reset
+    output: { ok: boolean }
+    errors: [ERR-BADTOKEN]
+    auth: null
+  GET /api/profile:
+    input: {}
+    output: { user: E-User, reservations: array }
+    errors: [ERR-UNAUTH]
+    auth: user-session
+  GET /api/settings:
+    input: {}
+    output: E-Settings
+    errors: []
+    auth: null
+  GET /api/rooms:
+    input: {}
+    output: E-RoomVisibility
+    errors: []
+    auth: null
+  GET /api/admin/rooms:
+    input: {}
+    output: { rooms: array }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN]
+    auth: admin
+  POST /api/admin/rooms/{slug}:
+    input: OP-Rooms.setVisibility
+    output: { room: E-RoomVisibility }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-NOTFOUND]
+    auth: admin
+  GET /api/admin/users:
+    input: OP-Users.list
+    output: { users: array }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN]
+    auth: admin
+  POST /api/admin/users/{id}/role:
+    input: OP-Users.setRole
+    output: { user: E-User }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-SELFROLE, ERR-NOTFOUND]
+    auth: admin
+  POST /api/admin/users/{id}/reset-link:
+    input: OP-Users.resetLink
+    output: { url: string }
+    errors: [ERR-UNAUTH, ERR-FORBIDDEN, ERR-NOTFOUND]
+    auth: admin
+
+UI:
+  screen-connexion:
+    actions: [register, login, forgot]
+    state: { idle, sending, forgot-sent, error }
+  screen-reinitialisation:
+    actions: [submit-new-password]
+    state: { idle, sending, success, error }
+  screen-profil:
+    actions: [change-password, logout]
+    state: { loading, loaded, error }
+  screen-admin:
+    actions: [view-reservations, view-outbox, edit-settings, change-password, toggle-room, search-users, set-role, generate-reset-link]
+    state: { loading, denied, loaded }
+
+DATA:
+  users: add nullable first_name, last_name, phone, company (migration 0008)
+  room_visibility: slug pk, is_public bool default true, updated_at; seed 3 slugs (migration 0009)
+  password_reset_tokens: token_hash pk, user_id fk, expires_at, used_at, created_at; index on user_id (migration 0010)
+  settings: stop reading or writing marketing_room_count and assignable_room_count (no migration)
+
+TEST:
+  T-PROF-001a:
+    verifies: R-PROF-001
+    behaviour: "register persists first_name, last_name, phone, company and a derived name"
+    steps:
+      - POST /api/auth/register with firstName Jean lastName Roy phone 418 company Acme
+      - assert inserted columns present and name equals Jean Roy
+  T-PROF-001b:
+    verifies: R-PROF-001
+    behaviour: "richer register form posts the new fields"
+    steps:
+      - render /connexion, fill new fields, submit
+      - assert register client called with the new fields
+  T-PROF-002a:
+    verifies: R-PROF-002
+    behaviour: "register enqueues one contact.upsert to the HubSpot fetcher"
+    steps:
+      - POST /api/auth/register with a mock HUBSPOT fetcher
+      - assert one enqueue call to http://hubspot/ops/enqueue with kind contact.upsert
+  T-PROF-002b:
+    verifies: R-PROF-002
+    behaviour: "a thrown enqueue still returns 201"
+    steps:
+      - mock HUBSPOT.fetch to throw
+      - POST /api/auth/register, assert 201 and user returned
+  T-HS-001a:
+    verifies: R-HS-001
+    behaviour: "contact.upsert creates a new contact with mapped properties"
+    steps:
+      - mock search to return no results
+      - execute contact.upsert, assert POST create carries firstname lastname phone company
+  T-HS-001b:
+    verifies: R-HS-001
+    behaviour: "contact.upsert PATCHes an existing contact and omits empty properties"
+    steps:
+      - mock search to return an id
+      - execute with empty phone, assert PATCH sent and phone not included
+  T-PROF-003a:
+    verifies: R-PROF-003
+    behaviour: "profile response has no hubspot field"
+    steps:
+      - GET /api/profile authenticated
+      - assert response has user and reservations and no hubspot key
+  T-SET-001a:
+    verifies: R-SET-001
+    behaviour: "public settings expose only price and email"
+    steps:
+      - call toPublicSettings, assert keys equal contactEmail and nightlyPrice
+  T-SET-001b:
+    verifies: R-SET-001
+    behaviour: "SettingsUpdateSchema accepts only price and email"
+    steps:
+      - parse valid two-key payload success
+      - room count keys are ignored or rejected as extra
+  T-ROOM-001a:
+    verifies: R-ROOM-001
+    behaviour: "GET /api/rooms returns only slug and is_public per element"
+    steps:
+      - GET /api/rooms, assert every element key set equals slug and is_public
+  T-ROOM-002a:
+    verifies: R-ROOM-002
+    behaviour: "admin toggles room visibility"
+    steps:
+      - POST /api/admin/rooms/refuge-rider isPublic false as admin, assert row updated
+  T-ROOM-002b:
+    verifies: R-ROOM-002
+    behaviour: "room visibility endpoints are admin-gated"
+    steps:
+      - call as unauthenticated then as guest, assert 401 then 403
+  T-PWD-001a:
+    verifies: R-PWD-001
+    behaviour: "change password succeeds with correct current password"
+    steps:
+      - POST /api/auth/password with correct current, assert 200 and login with new password works
+  T-PWD-001b:
+    verifies: R-PWD-001
+    behaviour: "change password rejects wrong current password"
+    steps:
+      - POST /api/auth/password with wrong current, assert 400 French message
+  T-PWD-002a:
+    verifies: R-PWD-002
+    behaviour: "forgot returns identical 200 for existing and missing accounts"
+    steps:
+      - POST /api/auth/forgot for existing then missing email, assert identical 200 body
+  T-PWD-002b:
+    verifies: R-PWD-002
+    behaviour: "forgot is rate limited"
+    steps:
+      - exceed the auth rate limit, assert 429
+  T-PWD-003a:
+    verifies: R-PWD-003
+    behaviour: "reset consumes a single-use token and sets the new password"
+    steps:
+      - POST /api/auth/reset with a valid token, assert 200 then reuse assert 400
+  T-PWD-003b:
+    verifies: R-PWD-003
+    behaviour: "reset invalidates all sessions for the user"
+    steps:
+      - reset password, assert prior sessions no longer validate
+  T-ADM-001a:
+    verifies: R-ADM-001
+    behaviour: "admin lists and searches users by email"
+    steps:
+      - GET /api/admin/users?q=admin as admin, assert filtered rows
+  T-ADM-002a:
+    verifies: R-ADM-002
+    behaviour: "admin promotes and demotes another user"
+    steps:
+      - POST /api/admin/users/2/role role admin then guest, assert row role changes
+  T-ADM-002b:
+    verifies: R-ADM-002
+    behaviour: "admin cannot change own role"
+    steps:
+      - POST /api/admin/users/self/role, assert 400 and unchanged
+  T-ADM-003a:
+    verifies: R-ADM-003
+    behaviour: "admin generates a one-time reset link"
+    steps:
+      - POST /api/admin/users/2/reset-link, assert url contains /reinitialisation and a token
+  T-NAV-001a:
+    verifies: R-NAV-001
+    behaviour: "admin visiting profil is redirected to admin"
+    steps:
+      - mount /profil as admin, assert navigation to /admin
+  T-NAV-001b:
+    verifies: R-NAV-001
+    behaviour: "nav shows admin link for admins and profil link for guests"
+    steps:
+      - render Nav with admin user, assert admin link; with guest, assert profil link
+
+NFR:
+  security: no user enumeration on forgot; tokens hashed at rest, single-use, 1 hour TTL; reset invalidates sessions
+  ratelimit: forgot and reset behind authRateLimiter, 10 per 15 minutes per IP
+  responsiveness: all new UI works at mobile and desktop widths in French
+  observability: outbox retains contact.upsert rows visible in the admin File HubSpot tab
+  compatibility: existing users with only name still authenticate; migrations idempotent
+
+FILE:
+  apps/api/migrations/0008_users_profile_fields.sql: TASK-migrations
+  apps/api/migrations/0009_room_visibility.sql: TASK-migrations
+  apps/api/migrations/0010_password_reset_tokens.sql: TASK-migrations
+  apps/api/src/auth/session.ts: TASK-api-auth
+  apps/api/src/settings.ts: TASK-api-settings
+  apps/api/test/settings.test.ts: TASK-api-settings
+  apps/api/src/index.ts: TASK-api-routes
+  apps/api/test/**: TASK-api-routes
+  apps/hubspot/src/ops/contact.ts: TASK-hubspot
+  apps/hubspot/test/ops.test.ts: TASK-hubspot
+  apps/web/src/lib/api.ts: TASK-web-api
+  apps/web/src/lib/settings.svelte.ts: TASK-web-api
+  apps/web/src/lib/__tests__/settings.test.ts: TASK-web-api
+  apps/web/src/lib/components/Nav.svelte: TASK-web-nav
+  apps/web/src/routes/+page.svelte: TASK-web-nav
+  apps/web/src/routes/connexion/**: TASK-web-auth
+  apps/web/src/routes/reinitialisation/**: TASK-web-auth
+  apps/web/src/routes/profil/**: TASK-web-profil
+  apps/web/src/routes/admin/**: TASK-web-admin
+  apps/web/src/routes/le-site/**: TASK-web-rooms
+  apps/web/src/routes/__tests__/**: TASK-web-admin
+
+TASK:
+  TASK-migrations:
+    scope:
+      - R-PROF-001
+      - R-ROOM-001
+      - R-PWD-003
+    files:
+      - apps/api/migrations/0008_users_profile_fields.sql
+      - apps/api/migrations/0009_room_visibility.sql
+      - apps/api/migrations/0010_password_reset_tokens.sql
+    must_preserve:
+      - INV-token-hashed
+    produce: [migrations]
+    verifies: [R-PROF-001]
+  TASK-api-auth:
+    scope:
+      - R-PWD-003
+    files:
+      - apps/api/src/auth/session.ts
+    must_preserve:
+      - INV-token-hashed
+      - INV-token-single-use
+    produce: [code]
+    verifies: [R-PWD-003]
+  TASK-api-settings:
+    scope:
+      - R-SET-001
+    files:
+      - apps/api/src/settings.ts
+      - apps/api/test/settings.test.ts
+    must_preserve:
+      - INV-settings-two-keys
+    produce: [code, tests]
+    verifies: [R-SET-001]
+  TASK-hubspot:
+    scope:
+      - R-HS-001
+    files:
+      - apps/hubspot/src/ops/contact.ts
+      - apps/hubspot/test/ops.test.ts
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-HS-001]
+  TASK-api-routes:
+    scope:
+      - R-PROF-001
+      - R-PROF-002
+      - R-PROF-003
+      - R-PWD-001
+      - R-PWD-002
+      - R-PWD-003
+      - R-ROOM-001
+      - R-ROOM-002
+      - R-ADM-001
+      - R-ADM-002
+      - R-ADM-003
+    files:
+      - apps/api/src/index.ts
+      - apps/api/test/**
+    must_preserve:
+      - INV-no-enumeration
+      - INV-name-derived
+      - INV-token-single-use
+    produce: [code, tests]
+    verifies: [R-PROF-002, R-PWD-001, R-PWD-002, R-ROOM-002, R-ADM-002]
+  TASK-web-api:
+    scope:
+      - R-SET-001
+      - R-ROOM-001
+      - R-PWD-001
+    files:
+      - apps/web/src/lib/api.ts
+      - apps/web/src/lib/settings.svelte.ts
+      - apps/web/src/lib/__tests__/settings.test.ts
+    must_preserve:
+      - INV-secret-free-frontend
+    produce: [code, tests]
+    verifies: [R-SET-001]
+  TASK-web-nav:
+    scope:
+      - R-NAV-001
+      - R-SET-001
+    files:
+      - apps/web/src/lib/components/Nav.svelte
+      - apps/web/src/routes/+page.svelte
+    must_preserve: []
+    produce: [code]
+    verifies: [R-NAV-001]
+  TASK-web-auth:
+    scope:
+      - R-PROF-001
+      - R-PWD-002
+      - R-PWD-003
+    files:
+      - apps/web/src/routes/connexion/**
+      - apps/web/src/routes/reinitialisation/**
+    must_preserve:
+      - INV-no-enumeration
+    produce: [code, tests]
+    verifies: [R-PROF-001, R-PWD-003]
+  TASK-web-profil:
+    scope:
+      - R-PROF-003
+      - R-PWD-001
+      - R-NAV-001
+    files:
+      - apps/web/src/routes/profil/**
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-PROF-003, R-PWD-001]
+  TASK-web-admin:
+    scope:
+      - R-SET-001
+      - R-ROOM-002
+      - R-ADM-001
+      - R-ADM-002
+      - R-ADM-003
+      - R-PWD-001
+    files:
+      - apps/web/src/routes/admin/**
+      - apps/web/src/routes/__tests__/**
+    must_preserve: []
+    produce: [code, tests]
+    verifies: [R-ROOM-002, R-ADM-002, R-ADM-003]
+  TASK-web-rooms:
+    scope:
+      - R-ROOM-001
+      - R-ROOM-002
+    files:
+      - apps/web/src/routes/le-site/**
+    must_preserve:
+      - INV-rooms-public-shape
+    produce: [code, tests]
+    verifies: [R-ROOM-001]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: Reset tokens reuse generateToken and sha256hex; only the hash is stored
+    rationale: "mirrors the sessions table; no new crypto surface"
+  ST-02:
+    status: locked
+    decision: Removing the two room-count settings keys is code-only with no down migration
+    rationale: "lingering rows are harmless; avoids a destructive migration"
+  ST-03:
+    status: locked
+    decision: users.name stays the derived source of truth for display and HubSpot name
+    rationale: "keeps every existing consumer backward compatible"
+  ST-04:
+    status: locked
+    decision: A successful password reset invalidates all sessions for that user
+    rationale: "limits blast radius if a token leaked"
+  ST-05:
+    status: locked
+    decision: "Forgot rate limiting is enforced per-IP and per-email (both)"
+    rationale: "per-email throttling blocks targeted token-flooding of one account even from many IPs; reuses the existing rate-limiter pattern"

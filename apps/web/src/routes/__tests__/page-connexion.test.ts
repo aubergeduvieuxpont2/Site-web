@@ -10,9 +10,11 @@ vi.mock("$app/navigation", () => ({
 
 const login = vi.fn((..._args: unknown[]) => Promise.resolve<unknown>(undefined));
 const register = vi.fn((..._args: unknown[]) => Promise.resolve<unknown>(undefined));
+const forgotPassword = vi.fn((..._args: unknown[]) => Promise.resolve<unknown>(undefined));
 vi.mock("$lib/api", () => ({
   login: (...args: unknown[]) => login(...args),
   register: (...args: unknown[]) => register(...args),
+  forgotPassword: (...args: unknown[]) => forgotPassword(...args),
   // Re-implement the real guard so the page's branching is exercised honestly.
   isError: (r: unknown) =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as { error: unknown }).error === "string",
@@ -30,6 +32,7 @@ beforeEach(() => {
   goto.mockClear();
   login.mockReset();
   register.mockReset();
+  forgotPassword.mockReset();
 });
 
 describe("page-connexion", () => {
@@ -44,7 +47,16 @@ describe("page-connexion", () => {
 
     it("associates every input with a label", () => {
       const { getByTestId, container } = render(Page);
-      for (const id of ["login-email", "login-password", "register-email", "register-password", "register-name"]) {
+      for (const id of [
+        "login-email",
+        "login-password",
+        "register-email",
+        "register-password",
+        "register-first-name",
+        "register-last-name",
+        "register-phone",
+        "register-company",
+      ]) {
         const input = getByTestId(id);
         const forAttr = input.getAttribute("id");
         expect(forAttr).toBeTruthy();
@@ -123,7 +135,7 @@ describe("page-connexion", () => {
       expect(getByTestId("register-error").textContent).toContain("8 caractères");
     });
 
-    it("registers with a trimmed name (null when blank) and redirects on success", async () => {
+    it("registers with all-null profile fields when blank and redirects on success", async () => {
       register.mockResolvedValue({ user: { id: 2, email: "new@b.co", name: null, role: "guest" } });
       const { getByTestId } = render(Page);
 
@@ -132,21 +144,33 @@ describe("page-connexion", () => {
       await fireEvent.submit(getByTestId("form-register"));
       await tick();
 
-      expect(register).toHaveBeenCalledWith("new@b.co", "longenough", null);
+      expect(register).toHaveBeenCalledWith("new@b.co", "longenough", {
+        firstName: null,
+        lastName: null,
+        phone: null,
+        company: null,
+      });
       expect(goto).toHaveBeenCalledWith("/profil");
     });
 
-    it("passes a provided name through, trimmed", async () => {
-      register.mockResolvedValue({ user: { id: 3, email: "n@b.co", name: "Ada", role: "guest" } });
+    it("passes provided profile fields through, trimmed (blank → null)", async () => {
+      register.mockResolvedValue({ user: { id: 3, email: "n@b.co", name: "Ada Lovelace", role: "guest" } });
       const { getByTestId } = render(Page);
 
-      await fireEvent.input(getByTestId("register-name"), { target: { value: "  Ada  " } });
+      await fireEvent.input(getByTestId("register-first-name"), { target: { value: "  Ada  " } });
+      await fireEvent.input(getByTestId("register-last-name"), { target: { value: "Lovelace" } });
+      await fireEvent.input(getByTestId("register-company"), { target: { value: "  Hydro-Québec " } });
       await fireEvent.input(getByTestId("register-email"), { target: { value: "n@b.co" } });
       await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough" } });
       await fireEvent.submit(getByTestId("form-register"));
       await tick();
 
-      expect(register).toHaveBeenCalledWith("n@b.co", "longenough", "Ada");
+      expect(register).toHaveBeenCalledWith("n@b.co", "longenough", {
+        firstName: "Ada",
+        lastName: "Lovelace",
+        phone: null,
+        company: "Hydro-Québec",
+      });
     });
 
     it("surfaces the API error message on a duplicate account (409)", async () => {
@@ -160,6 +184,57 @@ describe("page-connexion", () => {
 
       expect(getByTestId("register-error").textContent).toContain("Un compte existe déjà");
       expect(goto).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("forgot-password flow", () => {
+    it("keeps the drawer collapsed and inert until toggled", async () => {
+      const { getByTestId } = render(Page);
+      const toggle = getByTestId("forgot-toggle");
+      // Svelte 5 reflects `inert` as a DOM property, not an attribute in jsdom.
+      const drawer = document.getElementById("forgot-drawer") as HTMLElement;
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(toggle.getAttribute("aria-controls")).toBe("forgot-drawer");
+      expect(drawer.inert).toBe(true);
+
+      await fireEvent.click(toggle);
+      await tick();
+
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(drawer.inert).toBe(false);
+    });
+
+    it("submits a trimmed email and swaps the zone for a generic confirmation", async () => {
+      forgotPassword.mockResolvedValue({ ok: true });
+      const { getByTestId, queryByTestId } = render(Page);
+
+      await fireEvent.click(getByTestId("forgot-toggle"));
+      await fireEvent.input(getByTestId("forgot-email"), { target: { value: "  who@b.co  " } });
+      await fireEvent.submit(getByTestId("forgot-form"));
+      await tick();
+
+      expect(forgotPassword).toHaveBeenCalledWith("who@b.co");
+      // On success the trigger + drawer are replaced by the confirmation.
+      expect(queryByTestId("forgot-toggle")).toBeNull();
+      expect(getByTestId("forgot-success").textContent).toContain(
+        "associée à un compte",
+      );
+    });
+
+    it("shows a neutral retry message on a transport failure and stays on the form", async () => {
+      forgotPassword.mockResolvedValue({ error: "Réseau indisponible" });
+      const { getByTestId, queryByTestId } = render(Page);
+
+      await fireEvent.click(getByTestId("forgot-toggle"));
+      await fireEvent.input(getByTestId("forgot-email"), { target: { value: "who@b.co" } });
+      await fireEvent.submit(getByTestId("forgot-form"));
+      await tick();
+
+      const err = getByTestId("forgot-error");
+      expect(err.getAttribute("data-visible")).toBe("true");
+      expect(err.textContent).toContain("Connexion impossible");
+      expect(queryByTestId("forgot-success")).toBeNull();
     });
   });
 });
