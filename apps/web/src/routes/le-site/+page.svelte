@@ -247,7 +247,7 @@
           </p>
           <p class="page-le-site__body">
             Un endroit calibré pour ceux qui partent tôt et rentrent tard, avec du béton qu'on
-            lave à grande eau et un déjeuner prêt avant le lever du soleil.
+            lave à grande eau.
           </p>
           <Button variant="secondary" href="/contact">Nous contacter</Button>
         </div>

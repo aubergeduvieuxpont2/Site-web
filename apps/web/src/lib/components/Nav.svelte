@@ -3,27 +3,25 @@
   import { page } from "$app/stores";
   import { NAV, SITE } from "../content";
   import Wordmark from "./Wordmark.svelte";
+  import { auth, clearUser } from "../auth.svelte";
+  import { logout } from "../api";
 
   let scrolled = $state(false);
   let open = $state(false);
-  let user = $state(null as any | null);
 
   onMount(() => {
     const onScroll = () => (scrolled = window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
 
-    fetch("/api/auth/me", { credentials: "include" })
-      .then((res) => {
-        if (res.ok) return res.json();
-      })
-      .then((data) => {
-        if (data?.user) user = data.user;
-      })
-      .catch(() => {});
-
     return () => window.removeEventListener("scroll", onScroll);
   });
+
+  async function handleLogout() {
+    await logout();
+    clearUser();
+    open = false;
+  }
 
   // Close the mobile menu whenever the route changes.
   $effect(() => {
@@ -82,7 +80,7 @@
           {/if}
         </a>
       {/each}
-      {#if !user}
+      {#if !auth.user}
         <a
           href="/connexion"
           data-testid="nav-connexion-link"
@@ -93,8 +91,8 @@
           >
         </a>
       {/if}
-      {#if user}
-        {#if user.role === "admin"}
+      {#if auth.user}
+        {#if auth.user?.role === "admin"}
           <a
             href="/admin"
             data-testid="nav-admin-link"
@@ -133,6 +131,17 @@
             {/if}
           </a>
         {/if}
+        <button
+          type="button"
+          data-testid="nav-logout"
+          class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
+          aria-label="Se déconnecter"
+          onclick={handleLogout}
+        >
+          <span class="text-sm font-medium text-ink hover:text-error transition-colors">
+            Déconnexion
+          </span>
+        </button>
       {/if}
     </nav>
 
@@ -196,7 +205,7 @@
           <span class="text-ink-mute">→</span>
         </a>
       {/each}
-      {#if !user}
+      {#if !auth.user}
         <a
           href="/connexion"
           data-testid="nav-connexion-link-mobile"
@@ -206,8 +215,8 @@
           <span class="text-ink-mute">→</span>
         </a>
       {/if}
-      {#if user}
-        {#if user.role === "admin"}
+      {#if auth.user}
+        {#if auth.user?.role === "admin"}
           <a
             href="/admin"
             data-testid="nav-admin-link-mobile"
@@ -225,7 +234,7 @@
           <a
             href="/profil"
             data-testid="nav-profil-link-mobile"
-            class="flex items-center justify-between border-b border-hairline-2 py-4 last:border-b-0"
+            class="flex items-center justify-between border-b border-hairline-2 py-4"
           >
             <span
               class="text-lg font-medium {isActive('/profil', $page.url.pathname)
@@ -236,6 +245,16 @@
             <span class="text-ink-mute">→</span>
           </a>
         {/if}
+        <button
+          type="button"
+          data-testid="nav-logout-mobile"
+          class="flex w-full items-center justify-between border-b border-hairline-2 py-4 text-left"
+          aria-label="Se déconnecter"
+          onclick={handleLogout}
+        >
+          <span class="text-lg font-medium text-error">Déconnexion</span>
+          <span class="text-ink-mute">→</span>
+        </button>
       {/if}
       <a
         href="/contact"

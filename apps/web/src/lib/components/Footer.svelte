@@ -1,33 +1,32 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { SITE } from "$lib/content";
   import Wordmark from "./Wordmark.svelte";
 
-  let footerEl: HTMLElement | undefined = $state();
+  let footerEl: HTMLElement | undefined;
+  let visible = $state(false);
 
-  $effect(() => {
+  onMount(() => {
     if (!footerEl) return;
 
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      footerEl.classList.add("footer--visible");
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (prefersReducedMotion) {
+      visible = true;
       return;
     }
 
     const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            footerEl!.classList.add("footer--visible");
-            observer.disconnect();
-          }
-        });
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          visible = true;
+          observer.disconnect();
+        }
       },
-      { threshold: 0.1 }
+      { threshold: 0 }
     );
 
     observer.observe(footerEl);
-
-    return () => observer.disconnect();
   });
 
   const phoneRaw = SITE.phoneHref.replace("tel:", "");
@@ -36,6 +35,7 @@
 <footer
   bind:this={footerEl}
   class="footer"
+  class:footer--visible={visible}
   data-testid="footer"
   aria-label="Pied de page"
 >
@@ -108,7 +108,6 @@
     transition: opacity 600ms cubic-bezier(0.33, 1, 0.68, 1);
   }
 
-  /* svelte-ignore css_unused_selector */
   .footer.footer--visible {
     opacity: 1;
   }

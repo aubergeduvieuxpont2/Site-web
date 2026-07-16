@@ -14,6 +14,7 @@ export const DealCreateSchema = z.object({
   description: z.string().optional(),
   pipeline: z.string().optional(),
   dealstage: z.string().optional(),
+  roomCount: z.number().optional(),
 });
 
 export type DealCreatePayload = z.infer<typeof DealCreateSchema>;
@@ -101,6 +102,7 @@ export async function executeDealCreate(
   if (payload.depart) properties.depart_date = payload.depart;
   if (payload.room) properties.room_type = payload.room;
   if (payload.people !== undefined) properties.number_of_guests = payload.people;
+  if (payload.roomCount !== undefined) properties.number_of_rooms = payload.roomCount;
   if (payload.description) properties.description = payload.description;
   if (dedupeKey) properties.dedupe_key = dedupeKey;
 

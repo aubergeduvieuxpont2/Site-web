@@ -229,6 +229,15 @@ describe('page-le-site route', () => {
       const { html } = renderPage();
       expect(html).toMatch(/alt=""/);
     });
+
+    it('does not contain the breakfast reference in lieu section', () => {
+      const { html } = renderPage();
+      const lieuSection = html.substring(
+        html.indexOf('data-testid="section-lieu"'),
+        html.indexOf('</section>', html.indexOf('data-testid="section-lieu"')) + 10
+      );
+      expect(lieuSection).not.toContain('déjeuner prêt avant le lever du soleil');
+    });
   });
 
   describe('CTA strip', () => {

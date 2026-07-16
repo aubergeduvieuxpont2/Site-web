@@ -1,6 +1,5 @@
 <script lang="ts">
   import ImagePanel from './ImagePanel.svelte';
-  import Button from './Button.svelte';
   import { settings } from '../settings.svelte';
 
   let { room } = $props<{
@@ -12,7 +11,6 @@
     };
   }>();
 
-  const contactHref = "/contact";
   const priceLabel = $derived(`${settings.nightlyPrice} $/nuit`);
 </script>
 
@@ -38,10 +36,6 @@
     <p class="room-card__description" data-testid="room-card-description">
       {room.description}
     </p>
-
-    <div class="room-card__cta" data-testid="room-card-cta">
-      <Button variant="secondary" href={contactHref}>Réserver</Button>
-    </div>
   </div>
 </article>
 
@@ -124,9 +118,5 @@
     color: var(--color-ink-variant, #45464d);
     margin: 0;
     flex: 1;
-  }
-
-  .room-card__cta {
-    margin-top: var(--space-md, 16px);
   }
 </style>

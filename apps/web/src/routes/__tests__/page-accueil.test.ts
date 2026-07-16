@@ -1,7 +1,8 @@
 // @vitest-environment node
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render } from 'svelte/server';
 import Page from '../+page.svelte';
+import { settings } from '$lib/settings.svelte';
 
 function renderPage() {
   const result = render(Page, { props: {} });
@@ -93,6 +94,39 @@ describe('+page.svelte (page-accueil SSR)', () => {
       const html = renderPage();
       expect(html).toContain('des principaux chantiers forestiers');
       expect(html).toContain('année de fondation');
+    });
+  });
+
+  // The rooms stat value is bound to the live `settings.publicRoomCount` (change
+  // 3 / criterion #5), NOT the hardcoded STATS[2].value or marketingRoomCount.
+  // Both default to 12, so mutate the store to a distinct value to observe the
+  // binding actually flows through to the rendered markup.
+  describe('rooms stat is driven by settings.publicRoomCount', () => {
+    afterEach(() => {
+      settings.publicRoomCount = 12;
+    });
+
+    it('renders the default publicRoomCount (12) with the rooms label', () => {
+      const html = renderPage();
+      expect(html).toContain('aria-label="12 chambres"');
+      expect(html).toContain("disponibles pour l'équipe");
+    });
+
+    it('reflects a changed publicRoomCount in the rooms stat', () => {
+      settings.publicRoomCount = 7;
+      const html = renderPage();
+      expect(html).toContain('aria-label="7 chambres"');
+      // The other stats are unaffected.
+      expect(html).toContain('aria-label="30 min"');
+    });
+
+    it('does not couple the rooms stat to marketingRoomCount', () => {
+      settings.publicRoomCount = 5;
+      settings.marketingRoomCount = 99;
+      const html = renderPage();
+      expect(html).toContain('aria-label="5 chambres"');
+      expect(html).not.toContain('aria-label="99 chambres"');
+      settings.marketingRoomCount = 12;
     });
   });
 

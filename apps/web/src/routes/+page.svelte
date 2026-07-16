@@ -17,7 +17,7 @@
   const renderedStats = $derived([
     STATS[0],
     { ...STATS[1], localize: false },
-    { ...STATS[2], value: settings.marketingRoomCount },
+    { ...STATS[2], value: settings.publicRoomCount },
     STATS[3],
   ]);
 </script>

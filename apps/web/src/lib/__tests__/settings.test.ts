@@ -18,6 +18,9 @@ function mergeSettings(
     ...(incoming.marketingRoomCount !== undefined && {
       marketingRoomCount: incoming.marketingRoomCount,
     }),
+    ...(incoming.publicRoomCount !== undefined && {
+      publicRoomCount: incoming.publicRoomCount,
+    }),
   };
 }
 
@@ -35,6 +38,7 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
         marketingRoomCount: 12,
+        publicRoomCount: 12,
       };
       const incoming = {
         contactEmail: "new@example.com",
@@ -44,6 +48,7 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "new@example.com",
         marketingRoomCount: 12,
+        publicRoomCount: 12,
       });
     });
 
@@ -52,6 +57,7 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         marketingRoomCount: 12,
+        publicRoomCount: 12,
       };
       const result = mergeSettings(current, {});
       expect(result).toEqual(current);
@@ -62,6 +68,7 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
         marketingRoomCount: 12,
+        publicRoomCount: 12,
       };
       const incoming = {
         nightlyPrice: 99,
@@ -72,7 +79,33 @@ describe("Settings", () => {
         nightlyPrice: 99,
         contactEmail: "new@example.com",
         marketingRoomCount: 12,
+        publicRoomCount: 12,
       });
+    });
+
+    it("merges the live publicRoomCount when present in incoming", () => {
+      const current: PublicSettings = {
+        nightlyPrice: 89,
+        contactEmail: "info@example.com",
+        marketingRoomCount: 12,
+        publicRoomCount: 12,
+      };
+      const result = mergeSettings(current, { publicRoomCount: 15 });
+      expect(result.publicRoomCount).toBe(15);
+    });
+
+    it("keeps the fallback publicRoomCount when the API omits it", () => {
+      const current: PublicSettings = {
+        nightlyPrice: 89,
+        contactEmail: "info@example.com",
+        marketingRoomCount: 12,
+        publicRoomCount: 12,
+      };
+      // API count query failed → publicRoomCount omitted from the response.
+      const result = mergeSettings(current, {
+        nightlyPrice: 95,
+      } as Partial<PublicSettings>);
+      expect(result.publicRoomCount).toBe(12);
     });
   });
 
@@ -82,6 +115,7 @@ describe("Settings", () => {
         nightlyPrice: 95,
         contactEmail: "info@test.com",
         marketingRoomCount: 15,
+        publicRoomCount: 8,
       };
       (global.fetch as any).mockResolvedValueOnce(
         new Response(JSON.stringify(mockSettings), { status: 200 })

@@ -4,6 +4,7 @@ import {
   PUBLIC_SETTING_KEYS,
   rowsToAdminSettings,
   toPublicSettings,
+  withPublicRoomCount,
   SETTINGS_DEFAULTS,
 } from "../src/settings";
 
@@ -187,6 +188,55 @@ describe("Settings", () => {
         nightlyPrice: SETTINGS_DEFAULTS.nightly_price,
         contactEmail: SETTINGS_DEFAULTS.contact_email,
       });
+    });
+  });
+
+  describe("withPublicRoomCount", () => {
+    const base = { nightlyPrice: 89, contactEmail: "info@example.com" };
+
+    it("includes publicRoomCount when the count succeeds", () => {
+      // data-test="api-settings-public-room-count"
+      const result = withPublicRoomCount(base, 3);
+      expect(result).toEqual({
+        nightlyPrice: 89,
+        contactEmail: "info@example.com",
+        publicRoomCount: 3,
+      });
+      expect(typeof result.publicRoomCount).toBe("number");
+    });
+
+    it("response shape includes all fields on success", () => {
+      const result = withPublicRoomCount(base, 12);
+      expect(Object.keys(result).sort()).toEqual([
+        "contactEmail",
+        "nightlyPrice",
+        "publicRoomCount",
+      ]);
+    });
+
+    it("preserves a zero count as a real value", () => {
+      const result = withPublicRoomCount(base, 0);
+      expect(result.publicRoomCount).toBe(0);
+      expect(result).toHaveProperty("publicRoomCount");
+    });
+
+    it("omits publicRoomCount on simulated query error but stays valid", () => {
+      const result = withPublicRoomCount(base, undefined);
+      expect(result).not.toHaveProperty("publicRoomCount");
+      // Still a valid response with the three base fields.
+      expect(result).toEqual({
+        nightlyPrice: 89,
+        contactEmail: "info@example.com",
+      });
+      // Serialisable JSON — no undefined leaks into the payload.
+      expect(JSON.parse(JSON.stringify(result))).toEqual(base);
+    });
+
+    it("does not mutate the input settings object", () => {
+      const input = { ...base };
+      withPublicRoomCount(input, 5);
+      expect(input).toEqual(base);
+      expect(input).not.toHaveProperty("publicRoomCount");
     });
   });
 

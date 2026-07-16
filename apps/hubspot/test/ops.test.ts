@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { parseEnvelope, executeOp } from "../src/ops/registry";
 import { executeContactUpsert } from "../src/ops/contact";
-import { executeDealCreate } from "../src/ops/deal";
+import { executeDealCreate, DealCreateSchema } from "../src/ops/deal";
 import { executeNoteCreate } from "../src/ops/note";
 import { executeListAdd, executeListRemove } from "../src/ops/list";
 import { executeTimelineEvent } from "../src/ops/timeline";
@@ -538,6 +538,126 @@ describe("Operations", () => {
 
         expect(result.ok).toBe(true);
         expect(result.hubspotId).toBe("existing-deal-456");
+      });
+
+      it("maps roomCount to number_of_rooms property on the deal", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockImplementation((url: string, init?: any) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [{ id: "contact-789" }] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v3/objects/deals") && init?.method === "POST") {
+            return Promise.resolve(
+              new Response(JSON.stringify({ id: "deal-123" }), {
+                status: 201,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v4/objects/deals/deal-123/associations/contacts/contact-789")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({}), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        const result = await executeDealCreate(mockEnv, {
+          contactEmail: "test@example.com",
+          dealname: "Room Booking",
+          roomCount: 5,
+        });
+
+        expect(result.ok).toBe(true);
+
+        const createCall = mockFetch.mock.calls.find(
+          (call: any) =>
+            call[0].includes("/crm/v3/objects/deals") &&
+            call[1]?.method === "POST" &&
+            !call[0].includes("search")
+        );
+        expect(createCall).toBeDefined();
+        const body = JSON.parse(createCall[1].body);
+        expect(body.properties.number_of_rooms).toBe(5);
+      });
+
+      it("omits number_of_rooms when roomCount is undefined", async () => {
+        const mockFetch = global.fetch as any;
+        mockFetch.mockImplementation((url: string, init?: any) => {
+          if (url.includes("/crm/v3/objects/contacts/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [{ id: "contact-789" }] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v3/objects/deals") && init?.method === "POST") {
+            return Promise.resolve(
+              new Response(JSON.stringify({ id: "deal-123" }), {
+                status: 201,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          if (url.includes("/crm/v4/objects/deals/deal-123/associations/contacts/contact-789")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({}), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
+          return Promise.reject(new Error(`Unexpected URL: ${url}`));
+        });
+
+        await executeDealCreate(mockEnv, {
+          contactEmail: "test@example.com",
+          dealname: "No Rooms",
+        });
+
+        const createCall = mockFetch.mock.calls.find(
+          (call: any) =>
+            call[0].includes("/crm/v3/objects/deals") &&
+            call[1]?.method === "POST" &&
+            !call[0].includes("search")
+        );
+        expect(createCall).toBeDefined();
+        const body = JSON.parse(createCall[1].body);
+        expect(body.properties).not.toHaveProperty("number_of_rooms");
+      });
+
+      it("accepts a numeric roomCount and rejects a string roomCount in the schema", () => {
+        expect(
+          DealCreateSchema.parse({
+            contactEmail: "test@example.com",
+            dealname: "Valid",
+            roomCount: 5,
+          }).roomCount
+        ).toBe(5);
+
+        expect(
+          DealCreateSchema.parse({
+            contactEmail: "test@example.com",
+            dealname: "Optional omitted",
+          }).roomCount
+        ).toBeUndefined();
+
+        expect(
+          DealCreateSchema.safeParse({
+            contactEmail: "test@example.com",
+            dealname: "Bad type",
+            roomCount: "5",
+          }).success
+        ).toBe(false);
       });
     });
 
