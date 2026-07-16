@@ -1,0 +1,240 @@
+REQ:
+  R-INV-001:
+    actor: Admin user
+    capability: "compute an invoice whose taxes compound (hebergement, then TPS on base+hebergement, then TVQ on base+hebergement+TPS)"
+    constraints: "each line rounded to cents with Math.round(x*100)/100; rounded lines sum exactly to total"
+    priority: MUST
+    tests:
+      - T-INV-001a
+      - T-INV-001b
+  R-INV-002:
+    actor: Admin user
+    capability: "receive an invoice breakdown with separate tps and tvq fields instead of a combined lodgingTax field"
+    constraints: "InvoiceBreakdown carries base, accommodationTax, tps, tvq, total, amount; no lodgingTax"
+    priority: MUST
+    tests:
+      - T-INV-002a
+      - T-INV-002b
+  R-INV-003:
+    actor: Admin user
+    capability: "compute a deposit amount as a percentage of the cascaded total"
+    constraints: "deposit amount = round2(total * depositPercent/100), default 30; full amount = total"
+    priority: MUST
+    tests:
+      - T-INV-003a
+  R-INV-004:
+    actor: Admin user
+    capability: "see four transparent tax rows (Taxe d'hebergement, TPS, TVQ) in the invoice breakdown display"
+    constraints: "cascade order after Sous-total; separate TPS and TVQ rows; no combined row"
+    priority: MUST
+    tests:
+      - T-INV-004a
+  R-INV-005:
+    actor: Maintainer
+    capability: "keep the API invoice cascade numerically identical to the frontend estimateStay cascade"
+    constraints: "parity asserted for default rates over the same stay inputs"
+    priority: SHOULD
+    tests:
+      - T-INV-005a
+
+E:
+  E-InvoiceBreakdown:
+    fields:
+      nights: integer
+      roomCount: integer
+      effectiveNightly: number (dollars)
+      base: number (dollars)
+      accommodationTax: number (dollars)
+      tps: number (dollars)
+      tvq: number (dollars)
+      total: number (dollars)
+      amount: number (dollars)
+    tenancy: not-tenant-scoped
+    invariants:
+      - INV-lines-sum-to-total
+  E-ComputeInvoiceParams:
+    fields:
+      effectiveNightly: number (dollars)
+      nights: integer
+      roomCount: integer
+      tps: number (percent)
+      tvq: number (percent)
+      accommodationTax: number (percent)
+      type: "enum deposit|full"
+      depositPercent: number (percent, optional)
+    tenancy: not-tenant-scoped
+    invariants: []
+
+OP:
+  OP-Invoice.compute:
+    input: E-ComputeInvoiceParams
+    auth: [admin-create-invoice]
+    pre:
+      - "reservation has valid dates and a room count"
+    err: []
+    out: E-InvoiceBreakdown
+
+AUTH:
+  admin-create-invoice: "only an authenticated admin may create an invoice for a reservation"
+
+INV:
+  INV-lines-sum-to-total: "base + accommodationTax + tps + tvq === total for every computeInvoice result"
+  INV-cascade-order: "TPS base includes accommodationTax; TVQ base includes accommodationTax and tps"
+
+ERR:
+  ERR-INCOMPLETE:
+    code: 422
+    meaning: "reservation is missing dates or room count; invoice cannot be computed"
+
+API:
+  POST /api/admin/reservations/{id}/invoice:
+    input: "{ type, depositPercent? }"
+    output: "{ ok, breakdown }"
+    errors: [ERR-INCOMPLETE]
+    auth: admin-create-invoice
+
+UI:
+  screen-invoice-creator:
+    actions: [create-invoice, toggle-breakdown, close]
+    state: { idle, loading, breakdown-shown, error }
+
+DATA:
+  settings table: "existing; supplies tps, tvq, accommodation_tax rate percentages; no migration"
+
+TEST:
+  T-INV-001a:
+    verifies: R-INV-001
+    behaviour: "computeInvoice cascade with default rates and base 100 returns hebergement 3.5, tps 5.18, tvq 10.84, total 119.52"
+    steps:
+      - "call computeInvoice({ effectiveNightly:100, nights:1, roomCount:1, tps:5, tvq:9.975, accommodationTax:3.5, type:'full' })"
+      - "assert accommodationTax===3.5, tps===5.18, tvq===10.84, total===119.52, amount===119.52"
+  T-INV-001b:
+    verifies: R-INV-001
+    behaviour: "rounded breakdown lines sum exactly to total"
+    steps:
+      - "call computeInvoice with default rates"
+      - "assert base + accommodationTax + tps + tvq === total"
+  T-INV-002a:
+    verifies: R-INV-002
+    behaviour: "InvoiceBreakdown in apps/api/src/pricing.ts has tps and tvq and no lodgingTax"
+    steps:
+      - "inspect returned object keys: includes tps, tvq; excludes lodgingTax"
+  T-INV-002b:
+    verifies: R-INV-002
+    behaviour: "client InvoiceBreakdown type in apps/web/src/lib/api.ts mirrors the API type"
+    steps:
+      - "typecheck passes with tps and tvq fields; no lodgingTax reference remains"
+  T-INV-003a:
+    verifies: R-INV-003
+    behaviour: "deposit amount is 30 percent of the cascaded total"
+    steps:
+      - "call computeInvoice with type:'deposit', depositPercent:30 over base-100 params"
+      - "assert amount===35.86"
+      - "omit depositPercent and assert amount===35.86 (default 30)"
+  T-INV-004a:
+    verifies: R-INV-004
+    behaviour: "InvoiceCreator renders separate TPS, TVQ and Taxe d'hebergement rows after success"
+    steps:
+      - "render InvoiceCreator with an eligible reservation and a cascade breakdown fixture"
+      - "click invoice-confirm; wait for invoice-breakdown-tbody"
+      - "assert tbody text contains TPS, TVQ, Taxe d'hebergement and not 'TPS + TVQ'"
+  T-INV-005a:
+    verifies: R-INV-005
+    behaviour: "computeInvoice outputs match estimateStay cascade for the same inputs"
+    steps:
+      - "compute cascade for base 100 with default rates"
+      - "assert base 100, hebergement 3.5, tps 5.18, tvq 10.84, total 119.52 (matching estimateStay)"
+
+NFR:
+  security: "endpoint stays admin-gated; no new inputs; arithmetic only"
+  reliability: "rounding pinned to IEEE-754; tests assert exact values"
+  observability: "no change; existing HubSpot enqueue uses breakdown.amount"
+
+FILE:
+  "apps/api/src/pricing.ts": TASK-api
+  "apps/api/src/index.ts": TASK-api
+  "apps/api/test/pricing.test.ts": TASK-api-tests
+  "apps/web/src/lib/api.ts": TASK-web
+  "apps/web/src/lib/components/admin/InvoiceCreator.svelte": TASK-web
+  "apps/web/src/lib/components/admin/__tests__/InvoiceCreator.test.ts": TASK-web-tests
+
+TASK:
+  TASK-api:
+    scope:
+      - R-INV-001
+      - R-INV-002
+      - R-INV-003
+      - OP-Invoice.compute
+      - INV-lines-sum-to-total
+      - INV-cascade-order
+      - ERR-INCOMPLETE
+    files:
+      - "apps/api/src/pricing.ts"
+      - "apps/api/src/index.ts"
+    must_preserve:
+      - INV-lines-sum-to-total
+      - INV-cascade-order
+    produce: [code]
+    verifies:
+      - R-INV-001
+      - R-INV-002
+      - R-INV-003
+  TASK-api-tests:
+    scope:
+      - R-INV-001
+      - R-INV-003
+      - R-INV-005
+      - T-INV-001a
+      - T-INV-001b
+      - T-INV-003a
+      - T-INV-005a
+    files:
+      - "apps/api/test/pricing.test.ts"
+    must_preserve:
+      - INV-lines-sum-to-total
+    produce: [tests]
+    verifies:
+      - R-INV-001
+      - R-INV-003
+      - R-INV-005
+  TASK-web:
+    scope:
+      - R-INV-002
+      - R-INV-004
+    files:
+      - "apps/web/src/lib/api.ts"
+      - "apps/web/src/lib/components/admin/InvoiceCreator.svelte"
+    must_preserve:
+      - INV-lines-sum-to-total
+    produce: [code]
+    verifies:
+      - R-INV-002
+      - R-INV-004
+  TASK-web-tests:
+    scope:
+      - R-INV-004
+      - T-INV-004a
+    files:
+      - "apps/web/src/lib/components/admin/__tests__/InvoiceCreator.test.ts"
+    must_preserve: []
+    produce: [tests]
+    verifies:
+      - R-INV-004
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Split lodgingTax into separate tps and tvq fields rather than renaming"
+    rationale: "enables transparent four-line tax display and per-line cascade verification; all consumers updated in this change"
+  ST-02:
+    status: locked
+    decision: "Round each cascade line to cents before feeding the next line"
+    rationale: "matches estimateStay so invoice and estimate agree to the cent and lines sum exactly to total"
+  ST-03:
+    status: locked
+    decision: "Render InvoiceCreator tax rows without percent labels; add no new props"
+    rationale: "component has no tax-rate props today; keeping it simple avoids widening the prop surface for no functional gain"
+  ST-04:
+    status: locked
+    decision: "Guard frontend/backend parity with an API-side test, not shared code"
+    rationale: "services deploy independently and cannot import each other; a numeric parity test pins agreement"

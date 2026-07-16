@@ -648,8 +648,9 @@ export interface InvoiceBreakdown {
   roomCount: number;
   effectiveNightly: number;
   base: number;
-  lodgingTax: number;
   accommodationTax: number;
+  tps: number;
+  tvq: number;
   total: number;
   amount: number;
 }

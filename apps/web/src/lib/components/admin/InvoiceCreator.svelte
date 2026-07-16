@@ -7,8 +7,9 @@
     roomCount: number;
     effectiveNightly: number;
     base: number;
-    lodgingTax: number;
     accommodationTax: number;
+    tps: number;
+    tvq: number;
     total: number;
     amount: number;
   };
@@ -95,8 +96,9 @@
           { label: "Chambres", value: formatCount(breakdown.roomCount), count: true },
           { label: "Prix effectif / nuit", value: formatCurrency(breakdown.effectiveNightly) },
           { label: "Sous-total", value: formatCurrency(breakdown.base) },
-          { label: "TPS + TVQ", value: formatCurrency(breakdown.lodgingTax) },
           { label: "Taxe d'hébergement", value: formatCurrency(breakdown.accommodationTax) },
+          { label: "TPS", value: formatCurrency(breakdown.tps) },
+          { label: "TVQ", value: formatCurrency(breakdown.tvq) },
           { label: "Total", value: formatCurrency(breakdown.total), preTotal: true },
           { label: "Montant dû", value: formatCurrency(breakdown.amount), final: true },
         ]

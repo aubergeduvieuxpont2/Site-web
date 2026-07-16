@@ -3,10 +3,11 @@ export interface InvoiceBreakdown {
   roomCount: number;
   effectiveNightly: number;
   base: number;
-  lodgingTax: number;
-  accommodationTax: number;
-  total: number;
-  amount: number;
+  accommodationTax: number;  // taxe d'hébergement, base × accommodationTax% / 100
+  tps: number;               // (base + accommodationTax) × tps% / 100
+  tvq: number;               // (base + accommodationTax + tps) × tvq% / 100
+  total: number;             // base + accommodationTax + tps + tvq
+  amount: number;            // total, or round2(total × depositPercent/100) for deposits
 }
 
 // The neon driver returns Postgres NUMERIC columns (discount_percent,
@@ -65,24 +66,29 @@ export interface ComputeInvoiceParams {
 }
 
 export function computeInvoice(params: ComputeInvoiceParams): InvoiceBreakdown {
-  const base = Math.round(params.effectiveNightly * params.nights * params.roomCount * 100) / 100;
-  const lodgingTax = Math.round(base * (params.tps + params.tvq) / 100 * 100) / 100;
-  const accommodationTaxAmount = Math.round(base * params.accommodationTax / 100 * 100) / 100;
-  const total = Math.round((base + lodgingTax + accommodationTaxAmount) * 100) / 100;
+  const round2 = (x: number) => Math.round(x * 100) / 100;
 
-  let amount = total;
-  if (params.type === "deposit") {
-    const depositPct = params.depositPercent ?? 30;
-    amount = Math.round(total * depositPct / 100 * 100) / 100;
-  }
+  // Compounding cascade: each subsequent tax line is computed on the running
+  // subtotal of all prior lines, so it matches the frontend `estimateStay` quote.
+  const base = round2(params.effectiveNightly * params.nights * params.roomCount);
+  const accommodationTax = round2(base * params.accommodationTax / 100);
+  const tps = round2((base + accommodationTax) * params.tps / 100);
+  // TVQ base includes TPS (compounding cascade).
+  const tvq = round2((base + accommodationTax + tps) * params.tvq / 100);
+  const total = round2(base + accommodationTax + tps + tvq);
+
+  const amount = params.type === "deposit"
+    ? round2(total * (params.depositPercent ?? 30) / 100)
+    : total;
 
   return {
     nights: params.nights,
     roomCount: params.roomCount,
     effectiveNightly: params.effectiveNightly,
     base,
-    lodgingTax,
-    accommodationTax: accommodationTaxAmount,
+    accommodationTax,
+    tps,
+    tvq,
     total,
     amount,
   };

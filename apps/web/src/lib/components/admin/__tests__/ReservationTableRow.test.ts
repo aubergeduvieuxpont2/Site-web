@@ -16,8 +16,9 @@ const breakdown = {
   roomCount: 2,
   effectiveNightly: 89,
   base: 356,
-  lodgingTax: 53.31,
   accommodationTax: 12.46,
+  tps: 18.42,
+  tvq: 34.89,
   total: 421.77,
   amount: 126.53,
 };

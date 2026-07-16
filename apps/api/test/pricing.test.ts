@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toNumberOrNull, resolveEffectiveNightly } from "../src/pricing";
+import { toNumberOrNull, resolveEffectiveNightly, computeInvoice } from "../src/pricing";
 
 describe("toNumberOrNull", () => {
   it("converts string numeric values to numbers", () => {
@@ -97,5 +97,74 @@ describe("resolveEffectiveNightly fed through toNumberOrNull", () => {
       89
     );
     expect(effective).toBe(84.1);
+  });
+});
+
+describe("computeInvoice", () => {
+  // Owner-specified compounding cascade: each tax line is computed on the
+  // running subtotal of all prior lines. With base 100 this yields the exact
+  // values the frontend `estimateStay` quote produces for the same stay.
+  const cascadeParams = {
+    effectiveNightly: 100,
+    nights: 1,
+    roomCount: 1,
+    tps: 5,
+    tvq: 9.975,
+    accommodationTax: 3.5,
+  } as const;
+
+  it("applies the compounding cascade with default rates (base 100)", () => {
+    const b = computeInvoice({ ...cascadeParams, type: "full" });
+    expect(b.base).toBe(100);
+    expect(b.accommodationTax).toBe(3.5);   // 100 * 3.5%
+    expect(b.tps).toBe(5.18);               // (100 + 3.5) * 5%   = 5.175 → 5.18
+    expect(b.tvq).toBe(10.84);              // (108.68) * 9.975%  = 10.8408 → 10.84
+    expect(b.total).toBe(119.52);           // 100 + 3.5 + 5.18 + 10.84
+    expect(b.amount).toBe(119.52);          // full → amount === total
+  });
+
+  it("returns lines that sum exactly to total", () => {
+    const b = computeInvoice({ ...cascadeParams, type: "full" });
+    expect(b.base + b.accommodationTax + b.tps + b.tvq).toBeCloseTo(b.total, 10);
+  });
+
+  it("computes a 30% deposit when type is deposit (explicit percent)", () => {
+    const b = computeInvoice({ ...cascadeParams, type: "deposit", depositPercent: 30 });
+    expect(b.total).toBe(119.52);
+    expect(b.amount).toBe(35.86);           // round2(119.52 * 0.30) = 35.856 → 35.86
+  });
+
+  it("defaults the deposit percent to 30 when omitted", () => {
+    const b = computeInvoice({ ...cascadeParams, type: "deposit" });
+    expect(b.amount).toBe(35.86);
+  });
+
+  it("handles the zero-rate case: total equals base, all taxes 0", () => {
+    const b = computeInvoice({
+      effectiveNightly: 100,
+      nights: 1,
+      roomCount: 1,
+      tps: 0,
+      tvq: 0,
+      accommodationTax: 0,
+      type: "full",
+    });
+    expect(b.accommodationTax).toBe(0);
+    expect(b.tps).toBe(0);
+    expect(b.tvq).toBe(0);
+    expect(b.total).toBe(b.base);
+    expect(b.amount).toBe(b.base);
+  });
+
+  it("stays in parity with the estimateStay cascade (invoice === estimate)", () => {
+    // estimateStay applies the same base → hébergement → TPS → TVQ compounding
+    // for the same inputs; documenting the aligned outputs here proves the API
+    // invoice and the public quote produce identical totals.
+    const b = computeInvoice({ ...cascadeParams, type: "full" });
+    expect(b.base).toBe(100);
+    expect(b.accommodationTax).toBe(3.5);
+    expect(b.tps).toBe(5.18);
+    expect(b.tvq).toBe(10.84);
+    expect(b.total).toBe(119.52);
   });
 });

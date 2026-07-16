@@ -14,8 +14,9 @@ const breakdown: InvoiceBreakdown = {
   roomCount: 2,
   effectiveNightly: 89,
   base: 534,
-  lodgingTax: 79.9,
   accommodationTax: 21.36,
+  tps: 27.77,
+  tvq: 52.13,
   total: 635.26,
   amount: 190.58,
 };
@@ -209,6 +210,21 @@ describe("InvoiceCreator — breakdown", () => {
     // fr-CA currency uses a non-breaking space + "$"; assert the digits + $.
     expect(tbody.textContent).toMatch(/190,58/);
     expect(tbody.textContent).toContain("$");
+  });
+
+  it("renders separate TPS, TVQ, and Taxe d'hébergement rows", async () => {
+    const { getByTestId } = render(InvoiceCreator, { props: baseProps() });
+    await fireEvent.click(getByTestId("invoice-confirm"));
+    await waitFor(() => getByTestId("invoice-breakdown-tbody"));
+
+    const tbody = getByTestId("invoice-breakdown-tbody");
+    const labels = Array.from(tbody.querySelectorAll("td.ic-cell-label")).map(
+      (td) => td.textContent?.trim(),
+    );
+    expect(labels).toContain("TPS");
+    expect(labels).toContain("TVQ");
+    expect(labels).toContain("Taxe d'hébergement");
+    expect(labels).not.toContain("TPS + TVQ");
   });
 
   it("collapses and re-expands the breakdown body via the toggle", async () => {
