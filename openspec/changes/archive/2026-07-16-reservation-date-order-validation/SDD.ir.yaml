@@ -1,0 +1,177 @@
+REQ:
+  R-RESV-001:
+    actor: Public reservation submitter
+    capability: be prevented from submitting a departure date on or before the arrival date
+    constraints: "reject only when both checkIn and checkOut are present and checkOut <= checkIn; message must be the exact French sentence on path checkOut"
+    priority: MUST
+    tests:
+      - T-RESV-001a
+      - T-RESV-001b
+      - T-RESV-001c
+  R-RESV-002:
+    actor: Public reservation submitter
+    capability: still submit with missing or partial dates exactly as before
+    constraints: "either or both dates empty or omitted must validate as today; no DB access on the ordering-failure path"
+    priority: MUST
+    tests:
+      - T-RESV-002a
+  R-RESV-003:
+    actor: Reservation form user
+    capability: see an inline French error and a min-bound departure input before submit
+    constraints: "helper datesOutOfOrder backs validateClient; checkout input min bound to form.checkIn; empty dates produce no error"
+    priority: MUST
+    tests:
+      - T-RESV-003a
+
+E:
+  E-ReservationRequest:
+    fields:
+      firstName: string
+      lastName: string
+      email: string
+      checkIn: "string or null (YYYY-MM-DD)"
+      checkOut: "string or null (YYYY-MM-DD)"
+      guests: integer
+      roomCount: integer
+    tenancy: none
+    invariants:
+      - INV-dates-optional
+      - INV-strict-order
+
+OP:
+  OP-Reservation.validate:
+    input: { body: E-ReservationRequest }
+    auth: [public-submit-reservation]
+    pre:
+      - "checkIn and checkOut normalized via trimToNull (string or null)"
+    err:
+      - ERR-DATE-ORDER
+    out: { valid: boolean }
+
+AUTH:
+  public-submit-reservation: anyone may submit a reservation request (unauthenticated public endpoint)
+
+INV:
+  INV-dates-optional: "a reservation body with either or both dates absent must remain valid"
+  INV-strict-order: "when both dates are present, checkOut must be strictly after checkIn"
+
+ERR:
+  ERR-DATE-ORDER:
+    code: 400
+    meaning: "departure date is not strictly after arrival date; message 'La date de depart doit etre posterieure a la date d arrivee.'"
+
+API:
+  POST /api/reservations:
+    input: E-ReservationRequest
+    output: { ok: boolean }
+    errors: [ERR-DATE-ORDER]
+    auth: public-submit-reservation
+
+UI:
+  screen-contact-reservation:
+    actions: [pick-check-in, pick-check-out, submit]
+    state: { idle, sending, sent, error }
+
+DATA:
+  no-migration: "no schema change; reservations table unchanged"
+
+TEST:
+  T-RESV-001a:
+    verifies: R-RESV-001
+    behaviour: "ReservationRequestSchema.safeParse rejects equal checkIn/checkOut with the French message on path checkOut"
+    steps:
+      - "safeParse valid base payload with checkIn '2026-08-10' and checkOut '2026-08-10'"
+      - "assert success is false and first issue message is the French sentence with path checkOut"
+  T-RESV-001b:
+    verifies: R-RESV-001
+    behaviour: "ReservationRequestSchema.safeParse rejects reversed dates (checkOut < checkIn)"
+    steps:
+      - "safeParse base payload with checkIn '2026-08-10' and checkOut '2026-08-09'"
+      - "assert success is false with the French message"
+  T-RESV-001c:
+    verifies: R-RESV-001
+    behaviour: "ReservationRequestSchema.safeParse accepts ordered dates (checkOut > checkIn)"
+    steps:
+      - "safeParse base payload with checkIn '2026-08-10' and checkOut '2026-08-11'"
+      - "assert success is true"
+  T-RESV-002a:
+    verifies: R-RESV-002
+    behaviour: "ReservationRequestSchema.safeParse accepts both-empty and one-empty date payloads"
+    steps:
+      - "safeParse base payload with both dates omitted -> success true"
+      - "safeParse base payload with only checkIn set -> success true"
+      - "safeParse base payload with only checkOut set -> success true"
+  T-RESV-003a:
+    verifies: R-RESV-003
+    behaviour: "datesOutOfOrder returns false for empty/one-empty, true for equal and reversed, false for ordered"
+    steps:
+      - "datesOutOfOrder('','') and one-empty variants return false"
+      - "datesOutOfOrder('2026-08-10','2026-08-10') and ('2026-08-10','2026-08-09') return true"
+      - "datesOutOfOrder('2026-08-10','2026-08-11') returns false"
+
+NFR:
+  latency: "ordering-failure path performs no I/O; synchronous in-memory validation"
+  security: "native input min is advisory only; server superRefine is authoritative"
+  observability: "no new logging; failure surfaces as existing 400 JSON error envelope"
+  consistency: "identical French message string on API and frontend"
+
+FILE:
+  apps/api/src/index.ts: TASK-api
+  apps/api/test/reservations.test.ts: TASK-api
+  apps/web/src/lib/utils.ts: TASK-web
+  apps/web/src/routes/contact/+page.svelte: TASK-web
+  apps/web/src/lib/__tests__/utils.test.ts: TASK-web
+
+TASK:
+  TASK-api:
+    scope:
+      - R-RESV-001
+      - R-RESV-002
+      - OP-Reservation.validate
+      - ERR-DATE-ORDER
+      - INV-dates-optional
+      - INV-strict-order
+      - T-RESV-001a
+      - T-RESV-001b
+      - T-RESV-001c
+      - T-RESV-002a
+    files:
+      - apps/api/src/index.ts
+      - apps/api/test/reservations.test.ts
+    must_preserve:
+      - INV-dates-optional
+      - INV-strict-order
+    produce: [code, tests]
+    verifies: [R-RESV-001, R-RESV-002]
+  TASK-web:
+    scope:
+      - R-RESV-003
+      - INV-dates-optional
+      - INV-strict-order
+      - T-RESV-003a
+    files:
+      - apps/web/src/lib/utils.ts
+      - apps/web/src/routes/contact/+page.svelte
+      - apps/web/src/lib/__tests__/utils.test.ts
+    must_preserve:
+      - INV-dates-optional
+    produce: [code, tests]
+    verifies: [R-RESV-003]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "validate ordering with a Zod superRefine on ReservationRequestSchema rather than in the handler body"
+    rationale: "keeps the failure path free of Neon access and makes rejection unit-testable via safeParse"
+  ST-02:
+    status: locked
+    decision: "reuse reservationDatesValid verbatim, guarding on both dates present before calling it"
+    rationale: "the helper returns false for a missing date, so a both-present guard prevents making optional dates required"
+  ST-03:
+    status: locked
+    decision: "frontend helper datesOutOfOrder uses lexicographic comparison of YYYY-MM-DD strings"
+    rationale: "zero-padded ISO date strings sort chronologically, so no date parsing or dependency is needed on the client"
+  ST-04:
+    status: locked
+    decision: "no database migration is created"
+    rationale: "ordering is a pure validation concern; stored data is untouched and the change is backward compatible"

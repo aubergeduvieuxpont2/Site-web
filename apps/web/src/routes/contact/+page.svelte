@@ -4,6 +4,7 @@
   import { createReservation, isError } from "$lib/api";
   import { SITE } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
+  import { datesOutOfOrder } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
   import { auth } from "$lib/auth.svelte";
   import Button from "$lib/components/Button.svelte";
@@ -31,6 +32,7 @@
     lastName?: string;
     email?: string;
     roomCount?: string;
+    checkOut?: string;
   }>({});
 
   // When a session user is present, the identity fields are hidden and their
@@ -82,6 +84,9 @@
     }
     if (!(Number(form.roomCount) >= 1))
       errors.roomCount = "Au moins une chambre est requise.";
+    if (datesOutOfOrder(form.checkIn, form.checkOut))
+      errors.checkOut =
+        "La date de départ doit être postérieure à la date d'arrivée.";
     fieldErrors = errors;
     return Object.keys(errors).length === 0;
   }
@@ -293,9 +298,22 @@
                     class="page-contact__input"
                     id="field-checkout"
                     type="date"
+                    min={form.checkIn || undefined}
+                    aria-describedby={fieldErrors.checkOut ? "err-checkout" : undefined}
                     data-testid="input-checkout"
                     bind:value={form.checkOut}
                   />
+                  {#if fieldErrors.checkOut}
+                    <span
+                      transition:fade={{ duration: 150 }}
+                      class="page-contact__field-error"
+                      id="err-checkout"
+                      role="alert"
+                      data-testid="error-checkout"
+                    >
+                      {fieldErrors.checkOut}
+                    </span>
+                  {/if}
                 </div>
               </div>
 

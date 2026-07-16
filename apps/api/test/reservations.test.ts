@@ -86,4 +86,65 @@ describe("ReservationRequestSchema", () => {
       expect(result.data.checkOut).toBeNull();
     }
   });
+
+  const ORDER_MESSAGE =
+    "La date de départ doit être postérieure à la date d'arrivée.";
+
+  it("rejects equal check-in and check-out dates", () => {
+    const result = ReservationRequestSchema.safeParse({
+      ...base,
+      checkIn: "2026-08-10",
+      checkOut: "2026-08-10",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(ORDER_MESSAGE);
+      expect(result.error.issues[0].path).toEqual(["checkOut"]);
+    }
+  });
+
+  it("rejects a check-out date before the check-in date", () => {
+    const result = ReservationRequestSchema.safeParse({
+      ...base,
+      checkIn: "2026-08-10",
+      checkOut: "2026-08-09",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(ORDER_MESSAGE);
+      expect(result.error.issues[0].path).toEqual(["checkOut"]);
+    }
+  });
+
+  it("accepts a check-out date after the check-in date", () => {
+    const result = ReservationRequestSchema.safeParse({
+      ...base,
+      checkIn: "2026-08-10",
+      checkOut: "2026-08-11",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts when both dates are omitted", () => {
+    const { checkIn, checkOut, ...withoutDates } = base;
+    const result = ReservationRequestSchema.safeParse(withoutDates);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts when only one date is present", () => {
+    expect(
+      ReservationRequestSchema.safeParse({
+        ...base,
+        checkIn: "2026-08-10",
+        checkOut: "",
+      }).success
+    ).toBe(true);
+    expect(
+      ReservationRequestSchema.safeParse({
+        ...base,
+        checkIn: "",
+        checkOut: "2026-08-10",
+      }).success
+    ).toBe(true);
+  });
 });
