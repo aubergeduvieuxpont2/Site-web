@@ -5,7 +5,9 @@
   import SectionLabel from '$lib/components/SectionLabel.svelte';
   import Contour from '$lib/components/Contour.svelte';
   import Button from '$lib/components/Button.svelte';
-  import { ROOMS, AMENITIES, STATS } from '$lib/content';
+  import Seo from '$lib/components/Seo.svelte';
+  import { ROOMS, AMENITIES, STATS, FAQ } from '$lib/content';
+  import { lodgingBusinessSchema, faqSchema } from '$lib/seo';
   import { settings } from '$lib/settings.svelte';
   import { auth } from '$lib/auth.svelte';
   import { reveal, countUp } from '$lib/motion';
@@ -176,6 +178,30 @@
   <!-- ── DIVIDER 03 ────────────────────────────────────────── -->
   <div class="page-accueil__divider">
     <Contour number="03" width="full" />
+  </div>
+
+  <!-- ── FAQ ──────────────────────────────────────────────── -->
+  <section
+    class="page-accueil__faq"
+    aria-labelledby="faq-heading"
+    data-testid="faq-section"
+  >
+    <SectionLabel text="Questions fréquentes" showHairline={false} />
+    <h2 id="faq-heading" class="page-accueil__h2">Bon à savoir avant de réserver</h2>
+
+    <dl class="page-accueil__faq-list">
+      {#each FAQ as item}
+        <div class="page-accueil__faq-item" data-testid="faq-item" use:reveal={{ y: 12 }}>
+          <dt class="page-accueil__faq-q">{item.question}</dt>
+          <dd class="page-accueil__faq-a">{item.answer}</dd>
+        </div>
+      {/each}
+    </dl>
+  </section>
+
+  <!-- ── DIVIDER 04 ────────────────────────────────────────── -->
+  <div class="page-accueil__divider">
+    <Contour number="04" width="full" />
   </div>
 
   <!-- ── CLOSING CTA ──────────────────────────────────────── -->
@@ -528,6 +554,40 @@
   }
 
   /* ═══════════════════════════════════════════════════
+     FAQ
+  ═══════════════════════════════════════════════════ */
+  .page-accueil__faq {
+    max-width: 860px;
+    margin-inline: auto;
+    padding: 0 var(--space-md) var(--space-3xl);
+  }
+
+  .page-accueil__faq-list {
+    margin: var(--space-2xl) 0 0;
+    border-top: 1px solid var(--color-outline-variant);
+  }
+
+  .page-accueil__faq-item {
+    padding: var(--space-lg) 0;
+    border-bottom: 1px solid var(--color-outline-variant);
+  }
+
+  .page-accueil__faq-q {
+    font-family: var(--font-sans);
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+
+  .page-accueil__faq-a {
+    margin: var(--space-sm) 0 0;
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--color-ink-variant);
+  }
+
+  /* ═══════════════════════════════════════════════════
      CLOSING CTA PANEL
   ═══════════════════════════════════════════════════ */
   .page-accueil__cta {
@@ -625,6 +685,9 @@
   }
 </style>
 
-<svelte:head>
-  <title>Auberge du Vieux Pont — hébergement pour travailleurs de terrain</title>
-</svelte:head>
+<Seo
+  title="Auberge du Vieux Pont — hébergement pour travailleurs de terrain"
+  description="Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres insonorisées, stockage d'équipement, tarifs d'entreprise, à 30 min des chantiers."
+  path="/"
+  schema={[lodgingBusinessSchema(), faqSchema(FAQ)]}
+/>

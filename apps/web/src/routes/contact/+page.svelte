@@ -6,6 +6,8 @@
   import { settings } from "$lib/settings.svelte";
   import { datesOutOfOrder } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
+  import Seo from "$lib/components/Seo.svelte";
+  import { breadcrumbSchema } from "$lib/seo";
   import { auth } from "$lib/auth.svelte";
   import Button from "$lib/components/Button.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
@@ -977,6 +979,14 @@
   }
 </style>
 
-<svelte:head>
-  <title>Contact — Auberge du Vieux Pont</title>
-</svelte:head>
+<Seo
+  title="Contact — Auberge du Vieux Pont"
+  description="Contactez L'Auberge du Vieux Pont à Saint-Raymond : réservations, tarifs d'entreprise et demandes d'information. Téléphone 418 655-1212."
+  path="/contact"
+  schema={[
+    breadcrumbSchema([
+      { name: "Accueil", path: "/" },
+      { name: "Contact", path: "/contact" },
+    ]),
+  ]}
+/>
