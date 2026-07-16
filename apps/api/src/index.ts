@@ -21,6 +21,7 @@ import {
   settingsHook,
   rowsToAdminSettings,
   toPublicSettings,
+  withPublicRoomCount,
 } from "./settings";
 import type { RoomRow } from "./rooms";
 import {
@@ -45,12 +46,15 @@ type MessageRow = {
 type ReservationRow = {
   id: number;
   name: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
   phone: string | null;
   room: string | null;
   arrive: string | null;
   depart: string | null;
   people: number;
+  room_count: number | null;
   message: string | null;
   created_at: string;
 };
@@ -80,8 +84,9 @@ const trimToNull = z
     return t.length > 0 ? t : null;
   });
 
-const ReservationRequestSchema = z.object({
-  name: z.string().trim().min(1, "name is required"),
+export const ReservationRequestSchema = z.object({
+  firstName: z.string().trim().min(1, "first name is required"),
+  lastName: z.string().trim().min(1, "last name is required"),
   email: z
     .string()
     .trim()
@@ -89,10 +94,13 @@ const ReservationRequestSchema = z.object({
     .email("valid email is required"),
   phone: trimToNull,
   room: trimToNull,
-  arrive: trimToNull,
-  depart: trimToNull,
+  // Accepted under the frontend's names; mapped to the arrive/depart/people
+  // columns in the handler.
+  checkIn: trimToNull,
+  checkOut: trimToNull,
   message: trimToNull,
-  people: z.coerce.number().int().min(1).catch(1),
+  guests: z.coerce.number().int().min(1).catch(1),
+  roomCount: z.coerce.number().int().min(1, "roomCount must be at least 1"),
 });
 
 const reservationHook = (result: any, c: any) =>
@@ -277,11 +285,15 @@ app.post(
   async (c) => {
     const data = c.req.valid("json");
 
+    // Derived value for the NOT NULL `name` column; the split first/last are
+    // persisted alongside it.
+    const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
+
     const sql = neon(c.env.DB_CONN);
     const rows = (await sql`
-      INSERT INTO reservations (name, email, phone, room, arrive, depart, people, message)
-      VALUES (${data.name}, ${data.email}, ${data.phone}, ${data.room}, ${data.arrive}, ${data.depart}, ${data.people}, ${data.message})
-      RETURNING id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
+      INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message)
+      VALUES (${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}, ${data.checkOut}, ${data.guests}, ${data.roomCount}, ${data.message})
+      RETURNING id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     `) as ReservationRow[];
 
     const created = rows[0];
@@ -298,7 +310,11 @@ app.post(
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 kind: "contact.upsert",
-                payload: { email: data.email, name: data.name },
+                payload: {
+                  email: data.email,
+                  firstname: data.firstName,
+                  lastname: data.lastName,
+                },
               }),
             })
           );
@@ -312,10 +328,11 @@ app.post(
                 payload: {
                   contactEmail: data.email,
                   dealname: `Reservation #${created.id}`,
-                  arrive: data.arrive || undefined,
-                  depart: data.depart || undefined,
+                  arrive: data.checkIn || undefined,
+                  depart: data.checkOut || undefined,
                   room: data.room || undefined,
-                  people: data.people || undefined,
+                  people: data.guests || undefined,
+                  roomCount: data.roomCount,
                   description: data.message || undefined,
                 },
                 dedupeKey: `reservation-${created.id}`,
@@ -543,7 +560,7 @@ app.get("/api/profile", async (c) => {
 
   const sql = neon(c.env.DB_CONN);
   const reservations = (await sql`
-    SELECT id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
+    SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
     WHERE lower(email) = lower(${user.email})
     ORDER BY created_at DESC
@@ -588,7 +605,7 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, message, created_at
+    SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
     WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
     ORDER BY created_at DESC
@@ -881,7 +898,20 @@ app.get("/api/settings", async (c) => {
   const adminSettings = rowsToAdminSettings(rows);
   const publicSettings = toPublicSettings(adminSettings);
 
-  return c.json(publicSettings);
+  // Live count of publicly-visible rooms. On any failure (missing column,
+  // db error) we omit the field so the endpoint never 500s; the frontend
+  // falls back to DEFAULTS.publicRoomCount.
+  let publicRoomCount: number | undefined;
+  try {
+    const countRows = (await sql`
+      SELECT count(*)::int AS count FROM rooms WHERE is_public = true
+    `) as { count: number }[];
+    publicRoomCount = countRows[0]?.count ?? 0;
+  } catch (err) {
+    console.error("Failed to count public rooms:", err);
+  }
+
+  return c.json(withPublicRoomCount(publicSettings, publicRoomCount));
 });
 
 // Admin settings read endpoint

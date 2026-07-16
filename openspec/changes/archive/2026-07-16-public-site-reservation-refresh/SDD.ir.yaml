@@ -1,0 +1,435 @@
+REQ:
+  R-COPY-001:
+    actor: Site visitor
+    capability: "read room and property copy free of breakfast claims"
+    constraints: "no petit-dejeuner or dejeuner-servi copy in content.ts or le-site page; self-serve meal copy stays"
+    priority: MUST
+    tests: [T-COPY-001a]
+  R-COPY-002:
+    actor: Site visitor
+    capability: "see a full 4-item amenity slice on the homepage"
+    constraints: "amenity A-04 replaced with a truthful non-breakfast amenity; AMENITIES keeps 8 entries"
+    priority: MUST
+    tests: [T-COPY-001b]
+  R-FOOT-001:
+    actor: Site visitor
+    capability: "see the CITQ footer at the bottom of every page"
+    constraints: "footer visible under non-reduced-motion; visibility bound in markup so the opacity selector is retained"
+    priority: MUST
+    tests: [T-FOOT-001a]
+  R-ROOMCNT-001:
+    actor: Web frontend
+    capability: "read the live count of public rooms from the settings response"
+    constraints: "publicRoomCount equals count of rooms where is_public true; endpoint never 500s on count failure"
+    priority: MUST
+    tests: [T-ROOMCNT-001a]
+  R-ROOMCNT-002:
+    actor: Site visitor
+    capability: "see the live public room count in the homepage stat"
+    constraints: "stat binds settings.publicRoomCount with static 12 fallback"
+    priority: MUST
+    tests: [T-ROOMCNT-001b]
+  R-SHOW-001:
+    actor: Site visitor
+    capability: "browse accommodation types without a per-room reserve button"
+    constraints: "RoomCard renders no reserve button; a single global reservation CTA remains"
+    priority: MUST
+    tests: [T-SHOW-001a]
+  R-FORM-001:
+    actor: Guest
+    capability: "provide first name and last name on the reservation form"
+    constraints: "single Nom field replaced by required Prenom and Nom inputs"
+    priority: MUST
+    tests: [T-FORM-001a]
+  R-FORM-002:
+    actor: Guest
+    capability: "state how many rooms are needed"
+    constraints: "required integer Nombre de chambres min 1"
+    priority: MUST
+    tests: [T-FORM-002a]
+  R-FORM-003:
+    actor: Authenticated guest
+    capability: "submit a reservation without re-entering name and email"
+    constraints: "name/email inputs hidden when auth.user present; values derived from the auth store"
+    priority: MUST
+    tests: [T-FORM-002b]
+  R-RES-001:
+    actor: API
+    capability: "accept and validate the aligned reservation contract"
+    constraints: "schema accepts firstName lastName roomCount; maps checkIn checkOut guests to arrive depart people; roomCount required min 1"
+    priority: MUST
+    tests: [T-RES-001a, T-RES-001b]
+  R-RES-002:
+    actor: API
+    capability: "persist the new and mapped reservation columns"
+    constraints: "insert first_name last_name room_count arrive depart people; name derived first+last preserves NOT NULL"
+    priority: MUST
+    tests: [T-RES-002a]
+  R-RES-003:
+    actor: API
+    capability: "enqueue HubSpot ops carrying the new fields"
+    constraints: "contact.upsert sends firstname lastname; deal.create sends roomCount"
+    priority: MUST
+    tests: [T-RES-002b]
+  R-DEAL-001:
+    actor: HubSpot Worker
+    capability: "map room count onto the deal"
+    constraints: "DealCreateSchema accepts roomCount; sets property number_of_rooms without hs prefix"
+    priority: MUST
+    tests: [T-DEAL-001a]
+  R-AUTH-001:
+    actor: Site visitor
+    capability: "see nav auth state update reactively"
+    constraints: "shared auth store is the single source; Nav reads it; login updates it with no page reload"
+    priority: MUST
+    tests: [T-AUTH-001a]
+  R-AUTH-002:
+    actor: Authenticated user
+    capability: "log out from desktop and mobile nav"
+    constraints: "logout button in both menus calls logout, clears store, reverts nav without reload"
+    priority: MUST
+    tests: [T-AUTH-002a]
+  R-MIG-001:
+    actor: Operator
+    capability: "apply additive idempotent migrations"
+    constraints: "0013 adds first_name last_name; 0014 adds room_count; ADD COLUMN IF NOT EXISTS; schema.sql updated"
+    priority: MUST
+    tests: [T-MIG-001a]
+
+E:
+  E-Reservation:
+    fields:
+      id: bigint
+      name: text (NOT NULL, derived)
+      email: text (NOT NULL)
+      first_name: "text (nullable)"
+      last_name: "text (nullable)"
+      arrive: date
+      depart: date
+      people: integer
+      room_count: "integer (nullable)"
+      message: text
+      created_at: timestamptz
+    invariants: [INV-name-not-null, INV-sql-parameterized]
+  E-Settings:
+    fields:
+      nightlyPrice: number
+      contactEmail: string
+      marketingRoomCount: number
+      publicRoomCount: number
+    invariants: []
+  E-AuthStore:
+    fields:
+      user: "User | null"
+      loaded: boolean
+    invariants: [INV-no-secrets-frontend]
+
+OP:
+  OP-Reservation.create:
+    input: "{ firstName, lastName, email, checkIn, checkOut, guests, roomCount, message }"
+    auth: []
+    pre: ["roomCount >= 1", "firstName and lastName non-empty when logged out"]
+    err: [ERR-VALIDATION]
+    out: "{ reservation }"
+  OP-Settings.getPublic:
+    input: "{}"
+    auth: []
+    pre: []
+    err: []
+    out: "{ nightlyPrice, contactEmail, publicRoomCount }"
+  OP-Auth.logout:
+    input: "{}"
+    auth: []
+    pre: []
+    err: []
+    out: "{ ok: true }"
+  OP-AuthStore.load:
+    input: "{}"
+    auth: []
+    pre: []
+    err: [ERR-UNAUTH]
+    out: "{ user | null }"
+  OP-Deal.create:
+    input: "{ contactEmail, dealname, roomCount }"
+    auth: []
+    pre: []
+    err: []
+    out: "{ ok: true, hubspotId }"
+
+ERR:
+  ERR-VALIDATION:
+    code: 400
+    meaning: "reservation payload failed schema validation (e.g. roomCount < 1 or missing name)"
+  ERR-UNAUTH:
+    code: 401
+    meaning: "no valid session; auth store resolves to logged-out"
+
+AUTH:
+  public-reservation: "anyone may create a reservation"
+  session-user: "an authenticated session identifies the acting user for prefill and logout"
+
+INV:
+  INV-name-not-null: "reservations.name is always written non-null via derived first+last"
+  INV-migration-idempotent: "every migration uses ADD COLUMN IF NOT EXISTS and is safe to re-run"
+  INV-no-secrets-frontend: "the auth store holds only the public User shape, never a token"
+  INV-sql-parameterized: "all reservation inputs are parameterized via the Neon tagged template, never interpolated"
+
+API:
+  GET /api/settings:
+    input: none
+    output: E-Settings
+    errors: []
+    auth: public-reservation
+  POST /api/reservations:
+    input: OP-Reservation.create
+    output: E-Reservation
+    errors: [ERR-VALIDATION]
+    auth: public-reservation
+  POST /api/auth/logout:
+    input: none
+    output: "{ ok: true }"
+    errors: []
+    auth: session-user
+
+UI:
+  screen-nav:
+    actions: [login-reflect, logout]
+    state: [logged-out, logged-in]
+  screen-contact-form:
+    actions: [submit, prefill-when-authed]
+    state: [logged-out, logged-in, sending, sent, error]
+  screen-footer:
+    actions: [reveal]
+    state: [hidden, visible]
+
+DATA:
+  "migration 0013_reservations_split_name.sql": "ADD COLUMN IF NOT EXISTS first_name TEXT; ADD COLUMN IF NOT EXISTS last_name TEXT"
+  "migration 0014_reservations_room_count.sql": "ADD COLUMN IF NOT EXISTS room_count INTEGER"
+  "schema.sql": "reservations gains first_name, last_name, room_count"
+
+TEST:
+  T-COPY-001a:
+    verifies: R-COPY-001
+    behaviour: "content.ts ROOMS and le-site page contain no breakfast copy"
+    steps:
+      - "grep content.ts and le-site page for petit-dejeuner and dejeuner-servi -> no matches"
+  T-COPY-001b:
+    verifies: R-COPY-002
+    behaviour: "amenity A-04 is non-breakfast and AMENITIES has 8 entries"
+    steps:
+      - "assert AMENITIES length 8 and A-04 title has no breakfast term"
+  T-FOOT-001a:
+    verifies: R-FOOT-001
+    behaviour: "footer becomes visible via markup-bound class"
+    steps:
+      - "render Footer; assert root footer gains footer--visible and shows the CITQ number"
+  T-ROOMCNT-001a:
+    verifies: R-ROOMCNT-001
+    behaviour: "GET /api/settings returns numeric publicRoomCount"
+    steps:
+      - "call GET /api/settings -> body.publicRoomCount is a number equal to public room count"
+  T-ROOMCNT-001b:
+    verifies: R-ROOMCNT-002
+    behaviour: "homepage rooms stat binds settings.publicRoomCount"
+    steps:
+      - "set settings.publicRoomCount; render homepage; stat shows that value"
+  T-SHOW-001a:
+    verifies: R-SHOW-001
+    behaviour: "RoomCard renders no reserve button"
+    steps:
+      - "render RoomCard; assert no element with reserve text and no room-card-cta test id"
+  T-FORM-001a:
+    verifies: R-FORM-001
+    behaviour: "form shows Prenom and Nom inputs when logged out"
+    steps:
+      - "render contact form logged out; assert input-first-name and input-last-name present"
+  T-FORM-002a:
+    verifies: R-FORM-002
+    behaviour: "form has a required Nombre de chambres input"
+    steps:
+      - "render contact form; assert input-rooms present with min 1"
+  T-FORM-002b:
+    verifies: R-FORM-003
+    behaviour: "authed form hides name and email and still submits"
+    steps:
+      - "set auth.user; render form; assert name/email hidden; submit sends user name and email"
+  T-RES-001a:
+    verifies: R-RES-001
+    behaviour: "schema accepts aligned contract and maps date/guest keys"
+    steps:
+      - "parse a payload with firstName lastName checkIn checkOut guests roomCount -> success"
+  T-RES-001b:
+    verifies: R-RES-001
+    behaviour: "roomCount below 1 or missing name is rejected"
+    steps:
+      - "parse payload with roomCount 0 -> failure; POST returns 400"
+  T-RES-002a:
+    verifies: R-RES-002
+    behaviour: "insert persists new and mapped columns with derived name"
+    steps:
+      - "POST reservation; assert stored first_name last_name room_count arrive depart people and name equals first last"
+  T-RES-002b:
+    verifies: R-RES-003
+    behaviour: "enqueued ops carry the new fields"
+    steps:
+      - "POST reservation; assert contact.upsert payload has firstname lastname and deal.create payload has roomCount"
+  T-DEAL-001a:
+    verifies: R-DEAL-001
+    behaviour: "deal create maps roomCount to number_of_rooms"
+    steps:
+      - "execute deal.create with roomCount; assert properties.number_of_rooms set"
+  T-AUTH-001a:
+    verifies: R-AUTH-001
+    behaviour: "nav reflects login from the shared store with no reload"
+    steps:
+      - "setUser a user; assert Nav shows Profil or Admin and hides Connexion"
+  T-AUTH-002a:
+    verifies: R-AUTH-002
+    behaviour: "logout control in desktop and mobile clears state"
+    steps:
+      - "render Nav authed; assert nav-logout and nav-logout-mobile exist; click -> logout called, store cleared, Connexion shown"
+  T-MIG-001a:
+    verifies: R-MIG-001
+    behaviour: "migrations are additive and idempotent"
+    steps:
+      - "assert 0013 and 0014 use ADD COLUMN IF NOT EXISTS and schema.sql lists the three columns"
+
+NFR:
+  typecheck: "npm run typecheck passes across all workspaces"
+  tests: "full Vitest suite web + api + hubspot green"
+  responsive: "reworked form and nav have no horizontal overflow at 375px"
+  reliability: "GET /api/settings never 500s due to the room count"
+  security: "reservation inputs validated and parameterized; no injection surface"
+
+FILE:
+  apps/web/src/lib/auth.svelte.ts: TASK-authstore
+  apps/web/src/lib/components/Nav.svelte: TASK-web-nav
+  apps/web/src/routes/+layout.svelte: TASK-web-nav
+  apps/web/src/routes/connexion/+page.svelte: TASK-web-nav
+  apps/web/src/lib/components/Footer.svelte: TASK-web-content
+  apps/web/src/lib/content.ts: TASK-web-content
+  apps/web/src/routes/le-site/+page.svelte: TASK-web-content
+  apps/web/src/lib/components/RoomCard.svelte: TASK-web-content
+  apps/web/src/routes/+page.svelte: TASK-web-content
+  apps/web/src/routes/contact/+page.svelte: TASK-web-contact
+  apps/web/src/lib/api.ts: TASK-web-contact
+  apps/web/src/lib/settings.svelte.ts: TASK-web-content
+  apps/api/src/index.ts: TASK-api
+  apps/api/src/settings.ts: TASK-api
+  apps/api/migrations/0013_reservations_split_name.sql: TASK-migrations
+  apps/api/migrations/0014_reservations_room_count.sql: TASK-migrations
+  apps/api/schema.sql: TASK-migrations
+  apps/hubspot/src/ops/deal.ts: TASK-hubspot
+
+TASK:
+  TASK-authstore:
+    scope: [R-AUTH-001, OP-AuthStore.load, E-AuthStore, ERR-UNAUTH, INV-no-secrets-frontend]
+    files: [apps/web/src/lib/auth.svelte.ts]
+    must_preserve: [INV-no-secrets-frontend]
+    produce: [code]
+    verifies: [R-AUTH-001]
+  TASK-web-nav:
+    scope: [R-AUTH-001, R-AUTH-002, OP-Auth.logout, OP-AuthStore.load, T-AUTH-001a, T-AUTH-002a]
+    files:
+      - apps/web/src/lib/components/Nav.svelte
+      - apps/web/src/routes/+layout.svelte
+      - apps/web/src/routes/connexion/+page.svelte
+    must_preserve: [INV-no-secrets-frontend]
+    produce: [code]
+    verifies: [R-AUTH-001, R-AUTH-002]
+  TASK-web-content:
+    scope:
+      - R-COPY-001
+      - R-COPY-002
+      - R-FOOT-001
+      - R-SHOW-001
+      - R-ROOMCNT-002
+      - T-COPY-001a
+      - T-COPY-001b
+      - T-FOOT-001a
+      - T-SHOW-001a
+      - T-ROOMCNT-001b
+    files:
+      - apps/web/src/lib/components/Footer.svelte
+      - apps/web/src/lib/content.ts
+      - apps/web/src/routes/le-site/+page.svelte
+      - apps/web/src/lib/components/RoomCard.svelte
+      - apps/web/src/routes/+page.svelte
+      - apps/web/src/lib/settings.svelte.ts
+    must_preserve: []
+    produce: [code]
+    verifies: [R-COPY-001, R-COPY-002, R-FOOT-001, R-SHOW-001, R-ROOMCNT-002]
+  TASK-web-contact:
+    scope:
+      - R-FORM-001
+      - R-FORM-002
+      - R-FORM-003
+      - OP-Reservation.create
+      - T-FORM-001a
+      - T-FORM-002a
+      - T-FORM-002b
+    files:
+      - apps/web/src/routes/contact/+page.svelte
+      - apps/web/src/lib/api.ts
+    must_preserve: [INV-no-secrets-frontend]
+    produce: [code]
+    verifies: [R-FORM-001, R-FORM-002, R-FORM-003]
+  TASK-api:
+    scope:
+      - R-RES-001
+      - R-RES-002
+      - R-RES-003
+      - R-ROOMCNT-001
+      - OP-Reservation.create
+      - OP-Settings.getPublic
+      - ERR-VALIDATION
+      - T-RES-001a
+      - T-RES-001b
+      - T-RES-002a
+      - T-RES-002b
+      - T-ROOMCNT-001a
+    files: [apps/api/src/index.ts, apps/api/src/settings.ts]
+    must_preserve: [INV-name-not-null, INV-sql-parameterized]
+    produce: [code]
+    verifies: [R-RES-001, R-RES-002, R-RES-003, R-ROOMCNT-001]
+  TASK-hubspot:
+    scope: [R-DEAL-001, OP-Deal.create, T-DEAL-001a]
+    files: [apps/hubspot/src/ops/deal.ts]
+    must_preserve: []
+    produce: [code]
+    verifies: [R-DEAL-001]
+  TASK-migrations:
+    scope: [R-MIG-001, INV-migration-idempotent, T-MIG-001a]
+    files:
+      - apps/api/migrations/0013_reservations_split_name.sql
+      - apps/api/migrations/0014_reservations_room_count.sql
+      - apps/api/schema.sql
+    must_preserve: [INV-migration-idempotent]
+    produce: [migrations]
+    verifies: [R-MIG-001]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Build the shared auth store (auth.svelte.ts) before the nav, contact, and logout work"
+    rationale: "changes 5, 8, and 9 all read it; mirrors the proven settings.svelte.ts state pattern"
+  ST-02:
+    status: locked
+    decision: "Fix footer visibility by binding class:footer--visible to a $state flag toggled by the observer"
+    rationale: "the selector was pruned because it only appeared via imperative classList; a markup binding retains it and keeps the reveal animation"
+  ST-03:
+    status: locked
+    decision: "Expose the live room count as publicRoomCount on GET /api/settings computed from rooms, not a stored setting"
+    rationale: "the marketing_room_count setting does not exist server-side; counting rides the existing settings fetch with a static 12 fallback"
+  ST-04:
+    status: locked
+    decision: "Widen the reservation schema to accept checkIn/checkOut/guests and map them to arrive/depart/people alongside the new fields"
+    rationale: "the frontend already sends these keys and the API silently drops them today; aligning the contract makes all fields persist"
+  ST-05:
+    status: locked
+    decision: "Keep reservations.name populated as a derived first+last value; new columns are nullable"
+    rationale: "name is NOT NULL and backs existing admin/profile views; additive nullable columns avoid a destructive change"
+  ST-06:
+    status: locked
+    decision: "Remove only the per-room CTA from RoomCard, leaving the informational card intact"
+    rationale: "matches the already-showcase le-site#chambres and funnels bookings through the single global Reserver flow"

@@ -4,6 +4,7 @@ const DEFAULTS: PublicSettings = {
   nightlyPrice: 89,
   contactEmail: "info@aubergeduvieuxpont.ca",
   marketingRoomCount: 12,
+  publicRoomCount: 12,
 };
 
 export const settings = $state({ ...DEFAULTS });
@@ -22,6 +23,9 @@ export function mergeSettings(
     }),
     ...(incoming.marketingRoomCount !== undefined && {
       marketingRoomCount: incoming.marketingRoomCount,
+    }),
+    ...(incoming.publicRoomCount !== undefined && {
+      publicRoomCount: incoming.publicRoomCount,
     }),
   };
 }

@@ -42,9 +42,10 @@ describe('RoomCard (SSR)', () => {
       expect(html).toContain('data-testid="room-card-price"');
     });
 
-    it('renders data-testid="room-card-cta" wrapper', () => {
+    it('does not render a CTA button', () => {
       const { html } = renderCard();
-      expect(html).toContain('data-testid="room-card-cta"');
+      expect(html).not.toContain('data-testid="room-card-cta"');
+      expect(html).not.toContain('Réserver');
     });
 
     it('renders an h3 inside the article', () => {
@@ -94,30 +95,6 @@ describe('RoomCard (SSR)', () => {
     it('price is inside the room-card-price element', () => {
       const { html } = renderCard();
       expect(html).toMatch(/data-testid="room-card-price"[^>]*>[^<]*89 \$\/nuit/s);
-    });
-  });
-
-  describe('CTA button', () => {
-    it('renders a link in the CTA region', () => {
-      const { html } = renderCard();
-      expect(html).toMatch(/data-testid="room-card-cta"[\s\S]*<a/);
-    });
-
-    it('CTA link points to /contact (no room-specific query)', () => {
-      const { html } = renderCard();
-      expect(html).toContain('href="/contact"');
-      expect(html).not.toContain('?chambre=');
-    });
-
-    it('CTA href is identical for all rooms', () => {
-      const familialHtml = renderCard({ ...mockRoom, name: 'Le Gîte Familial' }).html;
-      expect(familialHtml).toContain('href="/contact"');
-      expect(familialHtml).not.toContain('?');
-    });
-
-    it('renders "Réserver" as CTA text', () => {
-      const { html } = renderCard();
-      expect(html).toContain('Réserver');
     });
   });
 

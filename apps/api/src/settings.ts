@@ -34,6 +34,10 @@ export interface AdminSettings {
 export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
+  // Live count of publicly-visible rooms. Optional: omitted from the response
+  // when the count query fails so the endpoint never 500s and the frontend
+  // fallback (DEFAULTS.publicRoomCount) can take over.
+  publicRoomCount?: number;
 }
 
 export function rowsToAdminSettings(
@@ -55,5 +59,18 @@ export function toPublicSettings(admin: AdminSettings): PublicSettings {
   return {
     nightlyPrice: admin.nightlyPrice,
     contactEmail: admin.contactEmail,
+  };
+}
+
+// Merge the live public-room count into the public settings response.
+// When `count` is undefined (the count query failed) the field is omitted
+// entirely so the response stays valid and the frontend fallback applies.
+export function withPublicRoomCount(
+  publicSettings: PublicSettings,
+  count: number | undefined
+): PublicSettings {
+  return {
+    ...publicSettings,
+    ...(count !== undefined && { publicRoomCount: count }),
   };
 }

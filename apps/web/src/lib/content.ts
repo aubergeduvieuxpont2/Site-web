@@ -28,6 +28,7 @@ export const DEFAULTS = {
   nightlyPrice: 89,
   contactEmail: "info@aubergeduvieuxpont.ca",
   marketingRoomCount: 12,
+  publicRoomCount: 12,
 } as const;
 
 export type NavLink = { label: string; href: string; code: string };
@@ -66,8 +67,7 @@ export const ROOMS: Room[] = [
     capacity: "1 à 2",
     beds: "1 lit queen",
     size: "16 m²",
-    blurb:
-      "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
+    blurb: "La chambre idéale pour les travailleurs de quart de nuit.",
     specs: [
       "Insonorisation murale complète",
       "Rideaux occultants intégrals",
@@ -77,7 +77,7 @@ export const ROOMS: Room[] = [
     seed: "shift-quarters",
     slug: "chambre-quart",
     description:
-      "Conçue pour ceux qui dorment le jour. Murs insonorisés, rideaux occultants, et un petit-déjeuner servi avant l'aube pour les horaires de quart.",
+      "Isolée et calme pour un repos ininterrompu après un quart de travail, avec insonorisation optimale.",
     imgKey: "bedroom.jpg",
     picsumSeed: 17,
   },
@@ -289,8 +289,8 @@ export const AMENITIES: Amenity[] = [
   },
   {
     code: "A-04",
-    title: "Petit-déjeuner matinal",
-    text: "Service avant l'aube, calibré sur les horaires de quart et de départ.",
+    title: "Café en libre-service",
+    text: "Accès à du café disponible à toute heure.",
     icon: "coffee",
   },
   {

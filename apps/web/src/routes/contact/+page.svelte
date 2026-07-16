@@ -1,28 +1,65 @@
 <script lang="ts">
+  import { fade } from "svelte/transition";
   import { reveal } from "$lib/motion";
   import { createReservation, isError } from "$lib/api";
   import { SITE } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
   import { DEFAULTS } from "$lib/content";
+  import { auth } from "$lib/auth.svelte";
   import Button from "$lib/components/Button.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
 
   let form = $state({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     checkIn: "",
     checkOut: "",
     guests: 1,
+    roomCount: 1,
     message: "",
   });
 
   type Status = "idle" | "sending" | "sent" | "error";
   let status = $state<Status>("idle");
   let errorMsg = $state("");
-  let firstName = $state("");
+  let greetingName = $state("");
 
   // Lightweight required-field errors, shown only after a submit attempt.
-  let fieldErrors = $state<{ name?: string; email?: string }>({});
+  let fieldErrors = $state<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    roomCount?: string;
+  }>({});
+
+  // When a session user is present, the identity fields are hidden and their
+  // values are derived from the store instead of the form.
+  const loggedIn = $derived(!!auth.user);
+
+  function splitName(full: string | null | undefined): {
+    first: string;
+    last: string;
+  } {
+    const parts = (full ?? "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { first: "", last: "" };
+    const [first, ...rest] = parts;
+    return { first, last: rest.join(" ") || first };
+  }
+
+  // The effective identity used for the submit payload: the session user when
+  // logged in, the trimmed form fields otherwise.
+  const effective = $derived.by(() => {
+    if (auth.user) {
+      const { first, last } = splitName(auth.user.name);
+      return { firstName: first, lastName: last, email: auth.user.email };
+    }
+    return {
+      firstName: form.firstName.trim(),
+      lastName: form.lastName.trim(),
+      email: form.email.trim(),
+    };
+  });
 
   // On success, move keyboard focus to the confirmation heading.
   let successHeading = $state<HTMLHeadingElement | null>(null);
@@ -33,10 +70,18 @@
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   function validateClient(): boolean {
-    const errors: { name?: string; email?: string } = {};
-    if (!form.name.trim()) errors.name = "Le nom est requis.";
-    if (!form.email.trim()) errors.email = "Le courriel est requis.";
-    else if (!EMAIL_RE.test(form.email.trim())) errors.email = "Courriel invalide.";
+    const errors: typeof fieldErrors = {};
+    // Identity fields are only required when logged out — otherwise they come
+    // from the session user.
+    if (!loggedIn) {
+      if (!form.firstName.trim()) errors.firstName = "Le prénom est requis.";
+      if (!form.lastName.trim()) errors.lastName = "Le nom est requis.";
+      if (!form.email.trim()) errors.email = "Le courriel est requis.";
+      else if (!EMAIL_RE.test(form.email.trim()))
+        errors.email = "Courriel invalide.";
+    }
+    if (!(Number(form.roomCount) >= 1))
+      errors.roomCount = "Au moins une chambre est requise.";
     fieldErrors = errors;
     return Object.keys(errors).length === 0;
   }
@@ -49,12 +94,15 @@
     status = "sending";
     errorMsg = "";
 
+    const eff = effective;
     const result = await createReservation({
-      name: form.name.trim(),
-      email: form.email.trim(),
+      firstName: eff.firstName,
+      lastName: eff.lastName,
+      email: eff.email,
       checkIn: form.checkIn,
       checkOut: form.checkOut,
       guests: Math.max(1, Math.trunc(Number(form.guests) || 1)),
+      roomCount: Math.max(1, Math.trunc(Number(form.roomCount) || 1)),
       message: form.message.trim() || undefined,
     });
 
@@ -62,7 +110,7 @@
       status = "error";
       errorMsg = result.error;
     } else {
-      firstName = form.name.trim().split(" ")[0] || "merci";
+      greetingName = eff.firstName || "merci";
       status = "sent";
     }
   }
@@ -95,7 +143,7 @@
                 tabindex="-1"
                 bind:this={successHeading}
               >
-                C'est noté, {firstName}.
+                C'est noté, {greetingName}.
               </h2>
               <p class="page-contact__success-body">
                 Votre demande est enregistrée. Nous vous répondrons par courriel
@@ -122,61 +170,110 @@
               aria-describedby="form-error-region"
               data-testid="contact-form"
             >
-              <!-- Nom -->
-              <div class="page-contact__field">
-                <label class="page-contact__label" for="field-name">
-                  Nom<span class="page-contact__required" aria-hidden="true"> *</span>
-                </label>
-                <input
-                  class="page-contact__input"
-                  id="field-name"
-                  type="text"
-                  required
-                  autocomplete="name"
-                  aria-required="true"
-                  aria-describedby={fieldErrors.name ? "err-name" : undefined}
-                  data-testid="input-name"
-                  bind:value={form.name}
-                />
-                {#if fieldErrors.name}
-                  <span
-                    class="page-contact__field-error"
-                    id="err-name"
-                    role="alert"
-                    data-testid="error-name"
+              {#if loggedIn}
+                <!-- Logged-in identity: name/email derived from the session -->
+                <div
+                  class="page-contact__identity"
+                  data-testid="contact-identity"
+                  aria-live="polite"
+                  transition:fade={{ duration: 150 }}
+                >
+                  <span class="page-contact__identity-label"
+                    >Réservation au nom de</span
                   >
-                    {fieldErrors.name}
+                  <span class="page-contact__identity-value">
+                    {effective.firstName}
+                    {effective.lastName} · {effective.email}
                   </span>
-                {/if}
-              </div>
+                </div>
+              {:else}
+                <!-- Prénom / Nom -->
+                <div
+                  class="page-contact__field-row"
+                  transition:fade={{ duration: 150 }}
+                >
+                  <div class="page-contact__field">
+                    <label class="page-contact__label" for="field-first-name">
+                      Prénom<span class="page-contact__required" aria-hidden="true"> *</span>
+                    </label>
+                    <input
+                      class="page-contact__input"
+                      id="field-first-name"
+                      type="text"
+                      required
+                      autocomplete="given-name"
+                      aria-required="true"
+                      aria-describedby={fieldErrors.firstName ? "err-first-name" : undefined}
+                      data-testid="input-first-name"
+                      bind:value={form.firstName}
+                    />
+                    {#if fieldErrors.firstName}
+                      <span
+                        class="page-contact__field-error"
+                        id="err-first-name"
+                        role="alert"
+                        data-testid="error-first-name"
+                      >
+                        {fieldErrors.firstName}
+                      </span>
+                    {/if}
+                  </div>
+                  <div class="page-contact__field">
+                    <label class="page-contact__label" for="field-last-name">
+                      Nom<span class="page-contact__required" aria-hidden="true"> *</span>
+                    </label>
+                    <input
+                      class="page-contact__input"
+                      id="field-last-name"
+                      type="text"
+                      required
+                      autocomplete="family-name"
+                      aria-required="true"
+                      aria-describedby={fieldErrors.lastName ? "err-last-name" : undefined}
+                      data-testid="input-last-name"
+                      bind:value={form.lastName}
+                    />
+                    {#if fieldErrors.lastName}
+                      <span
+                        class="page-contact__field-error"
+                        id="err-last-name"
+                        role="alert"
+                        data-testid="error-last-name"
+                      >
+                        {fieldErrors.lastName}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
 
-              <!-- Courriel -->
-              <div class="page-contact__field">
-                <label class="page-contact__label" for="field-email">
-                  Courriel<span class="page-contact__required" aria-hidden="true"> *</span>
-                </label>
-                <input
-                  class="page-contact__input"
-                  id="field-email"
-                  type="email"
-                  required
-                  autocomplete="email"
-                  aria-required="true"
-                  aria-describedby={fieldErrors.email ? "err-email" : undefined}
-                  data-testid="input-email"
-                  bind:value={form.email}
-                />
-                {#if fieldErrors.email}
-                  <span
-                    class="page-contact__field-error"
-                    id="err-email"
-                    role="alert"
-                    data-testid="error-email"
-                  >
-                    {fieldErrors.email}
-                  </span>
-                {/if}
-              </div>
+                <!-- Courriel -->
+                <div class="page-contact__field" transition:fade={{ duration: 150 }}>
+                  <label class="page-contact__label" for="field-email">
+                    Courriel<span class="page-contact__required" aria-hidden="true"> *</span>
+                  </label>
+                  <input
+                    class="page-contact__input"
+                    id="field-email"
+                    type="email"
+                    required
+                    autocomplete="email"
+                    aria-required="true"
+                    aria-describedby={fieldErrors.email ? "err-email" : undefined}
+                    data-testid="input-email"
+                    bind:value={form.email}
+                  />
+                  {#if fieldErrors.email}
+                    <span
+                      class="page-contact__field-error"
+                      id="err-email"
+                      role="alert"
+                      data-testid="error-email"
+                    >
+                      {fieldErrors.email}
+                    </span>
+                  {/if}
+                </div>
+              {/if}
 
               <!-- Dates -->
               <div class="page-contact__field-row">
@@ -202,18 +299,47 @@
                 </div>
               </div>
 
-              <!-- Personnes -->
-              <div class="page-contact__field">
-                <label class="page-contact__label" for="field-guests">Nombre de personnes</label>
-                <input
-                  class="page-contact__input"
-                  id="field-guests"
-                  type="number"
-                  min="1"
-                  inputmode="numeric"
-                  data-testid="input-guests"
-                  bind:value={form.guests}
-                />
+              <!-- Personnes + Nombre de chambres -->
+              <div class="page-contact__field-row">
+                <div class="page-contact__field">
+                  <label class="page-contact__label" for="field-guests">Nombre de personnes</label>
+                  <input
+                    class="page-contact__input"
+                    id="field-guests"
+                    type="number"
+                    min="1"
+                    inputmode="numeric"
+                    data-testid="input-guests"
+                    bind:value={form.guests}
+                  />
+                </div>
+                <div class="page-contact__field">
+                  <label class="page-contact__label" for="field-rooms">
+                    Nombre de chambres<span class="page-contact__required" aria-hidden="true"> *</span>
+                  </label>
+                  <input
+                    class="page-contact__input"
+                    id="field-rooms"
+                    type="number"
+                    min="1"
+                    inputmode="numeric"
+                    required
+                    aria-required="true"
+                    aria-describedby={fieldErrors.roomCount ? "err-rooms" : undefined}
+                    data-testid="input-rooms"
+                    bind:value={form.roomCount}
+                  />
+                  {#if fieldErrors.roomCount}
+                    <span
+                      class="page-contact__field-error"
+                      id="err-rooms"
+                      role="alert"
+                      data-testid="error-rooms"
+                    >
+                      {fieldErrors.roomCount}
+                    </span>
+                  {/if}
+                </div>
               </div>
 
               <!-- Message -->
@@ -354,7 +480,7 @@
     font-size: 18px;
     font-weight: 400;
     line-height: 1.65;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     max-width: 52ch;
     margin: var(--space-md) 0 0;
   }
@@ -396,7 +522,7 @@
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.6;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     margin: var(--space-sm) 0 0;
   }
 
@@ -432,12 +558,12 @@
     font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     display: block;
   }
 
   .page-contact__required {
-    color: var(--color-secondary);
+    color: var(--color-terracotta);
   }
 
   .page-contact__input {
@@ -461,8 +587,8 @@
   }
 
   .page-contact__input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px var(--color-primary);
+    border-color: var(--color-terracotta);
+    box-shadow: 0 0 0 2px var(--color-terracotta);
   }
 
   .page-contact__input:hover:not(:focus) {
@@ -474,6 +600,33 @@
     resize: vertical;
     line-height: 1.65;
     padding-top: var(--space-md);
+  }
+
+  /* ── Logged-in identity indicator ─────────────────────── */
+  .page-contact__identity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius);
+    background-color: var(--color-surface-2);
+  }
+
+  .page-contact__identity-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-mute, var(--color-ink-soft));
+  }
+
+  .page-contact__identity-value {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-ink-mute, var(--color-ink-soft));
+    word-break: break-word;
   }
 
   /* ── Field-level errors ───────────────────────────────── */
@@ -508,7 +661,7 @@
   .page-contact__error-banner > *:not(.page-contact__error-msg) {
     font-family: var(--font-sans);
     font-size: 13px;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
   }
 
   .page-contact__error-phone {
@@ -520,7 +673,7 @@
   }
 
   .page-contact__error-phone:hover {
-    color: var(--color-secondary);
+    color: var(--color-terracotta);
   }
 
   /* ── Submit area ──────────────────────────────────────── */
@@ -581,7 +734,7 @@
   }
 
   .page-contact__success-title:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-terracotta);
     outline-offset: 4px;
     border-radius: 2px;
   }
@@ -589,7 +742,7 @@
   .page-contact__success-badge {
     width: 40px;
     height: 4px;
-    background-color: var(--color-secondary-container);
+    background-color: var(--color-ember);
     border-radius: 2px;
     margin-bottom: var(--space-xs);
   }
@@ -598,13 +751,13 @@
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.65;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     max-width: 48ch;
     margin: 0;
   }
 
   .page-contact__success-cta {
-    background-color: var(--color-surface-container-low);
+    background-color: var(--color-surface-2);
     border: 1px solid var(--color-outline-variant);
     border-radius: var(--radius);
     padding: var(--space-md) var(--space-lg);
@@ -639,7 +792,7 @@
     font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     display: block;
   }
 
@@ -664,11 +817,11 @@
   }
 
   .page-contact__phone-link:hover {
-    color: var(--color-secondary);
+    color: var(--color-terracotta);
   }
 
   .page-contact__phone-link:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-terracotta);
     outline-offset: 3px;
     border-radius: 2px;
   }
@@ -676,7 +829,7 @@
   .page-contact__email-link {
     font-family: var(--font-sans);
     font-size: 14px;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
     text-decoration: underline;
     text-decoration-color: var(--color-outline-variant);
     text-underline-offset: 4px;
@@ -687,12 +840,12 @@
   }
 
   .page-contact__email-link:hover {
-    color: var(--color-secondary);
-    text-decoration-color: var(--color-secondary);
+    color: var(--color-terracotta);
+    text-decoration-color: var(--color-terracotta);
   }
 
   .page-contact__email-link:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-terracotta);
     outline-offset: 3px;
     border-radius: 2px;
   }
@@ -721,7 +874,7 @@
   .page-contact__hour-row dt {
     font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--color-ink-variant);
+    color: var(--color-ink-soft);
   }
 
   .page-contact__hour-row dd {
@@ -733,7 +886,7 @@
 
   /* ── Phone CTA strip ──────────────────────────────────── */
   .page-contact__strip {
-    background-color: var(--color-inverse-surface);
+    background-color: var(--color-charcoal);
     color: var(--color-inverse-on-surface);
     border-top: 1px solid var(--color-outline-variant);
   }
@@ -780,7 +933,7 @@
   }
 
   .page-contact__strip-phone:focus-visible {
-    outline: 2px solid var(--color-secondary-container);
+    outline: 2px solid var(--color-ember);
     outline-offset: 3px;
     border-radius: 2px;
   }

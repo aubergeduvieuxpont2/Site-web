@@ -20,6 +20,9 @@ CREATE TABLE IF NOT EXISTS reservations (
   depart     DATE,
   people     INT NOT NULL DEFAULT 1,
   message    TEXT,
+  first_name TEXT,
+  last_name  TEXT,
+  room_count INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

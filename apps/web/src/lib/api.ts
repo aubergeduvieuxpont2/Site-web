@@ -35,6 +35,12 @@ export interface ReservationRow {
   message: string | null;
   created_at: string;
   updated_at: string;
+  // Split-name + room-count columns (nullable; populated by the reservation
+  // route once the 0013/0014 migrations have applied). Optional so rows read
+  // back before the migration — and existing fixtures — stay assignable.
+  first_name?: string | null;
+  last_name?: string | null;
+  room_count?: number | null;
 }
 
 export interface OutboxRow {
@@ -75,9 +81,15 @@ export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
   marketingRoomCount: number;
+  // Live count of publicly-visible rooms, served by GET /api/settings. Kept
+  // required client-side: loadSettings seeds it from DEFAULTS (12) so callers
+  // always read a number even when the API omits it on a count failure.
+  publicRoomCount: number;
 }
 
-export interface AdminSettings extends PublicSettings {
+// `publicRoomCount` is a live, computed public field — never part of an admin
+// settings body — so it is excluded from the admin shape.
+export interface AdminSettings extends Omit<PublicSettings, "publicRoomCount"> {
   assignableRoomCount: number;
 }
 
@@ -375,11 +387,13 @@ export async function adminUserResetLink(
 // ---------------------------------------------------------------------------
 
 export async function createReservation(data: {
-  name: string;
+  firstName: string;
+  lastName: string;
   email: string;
   checkIn: string;
   checkOut: string;
   guests: number;
+  roomCount: number;
   message?: string;
 }): Promise<{ reservation: ReservationRow } | ApiError> {
   return fetchJson<{ reservation: ReservationRow }>("/reservations", {

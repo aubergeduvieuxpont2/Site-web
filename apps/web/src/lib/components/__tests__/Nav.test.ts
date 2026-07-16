@@ -16,6 +16,7 @@ vi.mock("$app/stores", () => ({
 
 import Nav from "../Nav.svelte";
 import { NAV, SITE } from "$lib/content";
+import { setUser, clearUser } from "$lib/auth.svelte";
 
 afterEach(() => cleanup());
 
@@ -147,15 +148,21 @@ describe("Nav", () => {
   });
 
   describe("authenticated user link (role-based)", () => {
-    beforeEach(() => vi.unstubAllGlobals());
-    afterEach(() => vi.unstubAllGlobals());
+    beforeEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
 
     it("shows neither Admin nor Profil for an unauthenticated visitor", async () => {
       stubAuthMe(null);
+      clearUser();
       const { queryByTestId } = render(Nav);
       // Allow the mocked fetch microtasks to settle.
-      await Promise.resolve();
-      await Promise.resolve();
+      await new Promise(resolve => setTimeout(resolve, 50));
       expect(queryByTestId("nav-admin-link")).toBeNull();
       expect(queryByTestId("nav-profil-link")).toBeNull();
       expect(queryByTestId("nav-admin-link-mobile")).toBeNull();
@@ -163,13 +170,15 @@ describe("Nav", () => {
     });
 
     it("shows the Admin link (desktop + mobile) for an admin user", async () => {
-      stubAuthMe({ role: "admin" });
-      const { findByTestId, queryByTestId } = render(Nav);
+      setUser({ id: 1, email: "admin@test.com", name: "Admin", role: "admin" });
+      const { queryByTestId } = render(Nav);
 
-      const desktop = await findByTestId("nav-admin-link");
-      expect(desktop.getAttribute("href")).toBe("/admin");
-      const mobile = await findByTestId("nav-admin-link-mobile");
-      expect(mobile.getAttribute("href")).toBe("/admin");
+      const desktop = queryByTestId("nav-admin-link");
+      expect(desktop).toBeTruthy();
+      expect(desktop?.getAttribute("href")).toBe("/admin");
+      const mobile = queryByTestId("nav-admin-link-mobile");
+      expect(mobile).toBeTruthy();
+      expect(mobile?.getAttribute("href")).toBe("/admin");
 
       // Guests' Profil link must be absent for admins.
       expect(queryByTestId("nav-profil-link")).toBeNull();
@@ -177,48 +186,115 @@ describe("Nav", () => {
     });
 
     it("shows the Profil link (desktop + mobile) for a guest user", async () => {
-      stubAuthMe({ role: "guest" });
-      const { findByTestId, queryByTestId } = render(Nav);
+      setUser({ id: 2, email: "guest@test.com", name: "Guest", role: "guest" });
+      const { queryByTestId } = render(Nav);
 
-      const desktop = await findByTestId("nav-profil-link");
-      expect(desktop.getAttribute("href")).toBe("/profil");
-      const mobile = await findByTestId("nav-profil-link-mobile");
-      expect(mobile.getAttribute("href")).toBe("/profil");
+      const desktop = queryByTestId("nav-profil-link");
+      expect(desktop).toBeTruthy();
+      expect(desktop?.getAttribute("href")).toBe("/profil");
+      const mobile = queryByTestId("nav-profil-link-mobile");
+      expect(mobile).toBeTruthy();
+      expect(mobile?.getAttribute("href")).toBe("/profil");
 
       // Admin link must be absent for guests.
       expect(queryByTestId("nav-admin-link")).toBeNull();
       expect(queryByTestId("nav-admin-link-mobile")).toBeNull();
     });
 
-    it("treats a user with a non-admin role as a guest", async () => {
-      stubAuthMe({ role: "something-else" });
-      const { findByTestId, queryByTestId } = render(Nav);
-      await findByTestId("nav-profil-link");
+    it("treats a guest user with profil link not admin", async () => {
+      setUser({ id: 3, email: "guest2@test.com", name: "Guest2", role: "guest" });
+      const { queryByTestId } = render(Nav);
+      const profil = queryByTestId("nav-profil-link");
+      expect(profil).toBeTruthy();
       expect(queryByTestId("nav-admin-link")).toBeNull();
     });
   });
 
   describe("Connexion link gating", () => {
-    beforeEach(() => vi.unstubAllGlobals());
-    afterEach(() => vi.unstubAllGlobals());
+    beforeEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
 
     it("shows Connexion (desktop + mobile) for an unauthenticated visitor", async () => {
-      stubAuthMe(null);
+      clearUser();
       const { queryByTestId } = render(Nav);
-      // Allow the mocked fetch microtasks to settle.
-      await Promise.resolve();
-      await Promise.resolve();
       expect(queryByTestId("nav-connexion-link")).toBeTruthy();
       expect(queryByTestId("nav-connexion-link-mobile")).toBeTruthy();
     });
 
     it("hides Connexion (desktop + mobile) once a user is authenticated", async () => {
-      stubAuthMe({ role: "guest" });
-      const { findByTestId, queryByTestId } = render(Nav);
-      // Wait for the auth fetch to resolve and the user state to populate.
-      await findByTestId("nav-profil-link");
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      const { queryByTestId } = render(Nav);
       expect(queryByTestId("nav-connexion-link")).toBeNull();
       expect(queryByTestId("nav-connexion-link-mobile")).toBeNull();
+    });
+  });
+
+  describe("logout button", () => {
+    beforeEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      clearUser();
+    });
+
+    it("hides logout (desktop + mobile) for an unauthenticated visitor", () => {
+      clearUser();
+      const { queryByTestId } = render(Nav);
+      expect(queryByTestId("nav-logout")).toBeNull();
+      expect(queryByTestId("nav-logout-mobile")).toBeNull();
+    });
+
+    it("shows logout (desktop + mobile) once a user is authenticated", () => {
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      const { queryByTestId } = render(Nav);
+
+      const desktop = queryByTestId("nav-logout");
+      expect(desktop).toBeTruthy();
+      expect(desktop?.tagName).toBe("BUTTON");
+      expect(desktop?.getAttribute("type")).toBe("button");
+      expect(desktop?.getAttribute("aria-label")).toBe("Se déconnecter");
+
+      const mobile = queryByTestId("nav-logout-mobile");
+      expect(mobile).toBeTruthy();
+      expect(mobile?.tagName).toBe("BUTTON");
+      expect(mobile?.getAttribute("type")).toBe("button");
+      expect(mobile?.getAttribute("aria-label")).toBe("Se déconnecter");
+    });
+
+    it("calls POST /api/auth/logout and clears the user on click", async () => {
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      const fetchMock = vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ ok: true }),
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const { queryByTestId } = render(Nav);
+      const button = queryByTestId("nav-logout") as HTMLButtonElement;
+      await fireEvent.click(button);
+      // Allow the awaited logout() promise + reactive update to settle.
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as unknown as [
+        string,
+        RequestInit,
+      ];
+      expect(url).toContain("/auth/logout");
+      expect(init?.method).toBe("POST");
+      // clearUser() ran → both logout buttons removed from the DOM.
+      expect(queryByTestId("nav-logout")).toBeNull();
+      expect(queryByTestId("nav-logout-mobile")).toBeNull();
     });
   });
 

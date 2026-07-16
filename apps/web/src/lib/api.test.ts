@@ -331,11 +331,13 @@ describe("createReservation", () => {
   it("POSTs the reservation payload", async () => {
     const { calls } = stubFetch({ reservation: { id: 1 } }, 201);
     const data = {
-      name: "Jean",
+      firstName: "Jean",
+      lastName: "Tremblay",
       email: "jean@ex.com",
       checkIn: "2026-08-01",
       checkOut: "2026-08-03",
       guests: 2,
+      roomCount: 1,
       message: "Vue sur le pont",
     };
     const res = await createReservation(data);
@@ -349,11 +351,13 @@ describe("createReservation", () => {
   it("maps a 400 validation error to an error body", async () => {
     stubFetch({ error: "email invalide" }, 400);
     const res = await createReservation({
-      name: "Jean",
+      firstName: "Jean",
+      lastName: "Tremblay",
       email: "bad",
       checkIn: "2026-08-01",
       checkOut: "2026-08-03",
       guests: 1,
+      roomCount: 1,
     });
     expect(isError(res)).toBe(true);
     expect(res).toEqual({ error: "email invalide" });
