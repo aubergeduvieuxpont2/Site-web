@@ -38,7 +38,7 @@
 
     <div class="page-accueil__hero-content">
       <p class="page-accueil__hero-eyebrow">Saint-Raymond · Portneuf · Québec</p>
-      <h1 id="hero-heading" class="page-accueil__hero-heading">L'art de recevoir</h1>
+      <h1 id="hero-heading" class="page-accueil__hero-heading">L'art de recevoir les travailleurs de terrain</h1>
       <p class="page-accueil__hero-sub">
         Une auberge de caractère pour les travailleurs de terrain — foresterie et secteur hydroélectrique.
       </p>
