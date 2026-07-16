@@ -2,6 +2,7 @@ import type { Env } from "./env";
 import { claimBatch, markDelivered, markRetry, markFailed, classifyFailure } from "./outbox";
 import { executeOp } from "./ops/registry";
 import type { OpEnvelope } from "./ops/registry";
+import { linkContactToUser } from "./userLink";
 
 export interface DrainStats {
   delivered: number;
@@ -31,6 +32,12 @@ export async function scheduled(
 
         if (result.ok) {
           await markDelivered(env, row.id.toString(), result.hubspotId || "");
+          if (row.kind === "contact.upsert" && result.hubspotId) {
+            const payload = row.payload as any;
+            if (payload?.email) {
+              await linkContactToUser(env, payload.email, result.hubspotId);
+            }
+          }
           stats.delivered++;
         } else {
           const failure = classifyFailure(result.status);

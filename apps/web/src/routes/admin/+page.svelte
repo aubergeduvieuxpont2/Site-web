@@ -4,6 +4,7 @@
   import Contour from "$lib/components/Contour.svelte";
   import Button from "$lib/components/Button.svelte";
   import AdminUtilisateursTab from "$lib/components/admin/AdminUtilisateursTab.svelte";
+  import AdminChambresTab from "$lib/components/admin/AdminChambresTab.svelte";
   import {
     getMe,
     adminReservations,
@@ -11,14 +12,11 @@
     requeueOutbox,
     adminGetSettings,
     adminUpdateSettings,
-    adminRooms,
-    adminSetRoomVisibility,
     changePassword,
     isError,
     type AdminSettings,
   } from "$lib/api";
   import type { ReservationRow, OutboxRow } from "$lib/api";
-  import { ROOMS } from "$lib/content";
 
   // ─── Auth state ───
   let loading = $state(true);
@@ -63,20 +61,6 @@
   let pwError = $state<string | null>(null);
   let pwSuccess = $state(false);
   let pwTimer: ReturnType<typeof setTimeout>;
-
-  // ─── Rooms (visibility) ───
-  type RoomVisRow = {
-    slug: string;
-    name: string;
-    code: string;
-    capacity: string;
-    is_public: boolean;
-  };
-  let rooms = $state<RoomVisRow[]>([]);
-  let roomsLoading = $state(false);
-  let roomsError = $state<string | null>(null);
-  let pendingToggles = $state(new Set<string>());
-  let toggleErrors = $state(new Map<string, string>());
 
   // ─── Helpers ───
   function formatDate(iso: string): string {
@@ -274,70 +258,12 @@
     }
   }
 
-  // ─── Rooms: load visibility and merge with static ROOMS content ───
-  async function loadRooms() {
-    roomsLoading = true;
-    roomsError = null;
-    const res = await adminRooms();
-    roomsLoading = false;
-    if (isError(res)) {
-      roomsError = "Impossible de charger les chambres.";
-      return;
-    }
-    const vis = res.rooms;
-    rooms = ROOMS.map((room) => {
-      const match = vis.find((r) => r.slug === room.slug);
-      return {
-        slug: room.slug,
-        name: room.name,
-        code: room.code,
-        capacity: room.capacity,
-        is_public: match?.is_public ?? true,
-      };
-    });
-  }
-
-  // ─── Rooms: optimistic visibility toggle with rollback on error ───
-  async function toggleRoom(slug: string) {
-    if (pendingToggles.has(slug)) return;
-    const idx = rooms.findIndex((r) => r.slug === slug);
-    if (idx === -1) return;
-
-    const prev = rooms[idx].is_public;
-    const next = !prev;
-
-    // Optimistic update
-    rooms[idx] = { ...rooms[idx], is_public: next };
-    const clearedErrors = new Map(toggleErrors);
-    clearedErrors.delete(slug);
-    toggleErrors = clearedErrors;
-    pendingToggles = new Set([...pendingToggles, slug]);
-
-    const res = await adminSetRoomVisibility(slug, next);
-
-    const stillPending = new Set(pendingToggles);
-    stillPending.delete(slug);
-    pendingToggles = stillPending;
-
-    if (isError(res)) {
-      // Rollback
-      rooms[idx] = { ...rooms[idx], is_public: prev };
-      const withError = new Map(toggleErrors);
-      withError.set(slug, "Impossible de modifier la visibilité. Veuillez réessayer.");
-      toggleErrors = withError;
-    } else {
-      rooms[idx] = { ...rooms[idx], is_public: res.room.is_public };
-    }
-  }
-
   // ─── Reactive data reload when tab changes ───
   $effect(() => {
     if (activeTab === "outbox") {
       loadOutbox(statusFilter);
     } else if (activeTab === "settings") {
       loadSettings();
-    } else if (activeTab === "rooms") {
-      loadRooms();
     }
   });
 
@@ -849,89 +775,11 @@
         id="panel-rooms"
         aria-labelledby="tab-rooms"
         hidden={activeTab !== "rooms"}
-        data-testid="admin-chambres-tab"
-        class="admin-chambres-tab"
+        data-testid="panel-rooms"
       >
         <div class="page-admin__panel-inner">
-          {#if roomsLoading}
-            <div
-              class="admin-chambres-tab__loading"
-              role="status"
-              aria-live="polite"
-              aria-label="Chargement des chambres"
-              data-testid="chambres-loading"
-            >
-              <span class="admin-chambres-tab__spinner" aria-hidden="true"></span>
-              <span class="admin-chambres-tab__loading-text">Chargement…</span>
-            </div>
-          {:else if roomsError}
-            <p class="admin-chambres-tab__fetch-error" role="alert" data-testid="chambres-error">
-              {roomsError}
-            </p>
-          {:else}
-            <ul
-              class="admin-chambres-tab__list"
-              aria-label="Visibilité des chambres"
-              data-testid="chambres-list"
-            >
-              {#each rooms as room (room.slug)}
-                <li
-                  class="admin-chambres-tab__card"
-                  data-testid="chambre-card-{room.slug}"
-                  data-public={room.is_public}
-                >
-                  <div class="admin-chambres-tab__card-row">
-                    <div class="admin-chambres-tab__room-info">
-                      <span
-                        class="admin-chambres-tab__room-name"
-                        data-testid="chambre-name-{room.slug}">{room.name}</span
-                      >
-                      <span class="admin-chambres-tab__room-meta">
-                        <span
-                          class="admin-chambres-tab__room-code"
-                          data-testid="chambre-code-{room.slug}">{room.code}</span
-                        >
-                        <span
-                          class="admin-chambres-tab__room-capacity"
-                          data-testid="chambre-capacity-{room.slug}">{room.capacity} pers.</span
-                        >
-                      </span>
-                    </div>
-
-                    <div class="admin-chambres-tab__control">
-                      <span
-                        class="admin-chambres-tab__visibility-label"
-                        data-testid="chambre-visibility-{room.slug}"
-                        aria-hidden="true">{room.is_public ? "Publique" : "Masquée"}</span
-                      >
-                      <button
-                        type="button"
-                        class="admin-chambres-tab__toggle"
-                        role="switch"
-                        aria-checked={room.is_public}
-                        aria-label="Rendre {room.name} publique"
-                        data-testid="toggle-{room.slug}"
-                        data-pending={pendingToggles.has(room.slug) ? "" : undefined}
-                        disabled={pendingToggles.has(room.slug)}
-                        onclick={() => toggleRoom(room.slug)}
-                      >
-                        <span class="admin-chambres-tab__toggle-track" aria-hidden="true">
-                          <span class="admin-chambres-tab__toggle-thumb"></span>
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <p
-                    class="admin-chambres-tab__card-error"
-                    role="alert"
-                    data-testid="chambre-error-{room.slug}"
-                  >
-                    {toggleErrors.get(room.slug) ?? ""}
-                  </p>
-                </li>
-              {/each}
-            </ul>
+          {#if activeTab === "rooms"}
+            <AdminChambresTab />
           {/if}
         </div>
       </div>
@@ -1626,229 +1474,4 @@
     }
   }
 
-  /* ─── Chambres tab (room visibility) ─── */
-  .admin-chambres-tab {
-    width: 100%;
-  }
-
-  .admin-chambres-tab__loading {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: var(--space-md) 0;
-  }
-
-  .admin-chambres-tab__spinner {
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--color-outline-variant);
-    border-top-color: var(--color-terracotta);
-    border-radius: 50%;
-    animation: admin-spin 750ms linear infinite;
-    flex-shrink: 0;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .admin-chambres-tab__spinner {
-      animation: none;
-      opacity: 0.6;
-    }
-  }
-
-  .admin-chambres-tab__loading-text {
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--color-ink-variant);
-  }
-
-  .admin-chambres-tab__fetch-error {
-    margin: 0;
-    padding: var(--space-sm) var(--space-md);
-    border-left: 3px solid var(--color-error);
-    font-family: var(--font-sans);
-    font-size: 14px;
-    color: var(--color-error);
-    background: color-mix(in srgb, var(--color-error) 6%, var(--color-surface));
-    border-radius: 0 4px 4px 0;
-  }
-
-  .admin-chambres-tab__list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-  }
-
-  .admin-chambres-tab__card {
-    background: var(--color-surface-container-lowest);
-    border: 1px solid var(--color-outline-variant);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-
-  .admin-chambres-tab__card-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md);
-    padding: var(--space-sm) var(--space-md);
-  }
-
-  .admin-chambres-tab__room-info {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    min-width: 0;
-  }
-
-  .admin-chambres-tab__room-name {
-    font-family: var(--font-sans);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-ink);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .admin-chambres-tab__room-meta {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-wrap: wrap;
-  }
-
-  .admin-chambres-tab__room-code {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    color: var(--color-ink-variant);
-    background: var(--color-url-surface, #eceef0);
-    padding: 2px 6px;
-    border-radius: 3px;
-  }
-
-  .admin-chambres-tab__room-capacity {
-    font-family: var(--font-sans);
-    font-size: 13px;
-    color: var(--color-ink-variant);
-  }
-
-  .admin-chambres-tab__control {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    flex-shrink: 0;
-  }
-
-  .admin-chambres-tab__visibility-label {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    min-width: 56px;
-    text-align: right;
-    transition: color 180ms ease;
-  }
-
-  .admin-chambres-tab__card[data-public="true"] .admin-chambres-tab__visibility-label {
-    color: var(--color-forest, #1a5c2d);
-  }
-
-  .admin-chambres-tab__card[data-public="false"] .admin-chambres-tab__visibility-label {
-    color: var(--color-toggle-off, #c6c6cd);
-  }
-
-  .admin-chambres-tab__toggle {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 9px 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    border-radius: 4px;
-    flex-shrink: 0;
-    transition: opacity 150ms;
-  }
-
-  .admin-chambres-tab__toggle:focus-visible {
-    outline: 2px solid var(--color-terracotta);
-    outline-offset: 3px;
-  }
-
-  .admin-chambres-tab__toggle[data-pending] {
-    opacity: 0.55;
-    pointer-events: none;
-  }
-
-  .admin-chambres-tab__toggle-track {
-    position: relative;
-    width: 48px;
-    height: 26px;
-    border-radius: 13px;
-    background: var(--color-toggle-off, #c6c6cd);
-    transition: background 200ms ease;
-    flex-shrink: 0;
-  }
-
-  .admin-chambres-tab__toggle[aria-checked="true"] .admin-chambres-tab__toggle-track {
-    background: var(--color-toggle-on, #1a5c2d);
-  }
-
-  .admin-chambres-tab__toggle-thumb {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #ffffff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
-    transition: transform 200ms ease;
-  }
-
-  .admin-chambres-tab__toggle[aria-checked="true"] .admin-chambres-tab__toggle-thumb {
-    transform: translateX(22px);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .admin-chambres-tab__toggle-track,
-    .admin-chambres-tab__toggle-thumb,
-    .admin-chambres-tab__visibility-label {
-      transition: none;
-    }
-  }
-
-  .admin-chambres-tab__card-error {
-    margin: 0;
-    padding: 0 var(--space-md) var(--space-sm);
-    font-family: var(--font-sans);
-    font-size: 13px;
-    color: var(--color-error);
-  }
-
-  .admin-chambres-tab__card-error:empty {
-    display: none;
-  }
-
-  @media (max-width: 640px) {
-    .admin-chambres-tab__card-row {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: var(--space-sm);
-    }
-
-    .admin-chambres-tab__control {
-      align-self: flex-end;
-    }
-  }
 </style>

@@ -82,14 +82,17 @@
           {/if}
         </a>
       {/each}
-      <a
-        href="/connexion"
-        class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
-      >
-        <span class="text-sm font-medium text-ink hover:text-terracotta transition-colors"
-          >Connexion</span
+      {#if !user}
+        <a
+          href="/connexion"
+          data-testid="nav-connexion-link"
+          class="group relative flex items-center gap-2 px-4 py-2 transition-colors"
         >
-      </a>
+          <span class="text-sm font-medium text-ink hover:text-terracotta transition-colors"
+            >Connexion</span
+          >
+        </a>
+      {/if}
       {#if user}
         {#if user.role === "admin"}
           <a
@@ -193,13 +196,16 @@
           <span class="text-ink-mute">→</span>
         </a>
       {/each}
-      <a
-        href="/connexion"
-        class="flex items-center justify-between border-b border-hairline-2 py-4"
-      >
-        <span class="text-lg font-medium text-ink">Connexion</span>
-        <span class="text-ink-mute">→</span>
-      </a>
+      {#if !user}
+        <a
+          href="/connexion"
+          data-testid="nav-connexion-link-mobile"
+          class="flex items-center justify-between border-b border-hairline-2 py-4"
+        >
+          <span class="text-lg font-medium text-ink">Connexion</span>
+          <span class="text-ink-mute">→</span>
+        </a>
+      {/if}
       {#if user}
         {#if user.role === "admin"}
           <a

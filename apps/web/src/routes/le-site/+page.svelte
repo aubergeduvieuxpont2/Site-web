@@ -1,13 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import RoomCard from '$lib/components/RoomCard.svelte';
   import ImagePanel from '$lib/components/ImagePanel.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
   import Contour from '$lib/components/Contour.svelte';
   import Button from '$lib/components/Button.svelte';
   import { reveal, revealStagger } from '$lib/motion';
-  import { ROOMS, ATTRACTIONS } from '$lib/content';
-  import { getRooms, isError } from '$lib/api';
+  import { ATTRACTIONS, PROPERTY_AREAS } from '$lib/content';
+  import { settings, loadSettings } from '$lib/settings.svelte';
 
   const NAV_SECTIONS = [
     { id: 'chambres', label: 'Chambres' },
@@ -18,10 +17,17 @@
   let activeSection = $state<string>('chambres');
   let sectionObserver: IntersectionObserver | undefined;
 
-  // Reactive room list — initial value is the full ROOMS array so SSR / the
-  // static prerender output is identical to today. The visibility filter
-  // silently narrows this after getRooms() resolves on the client.
-  let visibleRooms = $state(ROOMS);
+  // Editorial (single-image) areas alternate the image side down the page.
+  // PROPERTY_AREAS is static, so the layout is derived once at module scope.
+  let editorialIndex = 0;
+  const areasWithLayout = PROPERTY_AREAS.map((area) => {
+    if (area.images.length === 1) {
+      const editorialReverse = editorialIndex % 2 === 1;
+      editorialIndex += 1;
+      return { ...area, editorialReverse };
+    }
+    return { ...area, editorialReverse: false };
+  });
 
   onMount(() => {
     const sections = NAV_SECTIONS
@@ -42,20 +48,10 @@
 
     sections.forEach(el => sectionObserver!.observe(el));
 
-    // Silent room visibility filter — never blocks render, degrades to
-    // showing every room on any API error or unexpected payload.
-    getRooms().then((result) => {
-      if (isError(result)) return; // API error → keep all rooms visible
-
-      // Map slug → is_public. Slugs absent from the response are treated as
-      // public (graceful fallback for content added ahead of the API).
-      const visibilityMap = new Map(result.map(r => [r.slug, r.is_public]));
-      const filtered = ROOMS.filter(r => visibilityMap.get(r.slug) !== false);
-
-      // If the filter hides everything (all slugs masked or an unexpected
-      // payload), fall back to the full list rather than an empty grid.
-      visibleRooms = filtered.length === 0 ? ROOMS : filtered;
-    });
+    // Refresh the flat nightly price from the API; the store already holds the
+    // static default (89 $) so the section renders correctly if this never
+    // resolves. loadSettings swallows its own errors.
+    loadSettings();
   });
 
   onDestroy(() => {
@@ -96,22 +92,107 @@
     </div>
   </nav>
 
-  <!-- ── CHAMBRES ────────────────────────────────────── -->
-  <section id="chambres" class="page-le-site__section" data-testid="section-chambres">
+  <!-- ── CHAMBRES (property overview) ──────────────────── -->
+  <section
+    id="chambres"
+    class="page-le-site__section"
+    data-testid="section-chambres"
+    aria-label="Aperçu de la propriété"
+  >
     <div class="page-le-site__section-inner">
       <Contour number="01" width="contained" />
       <SectionLabel text="Hébergement" />
       <h2 class="page-le-site__heading" use:reveal={{ y: 20, delay: 0.05 }}>
-        Nos chambres
+        Nos espaces
       </h2>
-      <p class="page-le-site__intro" use:reveal={{ y: 16, delay: 0.1 }}>
-        Chaque chambre est calibrée pour ceux qui arrivent couverts de boue et repartent reposés.
+      <p
+        class="page-le-site__intro"
+        data-testid="property-overview-intro"
+        use:reveal={{ y: 16, delay: 0.1 }}
+      >
+        Chaque espace est calibré pour ceux qui arrivent couverts de boue et repartent reposés.
         Les chambres sont assignées à votre arrivée selon les besoins de votre équipe.
+        Tarif unique&nbsp;:
+        <strong class="page-le-site__price" data-testid="property-overview-price"
+          >{settings.nightlyPrice} $/nuit</strong
+        >.
       </p>
-      <div class="page-le-site__rooms-grid" data-testid="rooms-grid" use:revealStagger={{ y: 24, each: 0.07 }}>
-        {#each visibleRooms as room (room.slug)}
-          <RoomCard {room} />
-        {/each}
+
+      {#each areasWithLayout as area (area.id)}
+        {#if area.images.length === 3}
+          <!-- 3-image equal-column grid -->
+          <article
+            class="page-le-site__area"
+            data-testid="area-{area.id}"
+            aria-label={area.label}
+          >
+            <div class="page-le-site__area-header">
+              <SectionLabel text={area.label} showHairline={false} />
+              <p class="page-le-site__area-blurb">{area.blurb}</p>
+            </div>
+            <div class="page-le-site__area-grid page-le-site__area-grid--3" use:revealStagger={{ y: 20, each: 0.06 }}>
+              {#each area.images as img (img.key)}
+                <div class="page-le-site__area-cell" data-testid="area-image-{img.key}">
+                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={img.alt} caption={img.caption} aspectRatio="4/3" />
+                </div>
+              {/each}
+            </div>
+          </article>
+        {:else if area.images.length === 5}
+          <!-- Extérieur: full-width lead panel + 2×2 grid -->
+          <article
+            class="page-le-site__area"
+            data-testid="area-{area.id}"
+            aria-label={area.label}
+          >
+            <div class="page-le-site__area-header">
+              <SectionLabel text={area.label} showHairline={false} />
+              <p class="page-le-site__area-blurb">{area.blurb}</p>
+            </div>
+            <div class="page-le-site__area-lead" data-testid="area-image-{area.images[0].key}" use:reveal={{ y: 16 }}>
+              <ImagePanel
+                imgKey={area.images[0].key}
+                picsumSeed={area.images[0].key}
+                alt={area.images[0].alt}
+                caption={area.images[0].caption}
+                aspectRatio="16/6"
+              />
+            </div>
+            <div class="page-le-site__area-grid page-le-site__area-grid--2" use:revealStagger={{ y: 20, each: 0.06 }}>
+              {#each area.images.slice(1) as img (img.key)}
+                <div class="page-le-site__area-cell" data-testid="area-image-{img.key}">
+                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={img.alt} caption={img.caption} aspectRatio="4/3" />
+                </div>
+              {/each}
+            </div>
+          </article>
+        {:else}
+          <!-- Single-image editorial split (alternating side) -->
+          <article
+            class="page-le-site__area page-le-site__area--editorial"
+            class:page-le-site__area--reverse={area.editorialReverse}
+            data-testid="area-{area.id}"
+            aria-label={area.label}
+          >
+            <div class="page-le-site__area-editorial-image" data-testid="area-image-{area.images[0].key}" use:reveal={{ y: 16 }}>
+              <ImagePanel
+                imgKey={area.images[0].key}
+                picsumSeed={area.images[0].key}
+                alt={area.images[0].alt}
+                caption={area.images[0].caption}
+                aspectRatio="3/2"
+              />
+            </div>
+            <div class="page-le-site__area-editorial-text">
+              <SectionLabel text={area.label} showHairline={false} />
+              <p class="page-le-site__area-blurb">{area.blurb}</p>
+            </div>
+          </article>
+        {/if}
+      {/each}
+
+      <div class="page-le-site__area-cta" data-testid="property-overview-cta">
+        <Button variant="action" href="/contact">Réserver votre séjour</Button>
       </div>
     </div>
   </section>
@@ -339,21 +420,106 @@
     padding-inline: var(--space-xl);
   }
 
-  /* ── Rooms grid ──────────────────────────────────────────────────────── */
-  .page-le-site__rooms-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-lg);
+  /* ── Property overview ───────────────────────────────────────────────── */
+  .page-le-site__price {
+    font-weight: 600;
+    color: var(--color-ink);
+    white-space: nowrap;
   }
 
-  @media (max-width: 1024px) {
-    .page-le-site__rooms-grid {
-      grid-template-columns: repeat(2, 1fr);
+  .page-le-site__area {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    /* Clip any image bleed so nothing overflows the viewport at 375px. */
+    overflow-x: hidden;
+  }
+
+  .page-le-site__area-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .page-le-site__area-blurb {
+    font-family: var(--font-sans);
+    font-size: 15px;
+    font-weight: 400;
+    line-height: 1.65;
+    color: var(--color-ink-variant);
+    margin: 0;
+    max-width: 60ch;
+  }
+
+  .page-le-site__area-grid {
+    display: grid;
+    gap: var(--space-md);
+  }
+
+  .page-le-site__area-grid--3 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .page-le-site__area-grid--2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .page-le-site__area-cell,
+  .page-le-site__area-lead,
+  .page-le-site__area-editorial-image {
+    min-width: 0; /* prevent grid/flex blowout */
+    overflow: hidden;
+  }
+
+  /* Editorial single-image split: photo 60% / text 40%, alternating side */
+  .page-le-site__area--editorial {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    align-items: center;
+    gap: var(--space-xl);
+  }
+
+  .page-le-site__area--reverse {
+    grid-template-columns: 2fr 3fr;
+  }
+
+  .page-le-site__area--reverse .page-le-site__area-editorial-image {
+    order: 2;
+  }
+
+  .page-le-site__area--reverse .page-le-site__area-editorial-text {
+    order: 1;
+  }
+
+  .page-le-site__area-editorial-text {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .page-le-site__area-cta {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: var(--space-md);
+  }
+
+  @media (max-width: 768px) {
+    /* Editorial splits stack — image always above text */
+    .page-le-site__area--editorial,
+    .page-le-site__area--reverse {
+      grid-template-columns: 1fr;
+      gap: var(--space-lg);
+    }
+    .page-le-site__area--reverse .page-le-site__area-editorial-image,
+    .page-le-site__area--reverse .page-le-site__area-editorial-text {
+      order: unset;
     }
   }
 
-  @media (max-width: 600px) {
-    .page-le-site__rooms-grid {
+  @media (max-width: 640px) {
+    /* Collapse every multi-column area grid to a single column */
+    .page-le-site__area-grid--3,
+    .page-le-site__area-grid--2 {
       grid-template-columns: 1fr;
     }
   }

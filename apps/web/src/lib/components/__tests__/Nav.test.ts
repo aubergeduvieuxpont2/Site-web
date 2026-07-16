@@ -198,6 +198,30 @@ describe("Nav", () => {
     });
   });
 
+  describe("Connexion link gating", () => {
+    beforeEach(() => vi.unstubAllGlobals());
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("shows Connexion (desktop + mobile) for an unauthenticated visitor", async () => {
+      stubAuthMe(null);
+      const { queryByTestId } = render(Nav);
+      // Allow the mocked fetch microtasks to settle.
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(queryByTestId("nav-connexion-link")).toBeTruthy();
+      expect(queryByTestId("nav-connexion-link-mobile")).toBeTruthy();
+    });
+
+    it("hides Connexion (desktop + mobile) once a user is authenticated", async () => {
+      stubAuthMe({ role: "guest" });
+      const { findByTestId, queryByTestId } = render(Nav);
+      // Wait for the auth fetch to resolve and the user state to populate.
+      await findByTestId("nav-profil-link");
+      expect(queryByTestId("nav-connexion-link")).toBeNull();
+      expect(queryByTestId("nav-connexion-link-mobile")).toBeNull();
+    });
+  });
+
   describe("accessibility", () => {
     it("brand link exposes an accessible name via aria-label", () => {
       const { container } = render(Nav);
