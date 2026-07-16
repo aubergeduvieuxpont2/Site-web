@@ -23,7 +23,7 @@ export function resolveEffectiveNightly(
   return Math.round(publicPrice * 100) / 100;
 }
 
-export function nightsBetween(arrive: string, depart: string): number {
+export function nightsBetween(arrive: string | Date, depart: string | Date): number {
   const arriveDate = parseDate(arrive);
   const departDate = parseDate(depart);
   if (!arriveDate || !departDate) return 0;
@@ -33,8 +33,13 @@ export function nightsBetween(arrive: string, depart: string): number {
   return Math.max(0, nights);
 }
 
-function parseDate(dateStr: string): Date | null {
-  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+// The neon driver returns Postgres DATE columns as JS Date objects; accept
+// both forms so a raw (non-to_char) SELECT can never throw here.
+function parseDate(date: string | Date): Date | null {
+  if (date instanceof Date) {
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
   const [, y, m, d] = match;
   return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
