@@ -1,0 +1,281 @@
+REQ:
+  R-UTIL-001:
+    actor: Reservation form / any caller
+    capability: "compute whole nights between two YYYY-MM-DD strings via a pure exported nightsBetween helper"
+    constraints: "returns 0 for empty/nullish/malformed input and for same-day or reversed ranges; never negative; local-date parsing (timezone-safe)"
+    priority: MUST
+    tests:
+      - T-UTIL-001a
+      - T-UTIL-001b
+      - T-UTIL-001c
+  R-ADMIN-001:
+    actor: Admin user
+    capability: "view the admin user-detail page with its topbar pinned below the fixed global nav (no overlap)"
+    constraints: "page offset 64px; sticky topbar top:64px; mirrors admin dashboard treatment"
+    priority: MUST
+    tests:
+      - T-ADMIN-001a
+  R-PROFIL-001:
+    actor: Authenticated guest
+    capability: "see their nightly rate on the profile page, preserved from getMe after the getProfile overwrite"
+    constraints: "value = effectiveNightlyPrice ?? settings.nightlyPrice; formatted X,XX $ /nuit"
+    priority: MUST
+    tests:
+      - T-PROFIL-001a
+  R-PROFIL-002:
+    actor: Authenticated guest
+    capability: "see a Tarif personnalise badge only when their rate differs from the public rate"
+    constraints: "badge shown iff effectiveNightlyPrice != null and != settings.nightlyPrice"
+    priority: MUST
+    tests:
+      - T-PROFIL-002a
+  R-CONTACT-001:
+    actor: Site visitor / logged-in user
+    capability: "see the effective nightly rate they will be charged on the reservation form"
+    constraints: "rate = auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice; custom badge when differs"
+    priority: MUST
+    tests:
+      - T-CONTACT-001a
+  R-CONTACT-002:
+    actor: Site visitor / logged-in user
+    capability: "see a live-updating cost estimate when the stay is valid"
+    constraints: "shown iff nights>=1 and roomCount>=1 and dates ordered; total = nights * rooms * rate; Svelte 5 $derived; uses nightsBetween"
+    priority: MUST
+    tests:
+      - T-CONTACT-002a
+      - T-CONTACT-002b
+
+E:
+  E-NightlyRate:
+    fields:
+      effectiveNightlyPrice: "number | undefined"
+      publicNightlyPrice: number
+    tenancy: per-user
+    invariants:
+      - INV-rate-fallback
+  E-StayEstimate:
+    fields:
+      nights: integer
+      rooms: integer
+      nightlyRate: number
+      total: number
+    tenancy: per-session
+    invariants:
+      - INV-estimate-gating
+      - INV-nights-nonneg
+
+OP:
+  OP-Profil.mergeRate:
+    input: "{ meUser: User, profileUser: User }"
+    auth: [guest-self]
+    pre:
+      - "getMe succeeded and getProfile succeeded"
+    err: []
+    out: "{ user: User with effectiveNightlyPrice preserved from meUser }"
+  OP-Contact.estimate:
+    input: "{ checkIn: string, checkOut: string, roomCount: number, nightlyRate: number }"
+    auth: [public]
+    pre: []
+    err: []
+    out: "{ nights: number, rooms: number, total: number, visible: boolean }"
+
+AUTH:
+  public: any visitor may view the reservation form and its rate/estimate
+  guest-self: an authenticated guest may view their own profile and rate
+  admin-self: an authenticated admin may view the admin user-detail page
+
+INV:
+  INV-rate-fallback: "displayed nightly rate is always effectiveNightlyPrice when non-null else settings.nightlyPrice"
+  INV-estimate-gating: "estimate is visible iff nights>=1 and rooms>=1 and dates are ordered"
+  INV-nights-nonneg: "nightsBetween never returns a negative number"
+
+ERR: {}
+
+API: {}
+
+UI:
+  screen-admin-user-detail:
+    actions: [view]
+    state: { loading, error, loaded }
+  screen-profil:
+    actions: [view]
+    state: { loading, loaded, error }
+  screen-contact:
+    actions: [edit-dates, edit-rooms, submit]
+    state: { idle, sending, sent, error }
+
+DATA:
+  none: "no schema, table, index, or migration changes"
+
+TEST:
+  T-UTIL-001a:
+    verifies: R-UTIL-001
+    behaviour: "nightsBetween returns correct nights for valid ranges"
+    steps:
+      - "nightsBetween('2026-08-01','2026-08-02') === 1"
+      - "nightsBetween('2026-08-01','2026-08-05') === 4"
+      - "nightsBetween('2026-01-31','2026-02-02') === 2"
+  T-UTIL-001b:
+    verifies: R-UTIL-001
+    behaviour: "nightsBetween returns 0 for same-day and reversed ranges"
+    steps:
+      - "nightsBetween('2026-08-01','2026-08-01') === 0"
+      - "nightsBetween('2026-08-05','2026-08-01') === 0"
+  T-UTIL-001c:
+    verifies: R-UTIL-001
+    behaviour: "nightsBetween returns 0 for empty, nullish, and malformed input"
+    steps:
+      - "nightsBetween('', '2026-08-02') === 0"
+      - "nightsBetween('2026-08-01', null) === 0"
+      - "nightsBetween(undefined, undefined) === 0"
+      - "nightsBetween('not-a-date','2026-08-02') === 0"
+  T-ADMIN-001a:
+    verifies: R-ADMIN-001
+    behaviour: "user-detail page root has 64px top offset and topbar sticks at top:64px"
+    steps:
+      - "grep .user-profile-page style block contains padding-top: 64px"
+      - "grep .user-profile-page__topbar contains top: 64px"
+  T-PROFIL-001a:
+    verifies: R-PROFIL-001
+    behaviour: "profile rate row renders with rate preserved from getMe after getProfile overwrite"
+    steps:
+      - "mock getMe -> user.effectiveNightlyPrice = 75 (guest); getProfile -> user without effectiveNightlyPrice"
+      - "render profil page; wait for loaded"
+      - "assert data-testid=profil-user-rate present and contains 75"
+  T-PROFIL-002a:
+    verifies: R-PROFIL-002
+    behaviour: "custom-rate badge shown only when rate differs from public"
+    steps:
+      - "effectiveNightlyPrice 75 vs settings.nightlyPrice 89 -> data-testid=profil-rate-badge present"
+      - "effectiveNightlyPrice undefined -> badge absent and value falls back to settings.nightlyPrice"
+  T-CONTACT-001a:
+    verifies: R-CONTACT-001
+    behaviour: "rate line always present; custom badge only when rate differs"
+    steps:
+      - "render contact page; assert data-testid=contact-rate-line present with rate"
+      - "auth.user.effectiveNightlyPrice != settings.nightlyPrice -> data-testid=contact-rate-badge present"
+  T-CONTACT-002a:
+    verifies: R-CONTACT-002
+    behaviour: "estimate hidden when inputs invalid"
+    steps:
+      - "no dates -> data-testid=contact-estimate absent"
+      - "reversed/equal dates or roomCount<1 -> estimate absent"
+  T-CONTACT-002b:
+    verifies: R-CONTACT-002
+    behaviour: "estimate appears and is correct for a valid stay and live-updates"
+    steps:
+      - "set checkIn/checkOut valid ordered (e.g. 2 nights) and roomCount 2"
+      - "assert data-testid=contact-estimate present showing nights, rooms, and total"
+
+NFR:
+  build: "npm run typecheck and npm run build:web exit 0"
+  tests: "all existing vitest suites pass with new tests"
+  responsive: "contact estimate/rate markup has no horizontal overflow at <=480px"
+  timezone: "nightsBetween uses local-date parsing (no UTC off-by-one)"
+
+FILE:
+  apps/web/src/lib/utils.ts: TASK-helper
+  apps/web/src/lib/__tests__/utils.test.ts: TASK-helper-tests
+  "apps/web/src/routes/admin/utilisateurs/[id]/+page.svelte": TASK-admin-header
+  apps/web/src/routes/profil/+page.svelte: TASK-profil
+  apps/web/src/routes/__tests__/page-profil.test.ts: TASK-profil-tests
+  apps/web/src/routes/contact/+page.svelte: TASK-contact
+  apps/web/src/routes/__tests__/page-contact.test.ts: TASK-contact-tests
+
+TASK:
+  TASK-helper:
+    scope:
+      - R-UTIL-001
+      - INV-nights-nonneg
+    files: [apps/web/src/lib/utils.ts]
+    must_preserve:
+      - INV-nights-nonneg
+    produce: [code]
+    verifies: [R-UTIL-001]
+  TASK-helper-tests:
+    scope:
+      - R-UTIL-001
+      - T-UTIL-001a
+      - T-UTIL-001b
+      - T-UTIL-001c
+    files: [apps/web/src/lib/__tests__/utils.test.ts]
+    must_preserve:
+      - INV-nights-nonneg
+    produce: [tests]
+    verifies: [R-UTIL-001]
+  TASK-admin-header:
+    scope:
+      - R-ADMIN-001
+    files: ["apps/web/src/routes/admin/utilisateurs/[id]/+page.svelte"]
+    must_preserve: []
+    produce: [code]
+    verifies: [R-ADMIN-001]
+  TASK-profil:
+    scope:
+      - R-PROFIL-001
+      - R-PROFIL-002
+      - OP-Profil.mergeRate
+      - INV-rate-fallback
+    files: [apps/web/src/routes/profil/+page.svelte]
+    must_preserve:
+      - INV-rate-fallback
+    produce: [code]
+    verifies: [R-PROFIL-001, R-PROFIL-002]
+  TASK-profil-tests:
+    scope:
+      - R-PROFIL-001
+      - R-PROFIL-002
+      - T-PROFIL-001a
+      - T-PROFIL-002a
+    files: [apps/web/src/routes/__tests__/page-profil.test.ts]
+    must_preserve:
+      - INV-rate-fallback
+    produce: [tests]
+    verifies: [R-PROFIL-001, R-PROFIL-002]
+  TASK-contact:
+    scope:
+      - R-CONTACT-001
+      - R-CONTACT-002
+      - OP-Contact.estimate
+      - INV-rate-fallback
+      - INV-estimate-gating
+    files: [apps/web/src/routes/contact/+page.svelte]
+    must_preserve:
+      - INV-rate-fallback
+      - INV-estimate-gating
+    produce: [code]
+    verifies: [R-CONTACT-001, R-CONTACT-002]
+  TASK-contact-tests:
+    scope:
+      - R-CONTACT-001
+      - R-CONTACT-002
+      - T-CONTACT-001a
+      - T-CONTACT-002a
+      - T-CONTACT-002b
+    files: [apps/web/src/routes/__tests__/page-contact.test.ts]
+    must_preserve:
+      - INV-estimate-gating
+    produce: [tests]
+    verifies: [R-CONTACT-001, R-CONTACT-002]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: "Preserve effectiveNightlyPrice by merging getMe's user into getProfile's user in the profile page, not by changing the API"
+    rationale: "API changes are out of scope; the merge keeps the HTTP contract stable and the fix surgical"
+  ST-02:
+    status: locked
+    decision: "Put nights math in a pure exported nightsBetween helper in apps/web/src/lib/utils.ts"
+    rationale: "isolates calendar math for unit testing and reuse; keeps components thin; reuses proven local-date parsing"
+  ST-03:
+    status: locked
+    decision: "Use Svelte 5 $derived for rate, nights, rooms, gating, and total on the contact page"
+    rationale: "matches existing rune-based components and gives live updates with no manual subscriptions"
+  ST-04:
+    status: locked
+    decision: "Copy the admin dashboard's padding-top:64px and top:64px nav-offset treatment onto the user-detail page"
+    rationale: "proven, consistent, low-risk; grep confirms only these two admin routes use position:sticky"
+  ST-05:
+    status: locked
+    decision: "Use the single fallback rule effectiveNightlyPrice ?? settings.nightlyPrice and badge-when-differs everywhere"
+    rationale: "consistent with the home page display; predictable site-wide behavior"

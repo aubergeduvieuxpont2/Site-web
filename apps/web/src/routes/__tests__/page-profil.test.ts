@@ -307,6 +307,53 @@ describe("page-profil change password", () => {
   });
 });
 
+describe("page-profil rate row", () => {
+  it("renders profil-user-rate with the effectiveNightlyPrice from getMe when getProfile omits it", async () => {
+    getMe.mockResolvedValue({ user: { ...GUEST, effectiveNightlyPrice: 75 } });
+    getProfile.mockResolvedValue(profile()); // GUEST has no effectiveNightlyPrice
+    const { findByTestId } = render(Page);
+    const rateEl = await findByTestId("profil-user-rate");
+    expect(rateEl.textContent).toContain("75");
+  });
+
+  it("shows profil-rate-badge when effectiveNightlyPrice (75) differs from settings.nightlyPrice (89)", async () => {
+    getMe.mockResolvedValue({ user: { ...GUEST, effectiveNightlyPrice: 75 } });
+    getProfile.mockResolvedValue(profile());
+    const { findByTestId } = render(Page);
+    await findByTestId("profil-user-rate");
+    const badge = await findByTestId("profil-rate-badge");
+    expect(badge).toBeTruthy();
+    expect(badge.getAttribute("aria-label")).toBe("Tarif personnalisé");
+  });
+
+  it("hides profil-rate-badge and falls back to settings.nightlyPrice when effectiveNightlyPrice is undefined", async () => {
+    // Default GUEST has no effectiveNightlyPrice.
+    getMe.mockResolvedValue({ user: GUEST });
+    getProfile.mockResolvedValue(profile());
+    const { findByTestId, queryByTestId } = render(Page);
+    const rateEl = await findByTestId("profil-user-rate");
+    // Falls back to default settings.nightlyPrice = 89.
+    expect(rateEl.textContent).toContain("89");
+    expect(queryByTestId("profil-rate-badge")).toBeNull();
+  });
+
+  it("hides profil-rate-badge when effectiveNightlyPrice equals settings.nightlyPrice", async () => {
+    getMe.mockResolvedValue({ user: { ...GUEST, effectiveNightlyPrice: 89 } });
+    getProfile.mockResolvedValue(profile());
+    const { findByTestId, queryByTestId } = render(Page);
+    await findByTestId("profil-user-rate");
+    expect(queryByTestId("profil-rate-badge")).toBeNull();
+  });
+
+  it("renders the rate as text, never as HTML", async () => {
+    getMe.mockResolvedValue({ user: { ...GUEST, effectiveNightlyPrice: 75 } });
+    getProfile.mockResolvedValue(profile());
+    const { findByTestId } = render(Page);
+    const rateEl = await findByTestId("profil-user-rate");
+    expect(rateEl.querySelector("script")).toBeNull();
+  });
+});
+
 describe("page-profil logout", () => {
   it("calls logout then redirects home", async () => {
     const { findByTestId } = render(Page);

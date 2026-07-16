@@ -346,6 +346,7 @@
     --upp-danger-text: #3d0a0a;
 
     min-height: 100vh;
+    padding-top: 64px; /* clear the fixed 64px global nav */
     background: var(--upp-surface);
     font-family: 'Jost', ui-sans-serif, system-ui, sans-serif;
     font-size: 15px;
@@ -356,7 +357,7 @@
   /* ── Topbar ── */
   .user-profile-page__topbar {
     position: sticky;
-    top: 0;
+    top: 64px; /* sit beneath the fixed 64px global nav */
     z-index: 20;
     background: var(--upp-primary);
     display: flex;

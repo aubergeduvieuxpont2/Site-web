@@ -115,6 +115,82 @@ describe("page-contact", () => {
     });
   });
 
+  describe("rate line + estimate panel", () => {
+    it("imports the nightsBetween helper from utils", () => {
+      const content = read();
+      expect(content).toContain("nightsBetween");
+      expect(content).toContain('from "$lib/utils"');
+    });
+
+    it("derives the effective nightly rate from auth then settings", () => {
+      const content = read();
+      expect(content).toContain(
+        "auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice"
+      );
+    });
+
+    it("flags a custom rate only when it differs from the public price", () => {
+      const content = read();
+      expect(content).toContain("isCustomRate");
+      expect(content).toContain("auth.user?.effectiveNightlyPrice != null");
+      expect(content).toContain(
+        "auth.user.effectiveNightlyPrice !== settings.nightlyPrice"
+      );
+    });
+
+    it("renders an always-present rate line with a live region", () => {
+      const content = read();
+      expect(content).toContain('data-testid="contact-rate-line"');
+      expect(content).toMatch(
+        /data-testid="contact-rate-line"[\s\S]*?aria-live="polite"/
+      );
+      expect(content).toContain("formatRate(nightlyRate)");
+    });
+
+    it("shows the custom-rate badge only when isCustomRate", () => {
+      const content = read();
+      expect(content).toContain('data-testid="contact-rate-badge"');
+      expect(content).toContain('aria-label="Tarif personnalisé"');
+      expect(content).toMatch(
+        /\{#if isCustomRate\}[\s\S]*?data-testid="contact-rate-badge"/
+      );
+    });
+
+    it("renders the estimate panel only when nights and rooms are set", () => {
+      const content = read();
+      expect(content).toContain("const estimateVisible = $derived(nights >= 1 && rooms >= 1)");
+      expect(content).toMatch(
+        /\{#if estimateVisible\}[\s\S]*?data-testid="contact-estimate"/
+      );
+    });
+
+    it("computes the estimate total as nights × rooms × rate", () => {
+      const content = read();
+      expect(content).toContain(
+        "const estimateTotal = $derived(nights * rooms * nightlyRate)"
+      );
+      expect(content).toContain("formatRate(estimateTotal)");
+      expect(content).toContain("(avant taxes)");
+    });
+
+    it("formats currency with fr-CA CAD via Intl.NumberFormat", () => {
+      const content = read();
+      expect(content).toContain('new Intl.NumberFormat("fr-CA"');
+      expect(content).toContain('currency: "CAD"');
+    });
+
+    it("does not assign any innerHTML for rate/estimate values", () => {
+      expect(read()).not.toContain("innerHTML");
+    });
+
+    it("guards rooms against negative or fractional input", () => {
+      const content = read();
+      expect(content).toContain(
+        "const rooms = $derived(Math.max(0, Math.trunc(Number(form.roomCount) || 0)))"
+      );
+    });
+  });
+
   describe("form structure", () => {
     it("renders contact form with page-contact testid", () => {
       const content = read();
