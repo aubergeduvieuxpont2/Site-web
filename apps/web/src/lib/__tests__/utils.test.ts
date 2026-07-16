@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDateOnly, datesOutOfOrder } from "$lib/utils";
+import { formatDateOnly, datesOutOfOrder, nightsBetween } from "$lib/utils";
 
 describe("formatDateOnly", () => {
   it("formats a YYYY-MM-DD string in fr-CA locale", () => {
@@ -69,5 +69,47 @@ describe("datesOutOfOrder", () => {
 
   it("returns false when check-out is after check-in", () => {
     expect(datesOutOfOrder("2026-08-10", "2026-08-11")).toBe(false);
+  });
+});
+
+describe("nightsBetween", () => {
+  it("counts a multi-night stay", () => {
+    expect(nightsBetween("2026-08-01", "2026-08-05")).toBe(4);
+  });
+
+  it("counts a single night", () => {
+    expect(nightsBetween("2026-08-01", "2026-08-02")).toBe(1);
+  });
+
+  it("counts across a month boundary", () => {
+    expect(nightsBetween("2026-01-31", "2026-02-02")).toBe(2);
+  });
+
+  it("returns 0 for a same-day stay", () => {
+    expect(nightsBetween("2026-08-01", "2026-08-01")).toBe(0);
+  });
+
+  it("returns 0 for reversed dates (never negative)", () => {
+    expect(nightsBetween("2026-08-05", "2026-08-01")).toBe(0);
+  });
+
+  it("returns 0 for an empty check-in", () => {
+    expect(nightsBetween("", "2026-08-02")).toBe(0);
+  });
+
+  it("returns 0 for a null check-out", () => {
+    expect(nightsBetween("2026-08-01", null)).toBe(0);
+  });
+
+  it("returns 0 when both inputs are undefined", () => {
+    expect(nightsBetween(undefined, undefined)).toBe(0);
+  });
+
+  it("returns 0 for a malformed check-in", () => {
+    expect(nightsBetween("not-a-date", "2026-08-02")).toBe(0);
+  });
+
+  it("returns 0 for a malformed check-out", () => {
+    expect(nightsBetween("2026-08-01", "invalid")).toBe(0);
   });
 });

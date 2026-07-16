@@ -4,6 +4,7 @@
   import { getMe, getProfile, logout, changePassword, isError } from "$lib/api";
   import type { User, ReservationRow } from "$lib/api";
   import ProfilReservationTable from "$lib/components/ProfilReservationTable.svelte";
+  import { settings } from "$lib/settings.svelte";
 
   // ── State ────────────────────────────────────────────────────────────
   type Phase = "loading" | "loaded" | "error";
@@ -15,6 +16,21 @@
 
   // Guard against a double logout click.
   let loggingOut = $state(false);
+
+  // ── Rate display ─────────────────────────────────────────────────────
+  // `effectiveNightlyPrice` comes from getMe(); getProfile() may omit it, so
+  // the onMount merge preserves it. Falls back to the public nightly price.
+  const displayRate = $derived(user?.effectiveNightlyPrice ?? settings.nightlyPrice);
+  const isCustomRate = $derived(
+    user?.effectiveNightlyPrice != null &&
+      user.effectiveNightlyPrice !== settings.nightlyPrice,
+  );
+  const formattedRate = $derived(
+    new Intl.NumberFormat("fr-CA", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(displayRate),
+  );
 
   // ── Change password state ─────────────────────────────────────────────
   let currentPassword = $state("");
@@ -58,7 +74,8 @@
       await goto("/connexion");
       return;
     }
-    user = meResult.user;
+    const meUser = meResult.user;
+    user = meUser;
 
     // Admin redirect — admins manage settings in /admin, not here.
     if (user.role === "admin") {
@@ -74,7 +91,9 @@
       return;
     }
 
-    user = profileResult.user;
+    // Merge: profileResult.user carries reservation-related fields; meUser
+    // carries effectiveNightlyPrice, which getProfile() does not return.
+    user = { ...profileResult.user, effectiveNightlyPrice: meUser.effectiveNightlyPrice };
     reservations = profileResult.reservations;
     phase = "loaded";
   });
@@ -164,6 +183,26 @@
                 >
                   {user.role === "admin" ? "Administrateur" : "Invité"}
                 </span>
+              </dd>
+            </div>
+            <div class="profil__user-field">
+              <dt class="profil__user-dt">Votre tarif</dt>
+              <dd
+                class="profil__user-dd profil__user-dd--rate"
+                data-testid="profil-user-rate"
+              >
+                <span class="profil__rate-value">
+                  {formattedRate}&nbsp;$/nuit
+                </span>
+                {#if isCustomRate}
+                  <span
+                    class="profil__role-badge profil__role-badge--custom"
+                    aria-label="Tarif personnalisé"
+                    data-testid="profil-rate-badge"
+                  >
+                    Tarif personnalisé
+                  </span>
+                {/if}
               </dd>
             </div>
           </dl>
@@ -423,6 +462,29 @@
     background-color: var(--color-secondary-container, #fd761a);
     border-color: var(--color-secondary-container, #fd761a);
     color: var(--color-on-secondary-container, #ffffff);
+  }
+
+  /* ── Rate row ── */
+  .profil__user-dd--rate {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm, 8px);
+    margin: 0;
+  }
+
+  .profil__rate-value {
+    font-family: var(--font-mono, "IBM Plex Mono", "Fira Code", ui-monospace, monospace);
+    font-size: 16px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink, #191c1e);
+  }
+
+  /* Custom rate badge — ember amber signal (admin-granted privilege). */
+  .profil__role-badge--custom {
+    background-color: var(--color-ember-pale, #ffdbca);
+    border-color: var(--color-ember-pale, #ffdbca);
+    color: var(--color-on-secondary-container, #5c2400);
   }
 
   .profil__admin-link {

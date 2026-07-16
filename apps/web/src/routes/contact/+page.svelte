@@ -4,7 +4,7 @@
   import { createReservation, isError } from "$lib/api";
   import { SITE } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
-  import { datesOutOfOrder } from "$lib/utils";
+  import { datesOutOfOrder, nightsBetween } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
@@ -40,6 +40,29 @@
   // When a session user is present, the identity fields are hidden and their
   // values are derived from the store instead of the form.
   const loggedIn = $derived(!!auth.user);
+
+  // Effective nightly rate: the per-user price when granted, otherwise the
+  // public setting. `isCustomRate` flags an admin-granted personalised rate.
+  const nightlyRate = $derived(
+    auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice
+  );
+  const isCustomRate = $derived(
+    auth.user?.effectiveNightlyPrice != null &&
+      auth.user.effectiveNightlyPrice !== settings.nightlyPrice
+  );
+  const nights = $derived(nightsBetween(form.checkIn, form.checkOut));
+  const rooms = $derived(Math.max(0, Math.trunc(Number(form.roomCount) || 0)));
+  const estimateVisible = $derived(nights >= 1 && rooms >= 1);
+  const estimateTotal = $derived(nights * rooms * nightlyRate);
+
+  function formatRate(value: number): string {
+    return new Intl.NumberFormat("fr-CA", {
+      style: "currency",
+      currency: "CAD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
 
   function splitName(full: string | null | undefined): {
     first: string;
@@ -362,6 +385,39 @@
                 </div>
               </div>
 
+              <!-- Rate line — always rendered while the form is visible -->
+              <div
+                class="page-contact__rate-line"
+                data-testid="contact-rate-line"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="page-contact__rate-label">Tarif</span>
+                <span class="page-contact__rate-value">{formatRate(nightlyRate)} /nuit</span>
+                {#if isCustomRate}
+                  <span
+                    class="page-contact__rate-badge"
+                    data-testid="contact-rate-badge"
+                    aria-label="Tarif personnalisé"
+                  >Tarif personnalisé</span>
+                {/if}
+              </div>
+
+              <!-- Estimate panel — fades in when nights ≥ 1 and rooms ≥ 1 -->
+              {#if estimateVisible}
+                <div
+                  class="page-contact__estimate"
+                  data-testid="contact-estimate"
+                  role="status"
+                  aria-live="polite"
+                  transition:fade={{ duration: 200 }}
+                >
+                  Estimation : {nights} nuit(s) × {rooms} chambre(s) × {formatRate(nightlyRate)} =&nbsp;<span
+                    class="page-contact__estimate-total"
+                  >{formatRate(estimateTotal)}</span> (avant taxes)
+                </div>
+              {/if}
+
               <!-- Message -->
               <div class="page-contact__field">
                 <label class="page-contact__label" for="field-message">Message</label>
@@ -647,6 +703,84 @@
     font-size: 12px;
     color: var(--color-ink-mute, var(--color-ink-soft));
     word-break: break-word;
+  }
+
+  /* ── Rate line ────────────────────────────────────────── */
+  .page-contact__rate-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    column-gap: var(--space-md);
+  }
+
+  .page-contact__rate-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-ink-mute, #76777d);
+  }
+
+  .page-contact__rate-value {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-ink, #191c1e);
+  }
+
+  /* Amber ember badge — reuses the ember-pale admin badge signal. Dark-brown
+     text declared directly (contrast #5c2400 on #ffdbca ≈ 7.2:1, WCAG AAA). */
+  .page-contact__rate-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding: 0 var(--space-xs, 0.5rem);
+    background-color: var(--color-ember-pale, #ffdbca);
+    border: 1px solid rgba(92, 36, 0, 0.22);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #5c2400;
+    white-space: nowrap;
+  }
+
+  /* ── Estimate panel ───────────────────────────────────── */
+  .page-contact__estimate {
+    background-color: var(--color-surface-container-low, #f2f4f6);
+    border: 1px solid var(--color-outline-variant, #c6c6cd);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md) var(--space-lg);
+    margin-top: var(--space-sm);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--color-ink, #191c1e);
+    overflow-wrap: break-word;
+  }
+
+  .page-contact__estimate-total {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-ink, #191c1e);
+  }
+
+  @media (max-width: 480px) {
+    .page-contact__estimate {
+      font-size: 13px;
+      padding: var(--space-sm) var(--space-md);
+      word-break: break-word;
+    }
+
+    .page-contact__estimate-total {
+      font-size: 14px;
+    }
   }
 
   /* ── Field-level errors ───────────────────────────────── */
