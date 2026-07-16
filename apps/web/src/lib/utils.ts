@@ -18,3 +18,19 @@ export function formatDateOnly(date: string | null | undefined): string {
     return "—";
   }
 }
+
+/**
+ * True when both dates are present and checkOut is NOT strictly after checkIn.
+ * Optional dates stay valid: returns false if either input is empty/nullish.
+ * Uses lexicographic comparison, which is chronologically correct for
+ * zero-padded YYYY-MM-DD strings.
+ */
+export function datesOutOfOrder(
+  checkIn: string | null | undefined,
+  checkOut: string | null | undefined
+): boolean {
+  const from = (checkIn ?? "").trim();
+  const to = (checkOut ?? "").trim();
+  if (!from || !to) return false;
+  return to <= from;
+}

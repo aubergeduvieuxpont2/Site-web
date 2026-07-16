@@ -84,6 +84,37 @@ describe("page-contact", () => {
     });
   });
 
+  describe("date-order validation", () => {
+    it("imports the datesOutOfOrder helper from utils", () => {
+      const content = read();
+      expect(content).toContain("datesOutOfOrder");
+      expect(content).toContain('from "$lib/utils"');
+    });
+
+    it("sets checkOut error when the dates are out of order", () => {
+      const content = read();
+      expect(content).toContain("datesOutOfOrder(form.checkIn, form.checkOut)");
+      expect(content).toContain(
+        "La date de départ doit être postérieure à la date d'arrivée."
+      );
+    });
+
+    it("constrains the checkout picker with a min bound to check-in", () => {
+      const content = read();
+      expect(content).toContain("min={form.checkIn || undefined}");
+    });
+
+    it("renders the checkOut field error with alert + aria wiring", () => {
+      const content = read();
+      expect(content).toContain('data-testid="error-checkout"');
+      expect(content).toContain('id="err-checkout"');
+      expect(content).toContain(
+        'aria-describedby={fieldErrors.checkOut ? "err-checkout" : undefined}'
+      );
+      expect(content).toMatch(/data-testid="error-checkout"[\s\S]*?role="alert"|role="alert"[\s\S]*?data-testid="error-checkout"/);
+    });
+  });
+
   describe("form structure", () => {
     it("renders contact form with page-contact testid", () => {
       const content = read();

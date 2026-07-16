@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDateOnly } from "$lib/utils";
+import { formatDateOnly, datesOutOfOrder } from "$lib/utils";
 
 describe("formatDateOnly", () => {
   it("formats a YYYY-MM-DD string in fr-CA locale", () => {
@@ -38,5 +38,36 @@ describe("formatDateOnly", () => {
     expect(result).toContain("décembre");
     expect(result).toContain("31");
     expect(result).toContain("2026");
+  });
+});
+
+describe("datesOutOfOrder", () => {
+  it("returns false when both dates are empty (optional)", () => {
+    expect(datesOutOfOrder("", "")).toBe(false);
+  });
+
+  it("returns false when only the check-in is present", () => {
+    expect(datesOutOfOrder("2026-08-10", "")).toBe(false);
+  });
+
+  it("returns false when only the check-out is present", () => {
+    expect(datesOutOfOrder("", "2026-08-10")).toBe(false);
+  });
+
+  it("returns false for null / undefined inputs", () => {
+    expect(datesOutOfOrder(null, null)).toBe(false);
+    expect(datesOutOfOrder(undefined, undefined)).toBe(false);
+  });
+
+  it("returns true for equal dates (departure not after arrival)", () => {
+    expect(datesOutOfOrder("2026-08-10", "2026-08-10")).toBe(true);
+  });
+
+  it("returns true when check-out is before check-in", () => {
+    expect(datesOutOfOrder("2026-08-10", "2026-08-09")).toBe(true);
+  });
+
+  it("returns false when check-out is after check-in", () => {
+    expect(datesOutOfOrder("2026-08-10", "2026-08-11")).toBe(false);
   });
 });

@@ -113,6 +113,16 @@ export const ReservationRequestSchema = z.object({
   message: trimToNull,
   guests: z.coerce.number().int().min(1).catch(1),
   roomCount: z.coerce.number().int().min(1, "roomCount must be at least 1"),
+}).superRefine((data, ctx) => {
+  // Dates stay optional: only enforce ordering when BOTH are present.
+  if (data.checkIn == null || data.checkOut == null) return;
+  if (!reservationDatesValid(data.checkIn, data.checkOut)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["checkOut"],
+      message: "La date de départ doit être postérieure à la date d'arrivée.",
+    });
+  }
 });
 
 const reservationHook = (result: any, c: any) =>
@@ -554,6 +564,7 @@ app.post(
 // Reset password (consumes token, invalidates sessions)
 app.post(
   "/api/auth/reset",
+  authRateLimiter,
   zValidator("json", ResetPasswordSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
