@@ -14,6 +14,8 @@
     "deploy:api": "npm run deploy --workspace apps/api",
     "dev:hubspot": "npm run dev --workspace apps/hubspot",
     "deploy:hubspot": "npm run deploy --workspace apps/hubspot",
+    "dev:email-ingest": "npm run dev --workspace apps/email-ingest",
+    "deploy:email-ingest": "npm run deploy --workspace apps/email-ingest",
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace apps/api"
