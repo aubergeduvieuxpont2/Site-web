@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site-web-email-ingest",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Email-ingest Worker — receives bookings@aubergeduvieuxpont.ca via a
+  // Cloudflare Email Routing rule (configured in the dashboard, see README).
+  // No HTTP routes: the only entry point is the email() handler.
+
+  // Every message is forwarded here before parsing. The address must be a
+  // VERIFIED Email Routing destination on the zone or forward() rejects.
+  "vars": { "FORWARD_TO": "aubergeduvieuxpont2@hotmail.com" },
+
+  "services": [{ "binding": "API", "service": "site-web-api" }]
+}
