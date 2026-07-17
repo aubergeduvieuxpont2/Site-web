@@ -743,6 +743,36 @@ app.get("/api/admin/outbox", async (c) => {
   return c.json({ rows });
 });
 
+type EmailIngestLogRow = {
+  id: number;
+  provider: string | null;
+  status: string;
+  reservation_id: number | null;
+  subject: string | null;
+  error: string | null;
+  created_at: string;
+};
+
+app.get("/api/admin/email-ingest", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`
+    SELECT id, provider, status, reservation_id, subject, error, created_at
+    FROM email_ingest_log
+    ORDER BY created_at DESC
+    LIMIT 100
+  `) as EmailIngestLogRow[];
+
+  return c.json({ rows });
+});
+
 app.post("/api/admin/outbox/:id/requeue", async (c) => {
   const user = await getAuthUser(c);
   if (!user) {
