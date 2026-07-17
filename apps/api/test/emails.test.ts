@@ -117,4 +117,60 @@ describe("renderEmail", () => {
       globalThis.Function = OriginalFunction;
     }
   });
+
+  // Tax transparency: the reservation confirmation must show the full compounding
+  // tax cascade (hébergement → TPS → TVQ) and a tax-inclusive total, not a bare
+  // pre-tax amount labelled "total".
+  it("reservation-confirmation FR shows the tax cascade and a taxes-included total", () => {
+    const sample = SAMPLES["reservation-confirmation"] as Record<string, unknown>;
+    const result = renderEmail("reservation-confirmation", "fr", sample);
+    expect(result.html).toContain("Sous-total");
+    expect(result.html).toContain("Taxe d'hébergement (3.5%)");
+    expect(result.html).toContain("TPS (5%)");
+    expect(result.html).toContain("TVQ (9.975%)");
+    expect(result.html).toContain("Total (taxes incluses)");
+    expect(result.html).toContain("425,47"); // tax-inclusive total (FR uses NBSP before $)
+  });
+
+  it("reservation-confirmation EN shows the tax cascade and a taxes-included total", () => {
+    const sample = SAMPLES["reservation-confirmation"] as Record<string, unknown>;
+    const result = renderEmail("reservation-confirmation", "en", sample);
+    expect(result.html).toContain("Subtotal");
+    expect(result.html).toContain("Lodging tax (3.5%)");
+    expect(result.html).toContain("GST (5%)");
+    expect(result.html).toContain("QST (9.975%)");
+    expect(result.html).toContain("Total (taxes included)");
+    expect(result.html).toContain("$425.47");
+  });
+
+  it("reservation-confirmation requires the tax fields", () => {
+    expect(() => {
+      renderEmail("reservation-confirmation", "fr", {
+        confirmationCode: "RES-001",
+        name: "Test",
+        checkIn: "2026-08-14",
+        checkOut: "2026-08-16",
+        guests: 1,
+        roomLabel: "Chambre",
+        nightlyPrice: 89,
+        nights: 2,
+      });
+    }).toThrow("Missing required field: subtotal");
+  });
+
+  // Mobile-first: the shared shell must be fluid (max-width, not a fixed 600px
+  // width attribute) so emails never force horizontal scrolling on phones.
+  it("renders a fluid, mobile-safe layout (no fixed 600px width)", () => {
+    const sample = SAMPLES["welcome"] as Record<string, unknown>;
+    const result = renderEmail("welcome", "fr", sample);
+    expect(result.html).toContain("max-width: 600px");
+    expect(result.html).toContain("@media only screen and (max-width: 600px)");
+    expect(result.html).not.toContain('width="600"');
+  });
+
+  it("sets the html lang attribute from the locale", () => {
+    const sample = SAMPLES["welcome"] as Record<string, unknown>;
+    expect(renderEmail("welcome", "fr", sample).html).toContain('<html lang="fr">');
+    expect(renderEmail("welcome", "en", sample).html).toContain('<html lang="en">');
+  });
 });
