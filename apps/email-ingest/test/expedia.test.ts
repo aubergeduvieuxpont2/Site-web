@@ -53,6 +53,6 @@ describe("parseExpedia", () => {
   });
 
   it("returns null without the check-in/check-out row", () => {
-    expect(parseExpedia("Reservation ID: 99\nGuest: A B", SUBJECT)).toBeNull();
+    expect(parseExpedia("Reservation ID: 123456\nGuest: A B", SUBJECT)).toBeNull();
   });
 });
