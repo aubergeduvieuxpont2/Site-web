@@ -24,6 +24,12 @@ import {
   withPublicRoomCount,
 } from "./settings";
 import { createEmailsRouter } from "./emails";
+import {
+  buildReservationHubspotOps,
+  enqueueHubspotOps,
+  OtaParsedSchema,
+  OtaFailureSchema,
+} from "./ota";
 import type { RoomRow, PublicRoomRow } from "./rooms";
 import {
   RoomCreateSchema,
@@ -326,51 +332,105 @@ app.post(
     }
 
     c.executionCtx.waitUntil(
-      (async () => {
-        try {
-          await c.env.HUBSPOT.fetch(
-            new Request("http://hubspot/ops/enqueue", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kind: "contact.upsert",
-                payload: {
-                  email: data.email,
-                  firstname: data.firstName,
-                  lastname: data.lastName,
-                },
-              }),
-            })
-          );
-
-          await c.env.HUBSPOT.fetch(
-            new Request("http://hubspot/ops/enqueue", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kind: "deal.create",
-                payload: {
-                  contactEmail: data.email,
-                  dealname: `Reservation #${created.id}`,
-                  arrive: data.checkIn || undefined,
-                  depart: data.checkOut || undefined,
-                  room: data.room || undefined,
-                  people: data.guests || undefined,
-                  roomCount: data.roomCount,
-                  description: data.message || undefined,
-                },
-                dedupeKey: `reservation-${created.id}`,
-              }),
-            })
-          );
-        } catch {
-        }
-      })()
+      enqueueHubspotOps(
+        c.env.HUBSPOT,
+        buildReservationHubspotOps({
+          reservationId: created.id,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          room: data.room,
+          guests: data.guests,
+          roomCount: data.roomCount,
+          description: data.message,
+        }),
+      )
     );
 
     return c.json({ reservation: created }, 201);
   }
 );
+
+// Internal endpoint for the email-ingest Worker (service binding only).
+// Not under /api/* on purpose: the Worker's routes only cover /api/*, so this
+// path is unreachable from the internet — same isolation model as the
+// route-less HubSpot gateway.
+app.post("/internal/ota-bookings", async (c) => {
+  let raw: unknown;
+  try {
+    raw = await c.req.json();
+  } catch {
+    return c.json({ error: "invalid JSON" }, 400);
+  }
+  const status = (raw as { status?: unknown } | null)?.status;
+  const sql = neon(c.env.DB_CONN);
+
+  if (status === "parse_failed" || status === "ignored") {
+    const parsed = OtaFailureSchema.safeParse(raw);
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, 400);
+    }
+    const d = parsed.data;
+    await sql`
+      INSERT INTO email_ingest_log (provider, status, subject, error)
+      VALUES (${d.provider}, ${d.status}, ${d.subject}, ${d.error})
+    `;
+    return c.json({ ok: true }, 202);
+  }
+
+  const parsed = OtaParsedSchema.safeParse(raw);
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid request" }, 400);
+  }
+  const d = parsed.data;
+  const name = [d.firstName, d.lastName].filter(Boolean).join(" ");
+  const providerLabel = d.source === "airbnb" ? "Airbnb" : "Expedia";
+  const message = `Réservation ${providerLabel} #${d.externalRef}`;
+
+  // ON CONFLICT against the partial unique index dedupes resent confirmations.
+  const rows = (await sql`
+    INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref)
+    VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef})
+    ON CONFLICT (source, external_ref) WHERE external_ref IS NOT NULL DO NOTHING
+    RETURNING id
+  `) as { id: number }[];
+
+  const created = rows[0];
+  if (!created) {
+    await sql`
+      INSERT INTO email_ingest_log (provider, status, subject)
+      VALUES (${d.source}, 'duplicate', ${d.subject})
+    `;
+    return c.json({ ok: true, duplicate: true }, 200);
+  }
+
+  await sql`
+    INSERT INTO email_ingest_log (provider, status, reservation_id, subject)
+    VALUES (${d.source}, 'parsed', ${created.id}, ${d.subject})
+  `;
+
+  c.executionCtx.waitUntil(
+    enqueueHubspotOps(
+      c.env.HUBSPOT,
+      buildReservationHubspotOps({
+        reservationId: created.id,
+        email: d.guestEmail,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        checkIn: d.checkIn,
+        checkOut: d.checkOut,
+        room: d.listingName,
+        guests: d.guests,
+        roomCount: 1,
+        description: message,
+      }),
+    )
+  );
+
+  return c.json({ reservationId: created.id }, 201);
+});
 
 // Auth routes
 app.post(
@@ -679,6 +739,36 @@ app.get("/api/admin/outbox", async (c) => {
   } else {
     rows = (await sql`SELECT * FROM hubspot_outbox WHERE status = ${status} ORDER BY updated_at DESC`) as OutboxRow[];
   }
+
+  return c.json({ rows });
+});
+
+type EmailIngestLogRow = {
+  id: number;
+  provider: string | null;
+  status: string;
+  reservation_id: number | null;
+  subject: string | null;
+  error: string | null;
+  created_at: string;
+};
+
+app.get("/api/admin/email-ingest", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`
+    SELECT id, provider, status, reservation_id, subject, error, created_at
+    FROM email_ingest_log
+    ORDER BY created_at DESC
+    LIMIT 100
+  `) as EmailIngestLogRow[];
 
   return c.json({ rows });
 });

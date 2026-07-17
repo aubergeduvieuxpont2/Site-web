@@ -9,6 +9,10 @@ independently deployable frontend and backend API communicating over HTTP.
 apps/
   web/   Svelte 5 + Vite SPA styled with Tailwind CSS v4, served by a Cloudflare Worker (static assets).
   api/   Hono Worker (the HTTP API) backed by a Neon Postgres database.
+  email-ingest/  Email Worker: receives OTA booking emails (bookings@) via
+                 Cloudflare Email Routing, forwards the original, parses
+                 Airbnb/Expedia confirmations and posts them to the API's
+                 internal /internal/ota-bookings endpoint (service binding).
 ```
 
 - **Frontend** (`apps/web`) is a static SPA. It calls the API over HTTP (`/api/*`).
@@ -18,6 +22,10 @@ apps/
   over HTTP. The connection string is the `DB_CONN` var/secret on `c.env` — there
   is **no** Cloudflare binding block for it.
 - The two services deploy independently; treat the HTTP boundary as the contract.
+- **Email ingest** (`apps/email-ingest`) is a Cloudflare Email Worker that ingests
+  OTA booking confirmations, creates reservations (with dedupe via `source`/`external_ref`
+  on the `reservations` table), and logs all processed emails to the `email_ingest_log`
+  table for admin visibility.
 
 ## Database config (DB_CONN)
 

@@ -23,6 +23,8 @@
   // The same API Worker backs every surface. Each host gets its own /api/*
   // route (more specific than the web/splitter catch-alls), so the SPA's
   // relative /api/* calls stay same-origin on www, dev, and the A/B subdomains.
+  // /internal/* must never be exposed via workers.dev.
+  "workers_dev": false,
   "routes": [
     { "pattern": "www.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" },
     { "pattern": "dev.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" },
