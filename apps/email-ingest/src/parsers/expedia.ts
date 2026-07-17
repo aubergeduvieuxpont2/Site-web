@@ -15,7 +15,10 @@ function isoFrom(mon: string, day: string, year: string): string | null {
 }
 
 export function parseExpedia(bodyText: string, _subject: string): ParsedBooking | null {
-  const body = bodyText.normalize("NFC");
+  // Strip markdown-style bold markers: Gmail regenerates text/plain on
+  // forward and renders <b> as '*', which lands between labels and values
+  // ("*Reservation ID: *2511634261", "*Guest:\n*Marie Gagnon").
+  const body = bodyText.normalize("NFC").replace(/\*/g, "");
 
   const id = body.match(/Reservation ID:?\s*(\d{6,})/i)?.[1] ?? null;
   if (!id) return null;

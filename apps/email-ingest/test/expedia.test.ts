@@ -26,6 +26,26 @@ describe("parseExpedia", () => {
     });
   });
 
+  it("parses the Gmail-forward plaintext (bold labels rendered as *asterisks*)", () => {
+    // Gmail regenerates text/plain on forward and renders <b> as markdown-style
+    // '*' markers, landing between labels and values: "*Reservation ID: *251...",
+    // "*Guest:\n*Marie Gagnon". Real production failure 2026-07-17.
+    const gmailText = readFileSync(join(FIXTURES, "expedia-new-booking-gmail.txt"), "utf8");
+    const b = parseExpedia(gmailText, "Fwd: FW: " + SUBJECT);
+    expect(b).toEqual({
+      source: "expedia",
+      externalRef: "2511634261",
+      firstName: "Marie",
+      lastName: "Gagnon",
+      guestEmail: "ntvrowuydj@m.expediapartnercentral.com",
+      phone: "1 1111111111",
+      checkIn: "2026-09-05",
+      checkOut: "2026-09-06",
+      guests: 2,
+      listingName: "Economy Double Room, River View - Standard",
+    });
+  });
+
   it("parses the HTML part via htmlToText to the same reservation", () => {
     const b = parseExpedia(htmlToText(html), SUBJECT);
     expect(b).not.toBeNull();
