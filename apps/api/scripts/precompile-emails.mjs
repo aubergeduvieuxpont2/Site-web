@@ -27,6 +27,7 @@ const KEYS = [
   "reservation-cancellation",
   "invoice-receipt",
   "review-request",
+  "room-assigned",
 ];
 
 const read = (rel) => readFileSync(join(emailsDir, rel), "utf8");

@@ -35,6 +35,8 @@ function room(over: Partial<Room> = {}): Room {
     capacity: 3,
     image_key: "bedroom",
     is_public: true,
+    passkey_enabled: false,
+    passkey: null,
     ...over,
   };
 }
@@ -140,6 +142,8 @@ describe("AdminChambresTab", () => {
         capacity: 2,
         imageKey: "lounge",
         isPublic: true,
+        passkeyEnabled: false,
+        passkey: "",
       }),
     );
 
@@ -252,6 +256,8 @@ describe("AdminChambresTab", () => {
         capacity: 4,
         imageKey: "bedroom",
         isPublic: true,
+        passkeyEnabled: false,
+        passkey: "",
       }),
     );
     await waitFor(() =>

@@ -2,7 +2,7 @@
   import { fade } from "svelte/transition";
   import { reveal } from "$lib/motion";
   import { createReservation, isError } from "$lib/api";
-  import { SITE } from "$lib/content";
+  import { SITE, phoneToHref } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
   import { datesOutOfOrder, nightsBetween, estimateStay } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
@@ -27,6 +27,10 @@
   let status = $state<Status>("idle");
   let errorMsg = $state("");
   let greetingName = $state("");
+
+  // Configured contact phone with graceful fallback to the static default.
+  const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
+  const phoneHref = $derived(phoneToHref(settings.contactPhone));
 
   // Lightweight required-field errors, shown only after a submit attempt.
   let fieldErrors = $state<{
@@ -193,7 +197,7 @@
               </p>
               <div class="page-contact__success-cta">
                 <span class="page-contact__tech-label">Une question pressante&nbsp;?</span>
-                <a class="page-contact__phone-link" href={SITE.phoneHref}>{SITE.phone}</a>
+                <a class="page-contact__phone-link" href={phoneHref}>{phoneDisplay}</a>
               </div>
             </div>
           {:else}
@@ -487,7 +491,7 @@
                   <span class="page-contact__error-msg">{errorMsg}</span>
                   <span>
                     En attendant, appelez-nous&nbsp;:
-                    <a class="page-contact__error-phone" href={SITE.phoneHref}>{SITE.phone}</a>
+                    <a class="page-contact__error-phone" href={phoneHref}>{phoneDisplay}</a>
                   </span>
                 </div>
               {/if}
@@ -525,7 +529,7 @@
 
         <div class="page-contact__info-section">
           <span class="page-contact__tech-label">Téléphone</span>
-          <a class="page-contact__phone-link" href={SITE.phoneHref}>{SITE.phone}</a>
+          <a class="page-contact__phone-link" href={phoneHref}>{phoneDisplay}</a>
         </div>
 
         <div class="page-contact__info-section">
@@ -562,7 +566,7 @@
       <p class="page-contact__strip-text">
         Préférez-vous la voix&nbsp;? Notre équipe répond du matin au soir.
       </p>
-      <a class="page-contact__strip-phone" href={SITE.phoneHref}>{SITE.phone}</a>
+      <a class="page-contact__strip-phone" href={phoneHref}>{phoneDisplay}</a>
     </div>
   </section>
 </div>

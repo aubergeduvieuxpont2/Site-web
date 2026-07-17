@@ -8,6 +8,8 @@
     capacity: number;
     image_key: string | null;
     is_public: boolean;
+    passkey_enabled: boolean;
+    passkey: string | null;
   }
 
   let {
@@ -124,6 +126,15 @@
         >
           {room.is_public ? 'Publique' : 'Masquée'}
         </span>
+        {#if room.passkey_enabled}
+          <span
+            class="rooms-list-item__badge rooms-list-item__badge--passkey"
+            role="status"
+            data-testid="rooms-list-item-passkey-badge"
+          >
+            Clé d'accès
+          </span>
+        {/if}
       </div>
     </div>
 
@@ -225,6 +236,8 @@
           capacity: room.capacity,
           imageKey: room.image_key ?? '',
           isPublic: room.is_public,
+          passkeyEnabled: room.passkey_enabled,
+          passkey: room.passkey ?? '',
         }}
         onSubmit={handleUpdate}
         loading={savePending}
@@ -340,6 +353,11 @@
   .rooms-list-item__badge--hidden {
     background-color: var(--color-surface-container);
     color: var(--color-ink-mute);
+  }
+
+  .rooms-list-item__badge--passkey {
+    background-color: var(--color-secondary-container);
+    color: var(--color-on-secondary-container);
   }
 
   /* ── Controls column ── */

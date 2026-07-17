@@ -9,6 +9,8 @@ type Room = {
   capacity: number;
   image_key: string | null;
   is_public: boolean;
+  passkey_enabled: boolean;
+  passkey: string | null;
 };
 
 afterEach(() => cleanup());
@@ -19,6 +21,8 @@ const publicRoom: Room = {
   capacity: 3,
   image_key: "bedroom",
   is_public: true,
+  passkey_enabled: false,
+  passkey: null,
 };
 
 const hiddenRoom: Room = {
@@ -27,6 +31,18 @@ const hiddenRoom: Room = {
   capacity: 2,
   image_key: null,
   is_public: false,
+  passkey_enabled: false,
+  passkey: null,
+};
+
+const passkeyRoom: Room = {
+  slug: "chambre-securisee",
+  name: "Chambre sécurisée",
+  capacity: 2,
+  image_key: "bedroom",
+  is_public: true,
+  passkey_enabled: true,
+  passkey: "1234",
 };
 
 function noopUpdate(): Promise<void> {
@@ -100,6 +116,17 @@ describe("RoomsListItem", () => {
       expect(badge.textContent).toContain("Masquée");
       expect(badge.className).toContain("rooms-list-item__badge--hidden");
     });
+
+    it("shows a pass-key indicator only when the room has one enabled", () => {
+      const { queryByTestId } = renderItem(publicRoom);
+      expect(queryByTestId("rooms-list-item-passkey-badge")).toBeNull();
+
+      cleanup();
+      const { getByTestId } = renderItem(passkeyRoom);
+      expect(
+        getByTestId("rooms-list-item-passkey-badge").textContent,
+      ).toContain("Clé d'accès");
+    });
   });
 
   describe("edit toggle", () => {
@@ -147,6 +174,8 @@ describe("RoomsListItem", () => {
         capacity: 3,
         imageKey: "bedroom",
         isPublic: true,
+        passkeyEnabled: false,
+        passkey: "",
       });
       await waitFor(() =>
         expect(queryByTestId("rooms-list-item-edit-panel")).toBeNull(),

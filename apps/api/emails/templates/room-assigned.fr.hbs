@@ -1,0 +1,25 @@
+<p>Bonjour {{name}},</p>
+
+<p>Votre chambre a été assignée pour votre séjour.</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Numéro de confirmation :</strong> {{confirmationCode}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Chambre :</strong> {{roomLabel}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Arrivée :</strong> {{formatDate checkIn}}</p>
+  <p style="margin: 0;"><strong>Départ :</strong> {{formatDate checkOut}}</p>
+</div>
+
+{{#if passkeyEnabled}}
+<div style="background-color: #fff4ec; border: 1px solid #ffb690; padding: 16px; border-radius: 4px; margin: 20px 0; text-align: center;">
+  <p style="margin: 0 0 6px 0; color: #45464d; font-size: 13px;">Code d'accès de votre chambre</p>
+  <p style="margin: 0; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9d4300;">{{passkey}}</p>
+</div>
+<p>Utilisez ce code pour déverrouiller la porte de votre chambre à votre arrivée.</p>
+{{else}}
+<p>Veuillez utiliser la clé qui se trouve dans la porte de votre chambre.</p>
+{{/if}}
+
+<p>Nous avons hâte de vous accueillir !</p>
+
+<p>Cordialement,<br/>
+L'équipe du Vieux Pont</p>

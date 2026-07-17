@@ -75,6 +75,8 @@
             capacity: data.capacity,
             image_key: data.imageKey,
             is_public: data.isPublic,
+            passkey_enabled: data.passkeyEnabled,
+            passkey: data.passkeyEnabled ? (data.passkey ?? "") : null,
           }
         : r,
     );

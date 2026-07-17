@@ -31,12 +31,42 @@ export const PARTIALS: Record<Locale, { header: HandlebarsTemplateDelegate; foot
   fr: { header: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
     return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Gîte champêtre en Mauricie\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}), footer: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
-    return "<tr>\n  <td style=\"background-color: #f7f9fb; padding: 20px; border-top: 1px solid #e8ebed; text-align: center; font-size: 12px; color: #2d3133; line-height: 1.6;\">\n    <div style=\"margin-bottom: 12px;\">\n      <strong>L'Auberge du Vieux Pont</strong><br/>\n      111, avenue Saint-Michel<br/>\n      Saint-Raymond (Québec) G3L 0H8<br/>\n      Canada\n    </div>\n    <div style=\"margin-bottom: 12px;\">\n      <a href=\"tel:4186551212\" style=\"color: #9d4300; text-decoration: none;\">418 655-1212</a><br/>\n      <a href=\"mailto:info@aubergeduvieuxpont.ca\" style=\"color: #9d4300; text-decoration: none;\">info@aubergeduvieuxpont.ca</a>\n    </div>\n    <div style=\"color: #304542; margin-bottom: 12px;\">\n      <strong>CITQ #304542</strong>\n    </div>\n    <div style=\"font-size: 11px; color: #6b7c81;\">\n      © 2026 L'Auberge du Vieux Pont. Tous droits réservés.\n    </div>\n  </td>\n</tr>\n";
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<tr>\n  <td style=\"background-color: #f7f9fb; padding: 20px; border-top: 1px solid #e8ebed; text-align: center; font-size: 12px; color: #2d3133; line-height: 1.6;\">\n    <div style=\"margin-bottom: 12px;\">\n      <strong>L'Auberge du Vieux Pont</strong><br/>\n      111, avenue Saint-Michel<br/>\n      Saint-Raymond (Québec) G3L 0H8<br/>\n      Canada\n    </div>\n    <div style=\"margin-bottom: 12px;\">\n      <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactPhoneHref") || (depth0 != null ? lookupProperty(depth0,"contactPhoneHref") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactPhoneHref","hash":{},"data":data,"loc":{"start":{"line":10,"column":15},"end":{"line":10,"column":35}}}) : helper)))
+    + "\" style=\"color: #9d4300; text-decoration: none;\">"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactPhone") || (depth0 != null ? lookupProperty(depth0,"contactPhone") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactPhone","hash":{},"data":data,"loc":{"start":{"line":10,"column":84},"end":{"line":10,"column":100}}}) : helper)))
+    + "</a><br/>\n      <a href=\"mailto:"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactEmail") || (depth0 != null ? lookupProperty(depth0,"contactEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactEmail","hash":{},"data":data,"loc":{"start":{"line":11,"column":22},"end":{"line":11,"column":38}}}) : helper)))
+    + "\" style=\"color: #9d4300; text-decoration: none;\">"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactEmail") || (depth0 != null ? lookupProperty(depth0,"contactEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactEmail","hash":{},"data":data,"loc":{"start":{"line":11,"column":87},"end":{"line":11,"column":103}}}) : helper)))
+    + "</a>\n    </div>\n    <div style=\"color: #304542; margin-bottom: 12px;\">\n      <strong>CITQ #304542</strong>\n    </div>\n    <div style=\"font-size: 11px; color: #6b7c81;\">\n      © 2026 L'Auberge du Vieux Pont. Tous droits réservés.\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}) },
   en: { header: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
     return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Rural inn in Mauricie\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}), footer: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
-    return "<tr>\n  <td style=\"background-color: #f7f9fb; padding: 20px; border-top: 1px solid #e8ebed; text-align: center; font-size: 12px; color: #2d3133; line-height: 1.6;\">\n    <div style=\"margin-bottom: 12px;\">\n      <strong>L'Auberge du Vieux Pont</strong><br/>\n      111, avenue Saint-Michel<br/>\n      Saint-Raymond (Quebec) G3L 0H8<br/>\n      Canada\n    </div>\n    <div style=\"margin-bottom: 12px;\">\n      <a href=\"tel:4186551212\" style=\"color: #9d4300; text-decoration: none;\">418 655-1212</a><br/>\n      <a href=\"mailto:info@aubergeduvieuxpont.ca\" style=\"color: #9d4300; text-decoration: none;\">info@aubergeduvieuxpont.ca</a>\n    </div>\n    <div style=\"color: #304542; margin-bottom: 12px;\">\n      <strong>CITQ #304542</strong>\n    </div>\n    <div style=\"font-size: 11px; color: #6b7c81;\">\n      © 2026 L'Auberge du Vieux Pont. All rights reserved.\n    </div>\n  </td>\n</tr>\n";
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<tr>\n  <td style=\"background-color: #f7f9fb; padding: 20px; border-top: 1px solid #e8ebed; text-align: center; font-size: 12px; color: #2d3133; line-height: 1.6;\">\n    <div style=\"margin-bottom: 12px;\">\n      <strong>L'Auberge du Vieux Pont</strong><br/>\n      111, avenue Saint-Michel<br/>\n      Saint-Raymond (Quebec) G3L 0H8<br/>\n      Canada\n    </div>\n    <div style=\"margin-bottom: 12px;\">\n      <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactPhoneHref") || (depth0 != null ? lookupProperty(depth0,"contactPhoneHref") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactPhoneHref","hash":{},"data":data,"loc":{"start":{"line":10,"column":15},"end":{"line":10,"column":35}}}) : helper)))
+    + "\" style=\"color: #9d4300; text-decoration: none;\">"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactPhone") || (depth0 != null ? lookupProperty(depth0,"contactPhone") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactPhone","hash":{},"data":data,"loc":{"start":{"line":10,"column":84},"end":{"line":10,"column":100}}}) : helper)))
+    + "</a><br/>\n      <a href=\"mailto:"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactEmail") || (depth0 != null ? lookupProperty(depth0,"contactEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactEmail","hash":{},"data":data,"loc":{"start":{"line":11,"column":22},"end":{"line":11,"column":38}}}) : helper)))
+    + "\" style=\"color: #9d4300; text-decoration: none;\">"
+    + alias4(((helper = (helper = lookupProperty(helpers,"contactEmail") || (depth0 != null ? lookupProperty(depth0,"contactEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"contactEmail","hash":{},"data":data,"loc":{"start":{"line":11,"column":87},"end":{"line":11,"column":103}}}) : helper)))
+    + "</a>\n    </div>\n    <div style=\"color: #304542; margin-bottom: 12px;\">\n      <strong>CITQ #304542</strong>\n    </div>\n    <div style=\"font-size: 11px; color: #6b7c81;\">\n      © 2026 L'Auberge du Vieux Pont. All rights reserved.\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}) },
 };
 
@@ -344,5 +374,74 @@ export const TEMPLATES: Record<TemplateKey, Record<Locale, HandlebarsTemplateDel
     + "</p>\n</div>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
     + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":13,"column":11},"end":{"line":13,"column":24}}}) : helper)))
     + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Leave a review</a>\n</p>\n\n<p>Thank you!</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
+},"useData":true}) },
+  "room-assigned": { fr: Handlebars.template({"0":function(container,depth0,helpers,partials,data) {
+    var helper, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<div style=\"background-color: #fff4ec; border: 1px solid #ffb690; padding: 16px; border-radius: 4px; margin: 20px 0; text-align: center;\">\n  <p style=\"margin: 0 0 6px 0; color: #45464d; font-size: 13px;\">Code d'accès de votre chambre</p>\n  <p style=\"margin: 0; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9d4300;\">"
+    + container.escapeExpression(((helper = (helper = lookupProperty(helpers,"passkey") || (depth0 != null ? lookupProperty(depth0,"passkey") : depth0)) != null ? helper : container.hooks.helperMissing),(typeof helper === "function" ? helper.call(depth0 != null ? depth0 : (container.nullContext || {}),{"name":"passkey","hash":{},"data":data,"loc":{"start":{"line":15,"column":97},"end":{"line":15,"column":108}}}) : helper)))
+    + "</p>\n</div>\n<p>Utilisez ce code pour déverrouiller la porte de votre chambre à votre arrivée.</p>\n";
+},"1":function(container,depth0,helpers,partials,data) {
+    return "<p>Veuillez utiliser la clé qui se trouve dans la porte de votre chambre.</p>\n";
+},"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Bonjour "
+    + alias4(((helper = (helper = lookupProperty(helpers,"name") || (depth0 != null ? lookupProperty(depth0,"name") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"name","hash":{},"data":data,"loc":{"start":{"line":1,"column":11},"end":{"line":1,"column":19}}}) : helper)))
+    + ",</p>\n\n<p>Votre chambre a été assignée pour votre séjour.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0 0 10px 0;\"><strong>Numéro de confirmation :</strong> "
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmationCode") || (depth0 != null ? lookupProperty(depth0,"confirmationCode") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmationCode","hash":{},"data":data,"loc":{"start":{"line":6,"column":75},"end":{"line":6,"column":95}}}) : helper)))
+    + "</p>\n  <p style=\"margin: 0 0 10px 0;\"><strong>Chambre :</strong> "
+    + alias4(((helper = (helper = lookupProperty(helpers,"roomLabel") || (depth0 != null ? lookupProperty(depth0,"roomLabel") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"roomLabel","hash":{},"data":data,"loc":{"start":{"line":7,"column":60},"end":{"line":7,"column":73}}}) : helper)))
+    + "</p>\n  <p style=\"margin: 0 0 10px 0;\"><strong>Arrivée :</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":60},"end":{"line":8,"column":82}}}))
+    + "</p>\n  <p style=\"margin: 0;\"><strong>Départ :</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":50},"end":{"line":9,"column":73}}}))
+    + "</p>\n</div>\n\n"
+    + ((stack1 = lookupProperty(helpers,"if").call(alias1,(depth0 != null ? lookupProperty(depth0,"passkeyEnabled") : depth0),{"name":"if","hash":{},"fn":container.program(0, data, 0),"inverse":container.program(1, data, 0),"data":data,"loc":{"start":{"line":12,"column":0},"end":{"line":20,"column":7}}})) != null ? stack1 : "")
+    + "\n<p>Nous avons hâte de vous accueillir !</p>\n\n<p>Cordialement,<br/>\nL'équipe du Vieux Pont</p>\n";
+},"useData":true}), en: Handlebars.template({"0":function(container,depth0,helpers,partials,data) {
+    var helper, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<div style=\"background-color: #fff4ec; border: 1px solid #ffb690; padding: 16px; border-radius: 4px; margin: 20px 0; text-align: center;\">\n  <p style=\"margin: 0 0 6px 0; color: #45464d; font-size: 13px;\">Your room access code</p>\n  <p style=\"margin: 0; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9d4300;\">"
+    + container.escapeExpression(((helper = (helper = lookupProperty(helpers,"passkey") || (depth0 != null ? lookupProperty(depth0,"passkey") : depth0)) != null ? helper : container.hooks.helperMissing),(typeof helper === "function" ? helper.call(depth0 != null ? depth0 : (container.nullContext || {}),{"name":"passkey","hash":{},"data":data,"loc":{"start":{"line":15,"column":97},"end":{"line":15,"column":108}}}) : helper)))
+    + "</p>\n</div>\n<p>Use this code to unlock your room door when you arrive.</p>\n";
+},"1":function(container,depth0,helpers,partials,data) {
+    return "<p>Please use the key located in your room door.</p>\n";
+},"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Hello "
+    + alias4(((helper = (helper = lookupProperty(helpers,"name") || (depth0 != null ? lookupProperty(depth0,"name") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"name","hash":{},"data":data,"loc":{"start":{"line":1,"column":9},"end":{"line":1,"column":17}}}) : helper)))
+    + ",</p>\n\n<p>Your room has been assigned for your stay.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0 0 10px 0;\"><strong>Confirmation code:</strong> "
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmationCode") || (depth0 != null ? lookupProperty(depth0,"confirmationCode") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmationCode","hash":{},"data":data,"loc":{"start":{"line":6,"column":69},"end":{"line":6,"column":89}}}) : helper)))
+    + "</p>\n  <p style=\"margin: 0 0 10px 0;\"><strong>Room:</strong> "
+    + alias4(((helper = (helper = lookupProperty(helpers,"roomLabel") || (depth0 != null ? lookupProperty(depth0,"roomLabel") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"roomLabel","hash":{},"data":data,"loc":{"start":{"line":7,"column":56},"end":{"line":7,"column":69}}}) : helper)))
+    + "</p>\n  <p style=\"margin: 0 0 10px 0;\"><strong>Check-in:</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":60},"end":{"line":8,"column":82}}}))
+    + "</p>\n  <p style=\"margin: 0;\"><strong>Check-out:</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":52},"end":{"line":9,"column":75}}}))
+    + "</p>\n</div>\n\n"
+    + ((stack1 = lookupProperty(helpers,"if").call(alias1,(depth0 != null ? lookupProperty(depth0,"passkeyEnabled") : depth0),{"name":"if","hash":{},"fn":container.program(0, data, 0),"inverse":container.program(1, data, 0),"data":data,"loc":{"start":{"line":12,"column":0},"end":{"line":20,"column":7}}})) != null ? stack1 : "")
+    + "\n<p>We look forward to welcoming you!</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
 },"useData":true}) },
 };

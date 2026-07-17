@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { SITE } from "$lib/content";
+  import { SITE, phoneToHref } from "$lib/content";
+  import { settings } from "$lib/settings.svelte";
   import Wordmark from "./Wordmark.svelte";
 
   let footerEl: HTMLElement | undefined;
@@ -29,7 +30,9 @@
     observer.observe(footerEl);
   });
 
-  const phoneRaw = SITE.phoneHref.replace("tel:", "");
+  // Configured contact phone with graceful fallback to the static default.
+  const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
+  const phoneHref = $derived(phoneToHref(settings.contactPhone));
 </script>
 
 <footer
@@ -54,12 +57,12 @@
           {SITE.address.city}
         </p>
         <a
-          href="tel:{phoneRaw}"
+          href={phoneHref}
           class="footer__phone"
           data-testid="footer-phone"
-          aria-label="Téléphone: {SITE.phone}"
+          aria-label="Téléphone: {phoneDisplay}"
         >
-          {SITE.phone}
+          {phoneDisplay}
         </a>
       </address>
     </div>

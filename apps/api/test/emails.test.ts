@@ -173,4 +173,60 @@ describe("renderEmail", () => {
     expect(renderEmail("welcome", "fr", sample).html).toContain('<html lang="fr">');
     expect(renderEmail("welcome", "en", sample).html).toContain('<html lang="en">');
   });
+
+  // Room-assignment email: conditional pass-key vs door-key content.
+  it("room-assigned FR shows the pass-key when enabled", () => {
+    const sample = SAMPLES["room-assigned"] as Record<string, unknown>;
+    const result = renderEmail("room-assigned", "fr", sample);
+    expect(result.html).toContain("4921");
+    expect(result.html).toContain("Code d'accès");
+    expect(result.html).not.toContain("clé qui se trouve dans la porte");
+  });
+
+  it("room-assigned FR shows the door-key text when disabled", () => {
+    const sample = { ...(SAMPLES["room-assigned"] as Record<string, unknown>), passkeyEnabled: false };
+    const result = renderEmail("room-assigned", "fr", sample);
+    expect(result.html).toContain("Veuillez utiliser la clé qui se trouve dans la porte de votre chambre.");
+    expect(result.html).not.toContain("4921");
+  });
+
+  it("room-assigned EN renders both branches", () => {
+    const on = renderEmail("room-assigned", "en", SAMPLES["room-assigned"] as Record<string, unknown>);
+    expect(on.html).toContain("4921");
+    expect(on.html).toContain("access code");
+    const off = renderEmail("room-assigned", "en", {
+      ...(SAMPLES["room-assigned"] as Record<string, unknown>),
+      passkeyEnabled: false,
+    });
+    expect(off.html).toContain("Please use the key located in your room door.");
+    expect(off.html).not.toContain("4921");
+  });
+
+  it("room-assigned renders without a passkey when the toggle is off", () => {
+    // passkey omitted entirely — must still render (it is not a required field).
+    const result = renderEmail("room-assigned", "fr", {
+      name: "Test",
+      roomLabel: "Chambre",
+      checkIn: "2026-08-14",
+      checkOut: "2026-08-16",
+      passkeyEnabled: false,
+    });
+    expect(result.html).toContain("clé qui se trouve dans la porte");
+  });
+
+  // Configurable phone reaches the footer via injected data, else the default.
+  it("footer uses the injected contact phone, or the default when absent", () => {
+    const sample = SAMPLES["welcome"] as Record<string, unknown>;
+    const injected = renderEmail("welcome", "fr", {
+      ...sample,
+      contactPhone: "581 555-0199",
+      contactPhoneHref: "tel:+15815550199",
+    });
+    expect(injected.html).toContain("581 555-0199");
+    expect(injected.html).toContain("tel:+15815550199");
+
+    const fallback = renderEmail("welcome", "fr", sample);
+    expect(fallback.html).toContain("418 655-1212");
+    expect(fallback.html).toContain("tel:+14186551212");
+  });
 });

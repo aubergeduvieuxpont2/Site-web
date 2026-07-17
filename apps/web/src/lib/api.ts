@@ -79,6 +79,7 @@ export interface ApiError {
 export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
+  contactPhone: string;
   marketingRoomCount: number;
   // Live count of publicly-visible rooms, served by GET /api/settings. Kept
   // required client-side: loadSettings seeds it from DEFAULTS (12) so callers
@@ -106,6 +107,8 @@ export interface Room {
   capacity: number;
   image_key: string | null;
   is_public: boolean;
+  passkey_enabled: boolean;
+  passkey: string | null;
 }
 
 /**
@@ -119,6 +122,8 @@ export interface RoomInput {
   capacity: number;
   imageKey: string;
   isPublic: boolean;
+  passkeyEnabled: boolean;
+  passkey?: string;
 }
 
 /**

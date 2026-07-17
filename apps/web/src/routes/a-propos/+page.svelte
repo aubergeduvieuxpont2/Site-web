@@ -1,6 +1,7 @@
 <script lang="ts">
   import { reveal, revealStagger } from '$lib/motion';
-  import { SITE } from '$lib/content';
+  import { SITE, phoneToHref } from '$lib/content';
+  import { settings } from '$lib/settings.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { breadcrumbSchema } from '$lib/seo';
   import Contour from '$lib/components/Contour.svelte';
@@ -13,6 +14,10 @@
     { code: '03', title: 'Accessible', text: "Un tarif unique pour tous. Confort et repos pour chaque travailleur, peu importe le budget. Le repos n'est pas un luxe réservé." },
     { code: '04', title: 'Ancré', text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les chantiers et le monde qui y travaille." },
   ];
+
+  // Configured contact phone with graceful fallback to the static default.
+  const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
+  const phoneHref = $derived(phoneToHref(settings.contactPhone));
 </script>
 
 <div class="page-a-propos" data-testid="page-a-propos">
@@ -256,12 +261,12 @@
         class="page-a-propos__cta-actions"
       >
         <a
-          href={SITE.phoneHref}
+          href={phoneHref}
           class="page-a-propos__cta-phone"
           data-testid="a-propos-cta-phone"
-          aria-label="Appeler le {SITE.phone}"
+          aria-label="Appeler le {phoneDisplay}"
         >
-          {SITE.phone}
+          {phoneDisplay}
         </a>
         <a
           href="/contact"

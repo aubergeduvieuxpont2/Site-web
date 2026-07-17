@@ -1,0 +1,25 @@
+<p>Hello {{name}},</p>
+
+<p>Your room has been assigned for your stay.</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Confirmation code:</strong> {{confirmationCode}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Room:</strong> {{roomLabel}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Check-in:</strong> {{formatDate checkIn}}</p>
+  <p style="margin: 0;"><strong>Check-out:</strong> {{formatDate checkOut}}</p>
+</div>
+
+{{#if passkeyEnabled}}
+<div style="background-color: #fff4ec; border: 1px solid #ffb690; padding: 16px; border-radius: 4px; margin: 20px 0; text-align: center;">
+  <p style="margin: 0 0 6px 0; color: #45464d; font-size: 13px;">Your room access code</p>
+  <p style="margin: 0; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #9d4300;">{{passkey}}</p>
+</div>
+<p>Use this code to unlock your room door when you arrive.</p>
+{{else}}
+<p>Please use the key located in your room door.</p>
+{{/if}}
+
+<p>We look forward to welcoming you!</p>
+
+<p>Best regards,<br/>
+The Vieux Pont team</p>

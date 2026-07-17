@@ -1,10 +1,35 @@
 import { Hono, type Context } from "hono";
+import { neon } from "@neondatabase/serverless";
 import type { User } from "../auth/session";
-import { renderEmail } from "./render";
+import { renderEmail, EMAIL_DEFAULTS } from "./render";
 import { MANIFEST, isTemplateKey, isLocale } from "./manifest";
 import { SAMPLES } from "./templates";
 
 type Bindings = { DB_CONN: string; HUBSPOT: Fetcher; ADMIN_EMAIL: string };
+
+// Build the footer contact context from the live `settings` values, falling
+// back to EMAIL_DEFAULTS if the query fails so a preview never 500s.
+function telHref(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (!digits) return EMAIL_DEFAULTS.contactPhoneHref;
+  return digits.length === 10 ? `tel:+1${digits}` : `tel:+${digits}`;
+}
+
+async function contactContext(dbConn: string | undefined) {
+  if (!dbConn) return { ...EMAIL_DEFAULTS };
+  try {
+    const sql = neon(dbConn);
+    const rows = (await sql`
+      SELECT key, value FROM settings WHERE key IN ('contact_phone', 'contact_email')
+    `) as { key: string; value: string }[];
+    const map = new Map(rows.map((r) => [r.key, r.value]));
+    const contactPhone = map.get("contact_phone") ?? EMAIL_DEFAULTS.contactPhone;
+    const contactEmail = map.get("contact_email") ?? EMAIL_DEFAULTS.contactEmail;
+    return { contactPhone, contactPhoneHref: telHref(contactPhone), contactEmail };
+  } catch {
+    return { ...EMAIL_DEFAULTS };
+  }
+}
 
 export function createEmailsRouter(deps: { authenticate: (c: Context<{ Bindings: Bindings }>) => Promise<User | null> }) {
   const router = new Hono<{ Bindings: Bindings }>();
@@ -48,7 +73,8 @@ export function createEmailsRouter(deps: { authenticate: (c: Context<{ Bindings:
 
     try {
       const sample = SAMPLES[templateParam] as Record<string, unknown>;
-      const rendered = renderEmail(templateParam, localeParam, sample);
+      const contact = await contactContext(c.env?.DB_CONN);
+      const rendered = renderEmail(templateParam, localeParam, { ...sample, ...contact });
       return c.json(rendered);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

@@ -57,6 +57,7 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
   return {
     nightlyPrice: 89,
     contactEmail: "info@aubergeduvieuxpont.ca",
+    contactPhone: "418 655-1212",
     marketingRoomCount: 12,
     assignableRoomCount: 12,
     tps: 5,
@@ -335,6 +336,34 @@ describe("page-admin tax settings fields", () => {
     expect(sent.accommodationTax).toBe(3.5);
     // No lingering validation errors after a clean save.
     expect(getByTestId("tps-error").textContent).toBe("");
+  });
+});
+
+describe("page-admin contact phone", () => {
+  it("seeds the phone input from settings and includes it in the save payload", async () => {
+    adminGetSettings.mockResolvedValue(adminSettings({ contactPhone: "581 222-3333" }));
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-settings"));
+    await waitFor(() => expect(adminGetSettings).toHaveBeenCalled());
+    const input = (await findByTestId("input-contact-phone")) as HTMLInputElement;
+    expect(input.value).toBe("581 222-3333");
+
+    await fireEvent.click(getByTestId("settings-save-btn"));
+    await waitFor(() => expect(adminUpdateSettings).toHaveBeenCalledTimes(1));
+    const sent = adminUpdateSettings.mock.calls[0][0] as AdminSettings;
+    expect(sent.contactPhone).toBe("581 222-3333");
+  });
+
+  it("blocks save with a French error when the phone is empty", async () => {
+    adminGetSettings.mockResolvedValue(adminSettings({ contactPhone: "" }));
+    const { findByTestId, getByTestId } = render(Page);
+    await fireEvent.click(await findByTestId("tab-settings"));
+    await waitFor(() => expect(adminGetSettings).toHaveBeenCalled());
+    await findByTestId("input-contact-phone");
+
+    await fireEvent.click(getByTestId("settings-save-btn"));
+    expect(adminUpdateSettings).not.toHaveBeenCalled();
+    expect(getByTestId("error-contact-phone").textContent).toContain("Téléphone requis");
   });
 });
 
