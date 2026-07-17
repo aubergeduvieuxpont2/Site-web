@@ -353,6 +353,22 @@ export async function requeueOutbox(
   );
 }
 
+export interface EmailIngestRow {
+  id: number;
+  provider: string | null;
+  status: "parsed" | "parse_failed" | "duplicate" | "ignored" | string;
+  reservation_id: number | null;
+  subject: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export async function adminEmailIngest(): Promise<
+  { rows: EmailIngestRow[] } | ApiError
+> {
+  return fetchJson<{ rows: EmailIngestRow[] }>("/admin/email-ingest");
+}
+
 // ---------------------------------------------------------------------------
 // Admin users
 // ---------------------------------------------------------------------------

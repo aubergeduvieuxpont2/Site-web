@@ -5,6 +5,7 @@
   import Button from "$lib/components/Button.svelte";
   import AdminUtilisateursTab from "$lib/components/admin/AdminUtilisateursTab.svelte";
   import AdminChambresTab from "$lib/components/admin/AdminChambresTab.svelte";
+  import AdminEmailsOtaTab from "$lib/components/admin/AdminEmailsOtaTab.svelte";
   import ReservationTableRow from "$lib/components/admin/ReservationTableRow.svelte";
   import type { InvoiceRequest, InvoiceResult } from "$lib/components/admin/InvoiceCreator.svelte";
   import {
@@ -27,7 +28,7 @@
   let currentUserId = $state<number | null>(null);
 
   // ─── Tab state ───
-  let activeTab = $state<"reservations" | "outbox" | "settings" | "rooms" | "users">("reservations");
+  let activeTab = $state<"reservations" | "outbox" | "settings" | "rooms" | "users" | "emails-ota">("reservations");
 
   // ─── Reservations ───
   let searchQuery = $state("");
@@ -236,7 +237,7 @@
 
   // ─── Tab keyboard nav (ARIA tabs pattern) ───
   function onTablistKeydown(e: KeyboardEvent) {
-    const order = ["reservations", "outbox", "settings", "rooms", "users"] as const;
+    const order = ["reservations", "outbox", "settings", "rooms", "users", "emails-ota"] as const;
     const idx = order.indexOf(activeTab);
     let next = idx;
     if (e.key === "ArrowRight") {
@@ -428,6 +429,21 @@
               data-testid="tab-users"
             >
               Utilisateurs
+            </button>
+            <button
+              role="tab"
+              id="tab-emails-ota"
+              aria-controls="panel-emails-ota"
+              aria-selected={activeTab === "emails-ota"}
+              tabindex={activeTab === "emails-ota" ? 0 : -1}
+              class="page-admin__tab {activeTab === 'emails-ota' ? 'page-admin__tab--active' : ''}"
+              onclick={() => {
+                activeTab = "emails-ota";
+              }}
+              onkeydown={onTablistKeydown}
+              data-testid="tab-emails-ota"
+            >
+              Emails OTA
             </button>
           </div>
           <a
@@ -936,6 +952,21 @@
         <div class="page-admin__panel-inner">
           {#if currentUserId !== null && activeTab === "users"}
             <AdminUtilisateursTab {currentUserId} />
+          {/if}
+        </div>
+      </div>
+
+      <!-- Emails OTA panel -->
+      <div
+        role="tabpanel"
+        id="panel-emails-ota"
+        aria-labelledby="tab-emails-ota"
+        hidden={activeTab !== "emails-ota"}
+        data-testid="panel-emails-ota"
+      >
+        <div class="page-admin__panel-inner">
+          {#if activeTab === "emails-ota"}
+            <AdminEmailsOtaTab />
           {/if}
         </div>
       </div>
