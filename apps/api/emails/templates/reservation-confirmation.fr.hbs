@@ -12,7 +12,32 @@
   <p style="margin: 0;"><strong>Tarif par nuit :</strong> {{money nightlyPrice}}</p>
 </div>
 
-<p><strong>Montant total :</strong> {{money total}}</p>
+<p><strong>Détails du prix :</strong></p>
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <tr style="border-bottom: 2px solid #333;">
+    <td style="padding: 8px; font-weight: bold;">Sous-total</td>
+    <td style="text-align: right; padding: 8px; font-weight: bold;">{{money subtotal}}</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 8px;">Taxe d'hébergement (3.5%)</td>
+    <td style="text-align: right; padding: 8px;">{{money accommodationTax}}</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 8px;">TPS (5%)</td>
+    <td style="text-align: right; padding: 8px;">{{money tps}}</td>
+  </tr>
+  <tr style="border-bottom: 2px solid #333;">
+    <td style="padding: 8px;">TVQ (9.975%)</td>
+    <td style="text-align: right; padding: 8px;">{{money tvq}}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; font-weight: bold; font-size: 16px;">Total (taxes incluses)</td>
+    <td style="text-align: right; padding: 8px; font-weight: bold; font-size: 16px;">{{money total}}</td>
+  </tr>
+</table>
+
+<p style="color: #45464d; font-size: 13px;">Les taxes applicables (taxe d'hébergement, TPS et TVQ) sont incluses dans le total ci-dessus.</p>
 
 <p>Vous pouvez gérer votre réservation en cliquant sur le lien ci-dessous :</p>
 

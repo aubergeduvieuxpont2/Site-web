@@ -7,6 +7,10 @@
   "roomLabel": "Chambre Rivière",
   "nightlyPrice": 89,
   "nights": 4,
-  "total": 356,
+  "subtotal": 356,
+  "accommodationTax": 12.46,
+  "tps": 18.42,
+  "tvq": 38.59,
+  "total": 425.47,
   "manageUrl": "https://www.aubergeduvieuxpont.ca/reservations/RES-2026-0042"
 }
