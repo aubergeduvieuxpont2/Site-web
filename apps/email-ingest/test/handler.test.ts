@@ -39,6 +39,7 @@ function makeEnv() {
   const calls: { url: string; body: any }[] = [];
   const env = {
     FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+    DEV_SENDER: "ychasse01@gmail.com",
     API: {
       fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : (input as Request).url;
@@ -106,11 +107,60 @@ describe("handleEmail", () => {
     expect(calls[0].body.provider).toBe("airbnb");
   });
 
-  it("only forwards unknown senders — no API call", async () => {
+  it("rejects unknown senders — no forward, no API call", async () => {
     const message = makeMessage("news@example.com", "Promo", "hello");
     const { env, calls } = makeEnv();
     await handleEmail(message, env);
-    expect(message.forward).toHaveBeenCalled();
+    expect(message.setReject).toHaveBeenCalled();
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("processes a dev-sender forward end-to-end without forwarding it", async () => {
+    const message = makeMessage(
+      "ychasse01@gmail.com",
+      "FW: Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(message.setReject).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body.status).toBe("parsed");
+    expect(calls[0].body.source).toBe("airbnb");
+    expect(calls[0].body.externalRef).toBe("HM45MDTHZ4");
+  });
+
+  it("rejects dev-sender emails with unrelated subjects", async () => {
+    const message = makeMessage("ychasse01@gmail.com", "Lunch tomorrow?", "hello");
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.setReject).toHaveBeenCalled();
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still forwards OTA mail when MIME parsing fails, using the envelope sender", async () => {
+    const raw = new ReadableStream({
+      start(controller) {
+        controller.error(new Error("broken stream"));
+      },
+    });
+    const message = {
+      from: "automated@airbnb.com",
+      to: "bookings@aubergeduvieuxpont.ca",
+      raw,
+      rawSize: 0,
+      headers: new Headers(),
+      forward: vi.fn(async () => {}),
+      setReject: vi.fn(),
+      reply: vi.fn(async () => {}),
+    } as any;
+    const { env, calls } = makeEnv();
+    await expect(handleEmail(message, env)).resolves.toBeUndefined();
+    expect(message.forward).toHaveBeenCalledWith("aubergeduvieuxpont2@hotmail.com");
+    expect(message.setReject).not.toHaveBeenCalled();
     expect(calls).toHaveLength(0);
   });
 

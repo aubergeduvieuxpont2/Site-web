@@ -48,3 +48,41 @@ describe("classify", () => {
     expect(classify("notairbnb.com@gmail.com", "Réservation confirmée : piège")).toEqual({ kind: "unknown" });
   });
 });
+
+describe("classify with a dev sender", () => {
+  const DEV = "ychasse01@gmail.com";
+
+  it("infers the provider from the subject for the dev sender", () => {
+    expect(
+      classify(DEV, "FW: Réservation confirmée : Jean Tremblay arrive le 30 juil.", DEV),
+    ).toEqual({ kind: "booking", provider: "airbnb" });
+    expect(classify(DEV, "FW: Expedia - New Booking - Arriving on 5 Sep 2026", DEV)).toEqual({
+      kind: "booking",
+      provider: "expedia",
+    });
+  });
+
+  it("classifies dev-sender request/cancel subjects as ignored", () => {
+    expect(
+      classify(DEV, "FW: En attente : demande de réservation concernant l'annonce X", DEV).kind,
+    ).toBe("ignored");
+    expect(classify(DEV, "FW: Expedia - Cancelled Booking - 2511634261", DEV).kind).toBe("ignored");
+  });
+
+  it("returns unknown for dev-sender emails with unrelated subjects", () => {
+    expect(classify(DEV, "Lunch tomorrow?", DEV)).toEqual({ kind: "unknown" });
+  });
+
+  it("only trusts the configured dev sender, and only when configured", () => {
+    expect(classify("other@gmail.com", "Réservation confirmée : X arrive le 1 août", DEV)).toEqual({
+      kind: "unknown",
+    });
+    expect(classify(DEV, "Réservation confirmée : X arrive le 1 août")).toEqual({ kind: "unknown" });
+  });
+
+  it("is case-insensitive on the dev sender address", () => {
+    expect(
+      classify("YChasse01@Gmail.com", "Réservation confirmée : X arrive le 1 août", DEV).kind,
+    ).toBe("booking");
+  });
+});

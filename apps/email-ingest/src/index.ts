@@ -7,24 +7,49 @@ import type { Env } from "./types";
 
 /**
  * Ordering is deliberate and load-bearing:
- *  1. forward() FIRST — the operator's mailbox copy must never depend on
- *     parsing. If forward() itself fails we let the error propagate so
- *     Cloudflare retries/bounces the delivery.
- *  2. After a successful forward, never throw: a retried delivery would
+ *  1. Classify BEFORE forwarding: only recognized OTA senders are forwarded
+ *     to the backup mailbox (spam is rejected at SMTP time, and the
+ *     operator's own DEV_SENDER test emails are processed but not
+ *     forwarded). If MIME parsing itself fails, fall back to classifying
+ *     the envelope sender so OTA mail is still forwarded, never dropped.
+ *  2. For forwarded (OTA) mail, forward() failures propagate so Cloudflare
+ *     retries/bounces the delivery.
+ *  3. After a successful forward, never throw: a retried delivery would
  *     forward a duplicate. Parse/API problems are logged (worker logs +
  *     email_ingest_log via the API when reachable) instead.
  */
 export async function handleEmail(message: ForwardableEmailMessage, env: Env): Promise<void> {
-  await message.forward(env.FORWARD_TO);
+  let parsed: Awaited<ReturnType<typeof PostalMime.parse>>;
+  try {
+    parsed = await PostalMime.parse(message.raw);
+  } catch (err) {
+    console.error("email-ingest: MIME parse failed", err);
+    // Can't read headers — classify on the envelope sender alone. OTA mail
+    // still reaches the backup mailbox; everything else is rejected.
+    if (classify(message.from, "", env.DEV_SENDER).kind !== "unknown") {
+      await message.forward(env.FORWARD_TO);
+    } else {
+      message.setReject("Message rejected");
+    }
+    return;
+  }
+
+  const from = parsed.from?.address ?? message.from;
+  const subject = (parsed.subject ?? "").normalize("NFC");
+  const cls = classify(from, subject, env.DEV_SENDER);
+
+  if (cls.kind === "unknown") {
+    message.setReject("Message rejected");
+    return;
+  }
+
+  const isDevSender =
+    !!env.DEV_SENDER && from.trim().toLowerCase() === env.DEV_SENDER.trim().toLowerCase();
+  if (!isDevSender) {
+    await message.forward(env.FORWARD_TO);
+  }
 
   try {
-    const parsed = await PostalMime.parse(message.raw);
-    const from = parsed.from?.address ?? message.from;
-    const subject = (parsed.subject ?? "").normalize("NFC");
-
-    const cls = classify(from, subject);
-    if (cls.kind === "unknown") return;
-
     let body: Record<string, unknown>;
     if (cls.kind === "ignored") {
       body = { status: "ignored", provider: cls.provider, subject, error: cls.reason };
@@ -73,7 +98,12 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
       }
     }
   } catch (err) {
-    console.error("email-ingest: processing failed (email was forwarded)", err);
+    console.error(
+      isDevSender
+        ? "email-ingest: processing failed (dev-sender email, not forwarded)"
+        : "email-ingest: processing failed (email was forwarded)",
+      err,
+    );
   }
 }
 
