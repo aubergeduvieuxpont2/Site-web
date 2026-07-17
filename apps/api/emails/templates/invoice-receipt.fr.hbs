@@ -1,0 +1,49 @@
+<p>Merci pour votre paiement, {{name}} !</p>
+
+<p>Voici votre reçu de facture :</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Numéro de facture :</strong> {{invoiceNumber}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Dates :</strong> {{formatDate checkIn locale}} - {{formatDate checkOut locale}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Date de paiement :</strong> {{formatDate paymentDate locale}}</p>
+</div>
+
+<p><strong>Détails de la facture :</strong></p>
+
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <tr style="border-bottom: 1px solid #ddd;">
+    <th style="text-align: left; padding: 8px; background-color: #f0f0f0;">Description</th>
+    <th style="text-align: right; padding: 8px; background-color: #f0f0f0;">Montant</th>
+  </tr>
+  {{#each lineItems}}
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 8px;">{{this.description}}</td>
+    <td style="text-align: right; padding: 8px;">{{money this.amount}}</td>
+  </tr>
+  {{/each}}
+  <tr style="border-bottom: 2px solid #333;">
+    <td style="padding: 8px; font-weight: bold;">Sous-total</td>
+    <td style="text-align: right; padding: 8px; font-weight: bold;">{{money subtotal}}</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 8px;">Taxe d'hébergement (3.5%)</td>
+    <td style="text-align: right; padding: 8px;">{{money accommodationTax}}</td>
+  </tr>
+  <tr style="border-bottom: 1px solid #ddd;">
+    <td style="padding: 8px;">TPS (5%)</td>
+    <td style="text-align: right; padding: 8px;">{{money tps}}</td>
+  </tr>
+  <tr style="border-bottom: 2px solid #333;">
+    <td style="padding: 8px;">TVQ (9.975%)</td>
+    <td style="text-align: right; padding: 8px;">{{money tvq}}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px; font-weight: bold; font-size: 16px;">Total</td>
+    <td style="text-align: right; padding: 8px; font-weight: bold; font-size: 16px;">{{money total}}</td>
+  </tr>
+</table>
+
+<p>Merci de votre confiance.</p>
+
+<p>Cordialement,<br/>
+L'équipe du Vieux Pont</p>

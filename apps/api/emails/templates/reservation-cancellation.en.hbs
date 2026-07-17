@@ -1,0 +1,19 @@
+<p>Hello {{name}},</p>
+
+<p>Your reservation has been cancelled.</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Confirmation code:</strong> {{confirmationCode}}</p>
+  <p style="margin: 0;"><strong>Dates:</strong> {{formatDate checkIn}} - {{formatDate checkOut}}</p>
+</div>
+
+<p>If you need further information, please contact:</p>
+
+<p style="text-align: center; margin: 20px 0;">
+  <a href="mailto:{{contactEmail}}" style="color: #9d4300; text-decoration: none;">{{contactEmail}}</a>
+</p>
+
+<p>Thank you for your understanding.</p>
+
+<p>Best regards,<br/>
+The Vieux Pont team</p>

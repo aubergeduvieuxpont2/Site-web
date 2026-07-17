@@ -426,6 +426,13 @@
               Utilisateurs
             </button>
           </div>
+          <a
+            href="/admin/courriels"
+            class="courriels-nav-link"
+            data-testid="courriels-nav-link"
+          >
+            Courriels
+          </a>
         </div>
       </div>
 
@@ -1028,11 +1035,64 @@
     max-width: 1280px;
     margin-inline: auto;
     padding-inline: var(--space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
   }
 
   .page-admin__tablist {
     display: flex;
     gap: 0;
+  }
+
+  /* ─── Courriels nav link (sibling of the tablist, not part of it) ─── */
+  .courriels-nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    padding: var(--space-sm) var(--space-md);
+    min-height: 44px;
+    min-width: 44px;
+
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: var(--color-ink-variant);
+
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background-color: transparent;
+    transition: color 160ms ease, background-color 160ms ease;
+  }
+
+  @media (hover: hover) {
+    .courriels-nav-link:hover {
+      background-color: var(--color-surface-container-low);
+      color: var(--color-ink);
+    }
+  }
+
+  .courriels-nav-link:focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 2px;
+    background-color: var(--color-surface-container-low);
+    color: var(--color-ink);
+  }
+
+  .courriels-nav-link:active {
+    background-color: var(--color-secondary-container);
+    color: var(--color-on-secondary-container);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .courriels-nav-link {
+      transition: none;
+    }
   }
 
   .page-admin__tab {

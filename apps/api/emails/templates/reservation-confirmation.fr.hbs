@@ -1,0 +1,26 @@
+<p>Merci pour votre réservation, {{name}} !</p>
+
+<p>Voici les détails de votre réservation :</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Numéro de confirmation :</strong> {{confirmationCode}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Chambre :</strong> {{roomLabel}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Arrivée :</strong> {{formatDate checkIn}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Départ :</strong> {{formatDate checkOut}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Nombre de nuits :</strong> {{nights}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Nombre de personnes :</strong> {{guests}}</p>
+  <p style="margin: 0;"><strong>Tarif par nuit :</strong> {{money nightlyPrice}}</p>
+</div>
+
+<p><strong>Montant total :</strong> {{money total}}</p>
+
+<p>Vous pouvez gérer votre réservation en cliquant sur le lien ci-dessous :</p>
+
+<p style="text-align: center; margin: 20px 0;">
+  <a href="{{manageUrl}}" style="display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Gérer ma réservation</a>
+</p>
+
+<p>Nous avons hâte de vous accueillir !</p>
+
+<p>Cordialement,<br/>
+L'équipe du Vieux Pont</p>

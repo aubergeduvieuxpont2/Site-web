@@ -23,6 +23,7 @@ import {
   toPublicSettings,
   withPublicRoomCount,
 } from "./settings";
+import { createEmailsRouter } from "./emails";
 import type { RoomRow } from "./rooms";
 import {
   RoomCreateSchema,
@@ -1350,6 +1351,9 @@ app.post(
     return c.json(adminSettings);
   }
 );
+
+// Email routes (admin-gated)
+app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
 
 // JSON 404 for unmatched routes.
 app.notFound((c) => {
