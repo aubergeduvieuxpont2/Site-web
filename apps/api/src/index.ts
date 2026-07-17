@@ -24,6 +24,7 @@ import {
   withPublicRoomCount,
 } from "./settings";
 import { createEmailsRouter } from "./emails";
+import { buildReservationHubspotOps, enqueueHubspotOps } from "./ota";
 import type { RoomRow, PublicRoomRow } from "./rooms";
 import {
   RoomCreateSchema,
@@ -326,46 +327,21 @@ app.post(
     }
 
     c.executionCtx.waitUntil(
-      (async () => {
-        try {
-          await c.env.HUBSPOT.fetch(
-            new Request("http://hubspot/ops/enqueue", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kind: "contact.upsert",
-                payload: {
-                  email: data.email,
-                  firstname: data.firstName,
-                  lastname: data.lastName,
-                },
-              }),
-            })
-          );
-
-          await c.env.HUBSPOT.fetch(
-            new Request("http://hubspot/ops/enqueue", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                kind: "deal.create",
-                payload: {
-                  contactEmail: data.email,
-                  dealname: `Reservation #${created.id}`,
-                  arrive: data.checkIn || undefined,
-                  depart: data.checkOut || undefined,
-                  room: data.room || undefined,
-                  people: data.guests || undefined,
-                  roomCount: data.roomCount,
-                  description: data.message || undefined,
-                },
-                dedupeKey: `reservation-${created.id}`,
-              }),
-            })
-          );
-        } catch {
-        }
-      })()
+      enqueueHubspotOps(
+        c.env.HUBSPOT,
+        buildReservationHubspotOps({
+          reservationId: created.id,
+          email: data.email,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          checkIn: data.checkIn,
+          checkOut: data.checkOut,
+          room: data.room,
+          guests: data.guests,
+          roomCount: data.roomCount,
+          description: data.message,
+        }),
+      )
     );
 
     return c.json({ reservation: created }, 201);
