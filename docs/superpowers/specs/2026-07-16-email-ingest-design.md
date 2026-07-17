@@ -28,6 +28,39 @@ forward every original email to `aubergeduvieuxpont2@hotmail.com`.
 - **Parsing:** deterministic per-provider parsers built against real sample
   emails supplied by the operator (fixtures committed with personal data
   scrubbed). No LLM parsing.
+- **Airbnb trigger:** only «Réservation confirmée» emails create a
+  reservation. Pending «demande de réservation» (accept/decline) emails are
+  recognized but logged as `ignored` and forwarded only.
+
+## Parsing facts (from real samples in `email-reservations-examples/`)
+
+The samples are forwards (from the operator's sister), so the outer
+headers/top are not representative; parsers must key off the **body content**,
+and provider detection in production uses the direct sender
+(`automated@airbnb.com`, `booknotif@expedia.com`).
+
+**Airbnb «Réservation confirmée»** (French — host account language):
+- Full guest name in subject («Réservation confirmée : Yashwin Singh arrive
+  le 30 juil.») and body; split into first/last on first space.
+- Confirmation code in a «Code de confirmation» section (`HM45MDTHZ4`), also
+  present in `hosting/reservations/details/<CODE>` URLs as fallback.
+- Dates as «jeu. 30 juil.» under «Arrivée»/«Départ» — **no year anywhere**;
+  infer year from the email's Date header: next occurrence of that day/month
+  on or after the sent date (a checkOut earlier in the calendar than checkIn
+  rolls into the next year). French month abbreviations (janv., févr., mars,
+  avr., mai, juin, juil., août, sept., oct., nov., déc.).
+- Guests: «2 adultes» under «Voyageurs».
+- **No guest email or phone in the email at all** → reservation stored with
+  empty email, HubSpot sync skipped entirely for Airbnb (nothing to sync).
+- Listing name («Auberge du vieux pont») → `room` text field.
+
+**Expedia "New Booking"** (English): subject
+`Expedia - New Booking - Arriving on 5 Sep 2026`; body has
+`Reservation ID: 2511634261`, `Guest: Dominique Sanon`, phone, relay
+`Guest Email: ...@m.expediapartnercentral.com`, `Room Type Name`, a
+Check-In/Check-Out/Adults/Kids table (`Sep 5, 2026` format), and
+`Total Cost`. `NotificationType: BookingReserve` distinguishes new bookings
+from modify/cancel notifications (which are logged `ignored`).
 
 ## Architecture
 
@@ -82,7 +115,8 @@ against scrubbed fixtures in `apps/email-ingest/test/fixtures/`.
 
 ### 2. `apps/api` changes
 
-**Migration `0018_ota_reservations.sql`** (idempotent):
+**Migration `0020_ota_reservations.sql`** (idempotent; 0018/0019 taken by
+phone-config and room-passkey work merged since this spec was drafted):
 
 - `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'website';`
 - `ALTER TABLE reservations ADD COLUMN IF NOT EXISTS external_ref TEXT;`
@@ -90,7 +124,7 @@ against scrubbed fixtures in `apps/email-ingest/test/fixtures/`.
   reservations (source, external_ref) WHERE external_ref IS NOT NULL;`
 - `CREATE TABLE IF NOT EXISTS email_ingest_log (id BIGINT GENERATED ALWAYS AS
   IDENTITY PRIMARY KEY, provider TEXT, status TEXT NOT NULL, -- parsed |
-  parse_failed | duplicate
+  parse_failed | duplicate | ignored
   reservation_id BIGINT REFERENCES reservations(id) ON DELETE SET NULL,
   subject TEXT, error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT now());`
 
@@ -108,8 +142,13 @@ HubSpot gateway's route-less worker). Behaviour:
   exactly as `POST /api/reservations` does: `contact.upsert`
   ({email, firstname, lastname}) and `deal.create` with
   `dedupeKey: "reservation-<id>"`; the deal description includes the source.
+  When the parsed booking has no guest email (Airbnb), the reservation is
+  stored with an empty email and **both HubSpot enqueues are skipped**.
   Log a `parsed` row with the reservation id. Return 201.
-- Zod-validated body; dates must be valid and `checkOut > checkIn`.
+- Recognized-but-ignored emails (Airbnb pending request, Expedia
+  modify/cancel) → insert an `ignored` log row, return 202.
+- Zod-validated body; dates must be valid and `checkOut > checkIn`;
+  `guestEmail` optional.
 
 The shared reservation-insert + HubSpot-enqueue logic is extracted into a
 helper reused by both the public route and the internal route (no copy-paste).
@@ -136,8 +175,9 @@ reservation id, error). Read-only. Responsive like the rest of the admin.
 
 ## Testing
 
-- Parser unit tests against real (scrubbed) Airbnb/Expedia fixtures —
-  **blocked on operator supplying sample emails**.
+- Parser unit tests against the real (scrubbed) fixtures derived from
+  `email-reservations-examples/` (Airbnb confirmation, Airbnb pending request
+  → ignored, Expedia new booking).
 - Internal endpoint tests: validation, dedupe, log rows, HubSpot enqueue calls.
 - Existing `POST /api/reservations` tests keep passing (shared helper refactor).
 
