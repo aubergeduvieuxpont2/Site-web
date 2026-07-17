@@ -673,3 +673,51 @@ export async function adminCreateInvoice(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Emails (admin-gated preview)
+// ---------------------------------------------------------------------------
+
+/**
+ * Summary of a transactional email template, as listed by
+ * `GET /api/admin/emails/templates`. `name`/`subject` carry both locales so the
+ * picker can label options in the currently-selected language without a refetch.
+ */
+export interface EmailTemplateSummary {
+  key: string;
+  name: { fr: string; en: string };
+  subject: { fr: string; en: string };
+}
+
+/**
+ * A rendered email preview from `GET /api/admin/emails/preview`. `html` feeds a
+ * sandboxed `<iframe srcdoc>`; `text` is the plain-text fallback body.
+ */
+export interface EmailPreview {
+  subject: string;
+  html: string;
+  text: string;
+}
+
+/**
+ * Admin-gated: list every transactional email template with its localized name
+ * and subject. 401/403 surface as `{ error }`.
+ */
+export async function adminEmailTemplates(): Promise<
+  { templates: EmailTemplateSummary[] } | ApiError
+> {
+  return fetchJson<{ templates: EmailTemplateSummary[] }>("/admin/emails/templates");
+}
+
+/**
+ * Admin-gated: render a single template in the given locale against its
+ * committed sample data. Both `template` and `locale` are URL-encoded via
+ * `URLSearchParams`, so they cannot break out of the query string.
+ */
+export async function adminEmailPreview(
+  template: string,
+  locale: "fr" | "en",
+): Promise<EmailPreview | ApiError> {
+  const params = new URLSearchParams({ template, locale });
+  return fetchJson<EmailPreview>(`/admin/emails/preview?${params.toString()}`);
+}
+

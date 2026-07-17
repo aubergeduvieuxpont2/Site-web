@@ -337,3 +337,30 @@ describe("page-admin tax settings fields", () => {
     expect(getByTestId("tps-error").textContent).toBe("");
   });
 });
+
+describe("page-admin courriels nav link", () => {
+  it("renders a link to the email preview page for an admin", async () => {
+    const { findByTestId } = render(Page);
+    const link = await findByTestId("courriels-nav-link");
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("/admin/courriels");
+    expect(link.textContent?.trim()).toBe("Courriels");
+  });
+
+  it("keeps the link outside the tablist ARIA region", async () => {
+    const { findByTestId, getByRole } = render(Page);
+    const link = await findByTestId("courriels-nav-link");
+    const tablist = getByRole("tablist");
+    // The link must not be a descendant of the tablist — it is a separate
+    // navigation affordance, not a tab, so it must not pollute the tab set.
+    expect(tablist.contains(link)).toBe(false);
+    expect(link.getAttribute("role")).toBeNull();
+  });
+
+  it("is not shown to a denied (non-admin) user", async () => {
+    getMe.mockResolvedValue({ user: GUEST });
+    const { findByTestId, queryByTestId } = render(Page);
+    await findByTestId("admin-denied");
+    expect(queryByTestId("courriels-nav-link")).toBeNull();
+  });
+});

@@ -40,5 +40,11 @@
   // The gateway has no public route; the API reaches it exclusively via this binding.
   "services": [
     { "binding": "HUBSPOT", "service": "site-web-hubspot" }
+  ],
+
+  // Treat .hbs Handlebars templates as Text modules so they can be imported
+  // as raw strings in the Worker bundle.
+  "rules": [
+    { "type": "Text", "globs": ["**/*.hbs"], "fallthrough": true }
   ]
 }

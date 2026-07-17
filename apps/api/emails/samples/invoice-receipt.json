@@ -1,0 +1,18 @@
+{
+  "invoiceNumber": "INV-2026-0001",
+  "name": "Philippe Gauthier",
+  "checkIn": "2026-08-14",
+  "checkOut": "2026-08-16",
+  "lineItems": [
+    {
+      "description": "Accommodation (2 nights × 1 room)",
+      "amount": 178.00
+    }
+  ],
+  "subtotal": 178.00,
+  "accommodationTax": 6.23,
+  "tps": 9.21,
+  "tvq": 19.30,
+  "total": 212.74,
+  "paymentDate": "2026-08-15"
+}

@@ -1,0 +1,26 @@
+<p>Thank you for your reservation, {{name}} !</p>
+
+<p>Here are your reservation details:</p>
+
+<div style="background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;">
+  <p style="margin: 0 0 10px 0;"><strong>Confirmation code:</strong> {{confirmationCode}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Room:</strong> {{roomLabel}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Check-in:</strong> {{formatDate checkIn}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Check-out:</strong> {{formatDate checkOut}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Number of nights:</strong> {{nights}}</p>
+  <p style="margin: 0 0 10px 0;"><strong>Number of guests:</strong> {{guests}}</p>
+  <p style="margin: 0;"><strong>Rate per night:</strong> {{money nightlyPrice}}</p>
+</div>
+
+<p><strong>Total amount:</strong> {{money total}}</p>
+
+<p>You can manage your reservation by clicking the link below:</p>
+
+<p style="text-align: center; margin: 20px 0;">
+  <a href="{{manageUrl}}" style="display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Manage my reservation</a>
+</p>
+
+<p>We look forward to welcoming you!</p>
+
+<p>Best regards,<br/>
+The Vieux Pont team</p>
