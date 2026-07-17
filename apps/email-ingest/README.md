@@ -1,8 +1,9 @@
 # email-ingest
 
-Cloudflare Email Worker: `bookings@aubergeduvieuxpont.ca` → forward to the
-backup mailbox → parse Airbnb/Expedia booking confirmations → create the
-reservation (+ HubSpot sync) through the API's internal endpoint.
+Cloudflare Email Worker: `bookings@aubergeduvieuxpont.ca` → forward OTA mail
+to the backup mailbox → parse Airbnb/Expedia booking confirmations → create
+the reservation (+ HubSpot sync) through the API's internal endpoint. Unknown
+senders are rejected (spam protection).
 
 ## One-time Cloudflare setup (dashboard, manual)
 
@@ -24,12 +25,21 @@ reservation (+ HubSpot sync) through the API's internal endpoint.
 
 ## Behaviour
 
-- Every email is forwarded to `FORWARD_TO` (wrangler var) BEFORE parsing.
+- Mail from recognized OTA senders (airbnb.com/.ca, expedia/expediagroup/
+  expediamail/expediapartnercentral.com) is forwarded to `FORWARD_TO`
+  (wrangler var) before any booking parsing.
+- Mail from `DEV_SENDER` (wrangler var — the operator's own address) is
+  **processed but NOT forwarded**: the provider is inferred from the subject
+  («Réservation confirmée» → Airbnb, "New Booking" → Expedia), so forwarding
+  a real OTA email from that mailbox exercises the full pipeline. Unrelated
+  subjects from `DEV_SENDER` are rejected like any stranger.
+- All other senders are **rejected at SMTP time** (no forward, no processing)
+  — bookings@ is only ever given to the OTAs, so anything else is spam.
 - Airbnb: only «Réservation confirmée» creates a reservation (no guest email
   in these emails → no HubSpot sync). Pending requests are logged `ignored`.
 - Expedia: "New Booking" creates a reservation with the relay guest email
   (synced to HubSpot). Modify/cancel notifications are logged `ignored`.
 - Dedupe: `(source, external_ref)` unique — resent confirmations log
   `duplicate` and change nothing.
-- Parse failures are logged `parse_failed` and visible in the admin; the
-  email is still in the backup mailbox.
+- Parse failures are logged `parse_failed` and visible in the admin; OTA
+  emails are additionally in the backup mailbox.
