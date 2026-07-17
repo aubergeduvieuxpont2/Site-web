@@ -1,5 +1,5 @@
-import Handlebars from "handlebars";
-import { BASE, PARTIALS, TEMPLATES, SAMPLES, type Locale, type TemplateKey } from "./templates";
+import { BASE, PARTIALS, TEMPLATES } from "./precompiled";
+import type { Locale, TemplateKey } from "./templates";
 import { MANIFEST } from "./manifest";
 
 export interface RenderedEmail {
@@ -24,6 +24,44 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+// Per-locale template helpers. Passed to each render call rather than registered
+// globally, so concurrent requests for different locales never race.
+function makeHelpers(locale: Locale) {
+  const tag = locale === "fr" ? "fr-CA" : "en-CA";
+  return {
+    formatDate(value: string) {
+      try {
+        const [y, m, d] = value.split("-").map(Number);
+        const date = new Date(y, m - 1, d);
+        return new Intl.DateTimeFormat(tag, {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }).format(date);
+      } catch {
+        return value;
+      }
+    },
+    money(value: number) {
+      try {
+        return new Intl.NumberFormat(tag, { style: "currency", currency: "CAD" }).format(value);
+      } catch {
+        return `$${value.toFixed(2)}`;
+      }
+    },
+  };
+}
+
+// Subjects use only `{{field}}` placeholders (no helpers/blocks), so plain string
+// substitution renders them — no Handlebars.compile, no runtime code generation
+// (which Cloudflare Workers forbid).
+function renderSubject(template: string, data: Record<string, unknown>): string {
+  return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_match, key: string) => {
+    const value = data[key];
+    return value == null ? "" : String(value);
+  });
+}
+
 export function renderEmail(key: TemplateKey, locale: Locale, data: Record<string, unknown>): RenderedEmail {
   const entry = MANIFEST[key];
   if (!entry) {
@@ -36,44 +74,21 @@ export function renderEmail(key: TemplateKey, locale: Locale, data: Record<strin
     }
   }
 
-  const hb = Handlebars.create();
-
-  hb.registerHelper("formatDate", (value: string) => {
-    try {
-      const [y, m, d] = value.split("-").map(Number);
-      const date = new Date(y, m - 1, d);
-      const fmt = new Intl.DateTimeFormat(locale === "fr" ? "fr-CA" : "en-CA", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-      return fmt.format(date);
-    } catch {
-      return value;
-    }
-  });
-
-  hb.registerHelper("money", (value: number) => {
-    try {
-      const fmt = new Intl.NumberFormat(locale === "fr" ? "fr-CA" : "en-CA", {
-        style: "currency",
-        currency: "CAD",
-      });
-      return fmt.format(value);
-    } catch {
-      return `$${value.toFixed(2)}`;
-    }
-  });
-
-  hb.registerPartial({
-    header: PARTIALS[locale].header,
-    footer: PARTIALS[locale].footer,
-    body: TEMPLATES[key][locale],
-  });
-
   const dataWithLocale = { ...data, locale };
-  const html = hb.compile(BASE)(dataWithLocale);
-  const subject = hb.compile(entry.subject[locale])(dataWithLocale);
+
+  // Render the precompiled base with per-call helpers + locale partials. The
+  // partials are precompiled template delegates (functions), never strings, so
+  // handlebars/runtime interprets them without generating any code at runtime.
+  const html = BASE(dataWithLocale, {
+    helpers: makeHelpers(locale),
+    partials: {
+      header: PARTIALS[locale].header,
+      footer: PARTIALS[locale].footer,
+      body: TEMPLATES[key][locale],
+    },
+  });
+
+  const subject = renderSubject(entry.subject[locale], dataWithLocale);
   const text = htmlToText(html);
 
   return { subject, html, text };

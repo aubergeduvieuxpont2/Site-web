@@ -8,6 +8,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // Precompile the Handlebars email templates before every bundle (dev + deploy)
+  // so the Worker never calls new Function()/eval, which Cloudflare's isolate
+  // forbids ("Code generation from strings disallowed"). Regenerates
+  // src/emails/precompiled.ts from apps/api/emails/*.hbs.
+  "build": { "command": "node scripts/precompile-emails.mjs" },
+
   // Custom-domain routing: the more-specific /api/* route wins over the web
   // Worker's catch-all, so the SPA's relative `/api/*` calls stay same-origin.
   // NOTE: only deploy with this route once the `aubergeduvieuxpont.ca` zone is
@@ -40,11 +46,5 @@
   // The gateway has no public route; the API reaches it exclusively via this binding.
   "services": [
     { "binding": "HUBSPOT", "service": "site-web-hubspot" }
-  ],
-
-  // Treat .hbs Handlebars templates as Text modules so they can be imported
-  // as raw strings in the Worker bundle.
-  "rules": [
-    { "type": "Text", "globs": ["**/*.hbs"], "fallthrough": true }
   ]
 }

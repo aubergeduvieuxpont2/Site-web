@@ -90,4 +90,31 @@ describe("renderEmail", () => {
       renderEmail("unknown" as TemplateKey, "fr", {});
     }).toThrow("Unknown template: unknown");
   });
+
+  // Regression: Cloudflare Workers' isolate forbids runtime code generation
+  // ("Code generation from strings disallowed"). Handlebars.compile() uses
+  // `new Function`, so the previous compile-at-render implementation crashed in
+  // production. Trap the Function constructor to simulate that ban in Node: the
+  // precompiled render path must produce a full email without any codegen.
+  it("renders without runtime code generation (Workers-safe: no new Function/eval)", () => {
+    const OriginalFunction = globalThis.Function;
+    function Trap(): never {
+      throw new Error("Code generation from strings disallowed for this context");
+    }
+    Trap.prototype = OriginalFunction.prototype;
+    globalThis.Function = Trap as unknown as FunctionConstructor;
+    try {
+      // The old Handlebars.compile() path threw here (new Function). The
+      // precompiled path renders a full email using only pre-baked functions.
+      // (The trap also disables Intl, so we assert codegen-independent output —
+      // Intl-formatted values are covered by the other tests.)
+      const sample = SAMPLES["reservation-confirmation"] as Record<string, unknown>;
+      const result = renderEmail("reservation-confirmation", "fr", sample);
+      expect(result.html).toContain("<!DOCTYPE html>");
+      expect(result.html.length).toBeGreaterThan(500);
+      expect(result.subject).toContain("RES-2026-0042");
+    } finally {
+      globalThis.Function = OriginalFunction;
+    }
+  });
 });
