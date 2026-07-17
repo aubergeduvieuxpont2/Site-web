@@ -1,10 +1,15 @@
 <script lang="ts">
   import { fade } from "svelte/transition";
   import { reveal } from "$lib/motion";
-  import { createReservation, isError } from "$lib/api";
+  import { createReservation, isError, getAvailability } from "$lib/api";
   import { SITE, phoneToHref } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
-  import { datesOutOfOrder, nightsBetween, estimateStay } from "$lib/utils";
+  import {
+    datesOutOfOrder,
+    nightsBetween,
+    estimateStay,
+    formatDateOnly,
+  } from "$lib/utils";
   import { DEFAULTS } from "$lib/content";
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
@@ -54,15 +59,98 @@
     auth.user?.effectiveNightlyPrice != null &&
       auth.user.effectiveNightlyPrice !== settings.nightlyPrice
   );
+  // Effective weekly rate: per-user grant, else the public setting, else the
+  // documented 560 fallback. Applied to stays of 7+ nights via estimateStay.
+  const weeklyRate = $derived(
+    auth.user?.effectiveWeeklyPrice ?? settings.weeklyPrice ?? 560
+  );
   const nights = $derived(nightsBetween(form.checkIn, form.checkOut));
   const rooms = $derived(Math.max(0, Math.trunc(Number(form.roomCount) || 0)));
   const estimateVisible = $derived(nights >= 1 && rooms >= 1);
   const estimate = $derived(
-    estimateStay(nights, rooms, nightlyRate, {
-      accommodationTax: settings.accommodationTax,
-      tps: settings.tps,
-      tvq: settings.tvq,
-    })
+    estimateStay(
+      nights,
+      rooms,
+      nightlyRate,
+      {
+        accommodationTax: settings.accommodationTax,
+        tps: settings.tps,
+        tvq: settings.tvq,
+      },
+      weeklyRate
+    )
+  );
+
+  // ── Checkout min: the day after check-in ─────────────────────────
+  // Formatted from local date components (matching formatDateOnly's local-parse
+  // convention) to avoid the UTC day-shift that toISOString() introduces.
+  const minCheckOut = $derived.by((): string => {
+    if (!form.checkIn) return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(form.checkIn);
+    if (!m) return "";
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    d.setDate(d.getDate() + 1);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  });
+
+  // Clear checkOut when it collapses to the same day or before check-in, so the
+  // form can never hold a zero/negative-night range.
+  $effect(() => {
+    if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
+      form.checkOut = "";
+    }
+  });
+
+  // ── Availability ─────────────────────────────────────────────────
+  type AvailStatus = "idle" | "loading" | "available" | "unavailable" | "error";
+  let availabilityStatus = $state<AvailStatus>("idle");
+  let unavailableNights = $state<string[]>([]);
+
+  // Debounced availability probe on date/room changes. A per-run `cancelled`
+  // flag prevents a slow in-flight response from overwriting newer state.
+  $effect(() => {
+    const ci = form.checkIn;
+    const co = form.checkOut;
+    const rc = Math.max(1, Math.trunc(Number(form.roomCount) || 1));
+
+    if (!ci || !co || co <= ci) {
+      availabilityStatus = "idle";
+      unavailableNights = [];
+      return;
+    }
+
+    availabilityStatus = "loading";
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      const result = await getAvailability(ci, co, rc);
+      if (cancelled) return;
+      if (isError(result)) {
+        availabilityStatus = "error";
+        unavailableNights = [];
+      } else {
+        unavailableNights = result.unavailableNights;
+        availabilityStatus = result.allAvailable ? "available" : "unavailable";
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  });
+
+  // ── Submit gate ──────────────────────────────────────────────────
+  // Disabled while sending, during maintenance, while an availability probe is
+  // in flight, or when the chosen range has unavailable nights. An availability
+  // API error leaves submit enabled — the server re-checks on POST.
+  const submitDisabled = $derived(
+    status === "sending" ||
+      !settings.reservationsEnabled ||
+      availabilityStatus === "unavailable" ||
+      availabilityStatus === "loading"
   );
 
   function formatRate(value: number): string {
@@ -134,7 +222,9 @@
 
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    if (status === "sending") return;
+    // Defense in depth: the submit button is disabled while gated, but an Enter
+    // keypress could still fire the form's submit — honour the same gate here.
+    if (submitDisabled) return;
     if (!validateClient()) return;
 
     status = "sending";
@@ -339,7 +429,7 @@
                     class="page-contact__input"
                     id="field-checkout"
                     type="date"
-                    min={form.checkIn || undefined}
+                    min={minCheckOut || undefined}
                     aria-describedby={fieldErrors.checkOut ? "err-checkout" : undefined}
                     data-testid="input-checkout"
                     bind:value={form.checkOut}
@@ -419,6 +509,24 @@
                 {/if}
               </div>
 
+              <!-- Weekly-rate hint — shown once the stay reaches a full week -->
+              {#if nights >= 7}
+                <div
+                  class="page-contact__weekly-hint"
+                  data-testid="weekly-rate-hint"
+                  aria-live="polite"
+                  aria-atomic="true"
+                >
+                  <span class="page-contact__tech-label">Tarif semaine actif</span>
+                  <span
+                    class="page-contact__weekly-rate"
+                    data-testid="weekly-rate-value"
+                  >
+                    {formatRate(weeklyRate)} /semaine
+                  </span>
+                </div>
+              {/if}
+
               <!-- Estimate panel — fades in when nights ≥ 1 and rooms ≥ 1 -->
               {#if estimateVisible}
                 <div
@@ -467,6 +575,42 @@
                 </div>
               {/if}
 
+              <!-- Availability: blocked-nights warning (hard-blocks submit) -->
+              {#if availabilityStatus === "unavailable"}
+                <div
+                  class="page-contact__avail-warning"
+                  role="alert"
+                  data-testid="availability-warning"
+                  aria-atomic="true"
+                  aria-live="assertive"
+                >
+                  <p class="page-contact__avail-title">
+                    Ces dates ne sont pas disponibles
+                  </p>
+                  <ul
+                    class="page-contact__avail-nights"
+                    data-testid="blocked-nights-list"
+                  >
+                    {#each unavailableNights as night (night)}
+                      <li data-testid="blocked-night">{formatDateOnly(night)}</li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
+
+              <!-- Availability: soft error (submit still allowed; server re-checks) -->
+              {#if availabilityStatus === "error"}
+                <div
+                  class="page-contact__avail-soft"
+                  role="status"
+                  data-testid="availability-error"
+                  aria-live="polite"
+                >
+                  Impossible de vérifier la disponibilité en ce moment. Votre demande
+                  sera examinée manuellement.
+                </div>
+              {/if}
+
               <!-- Message -->
               <div class="page-contact__field">
                 <label class="page-contact__label" for="field-message">Message</label>
@@ -496,9 +640,22 @@
                 </div>
               {/if}
 
+              <!-- Maintenance notice — reservations globally paused -->
+              {#if !settings.reservationsEnabled}
+                <div
+                  class="page-contact__maintenance-notice"
+                  role="status"
+                  data-testid="maintenance-notice"
+                  aria-live="polite"
+                >
+                  Les réservations sont temporairement suspendues. Merci de réessayer
+                  bientôt.
+                </div>
+              {/if}
+
               <!-- Submit -->
-              <div class="page-contact__submit">
-                <Button type="submit" variant="action" disabled={status === "sending"}>
+              <div class="page-contact__submit" data-testid="contact-submit">
+                <Button type="submit" variant="action" disabled={submitDisabled}>
                   <span class="page-contact__submit-inner" aria-live="polite">
                     {#if status === "sending"}
                       <span class="page-contact__spinner" aria-hidden="true"></span>
@@ -1037,6 +1194,81 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  /* ── Weekly-rate hint ─────────────────────────────────── */
+  .page-contact__weekly-hint {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--color-forest-surface, #d4ede0);
+    border: 1px solid var(--color-forest, #1a5c2d);
+    border-radius: 4px;
+    margin-top: var(--space-xs);
+    transition: opacity 180ms ease;
+  }
+
+  .page-contact__weekly-rate {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-forest, #1a5c2d);
+    letter-spacing: 0.04em;
+  }
+
+  /* ── Availability panels ──────────────────────────────── */
+  .page-contact__avail-warning,
+  .page-contact__avail-soft {
+    border-radius: 4px;
+    padding: var(--space-sm) var(--space-md);
+    margin-top: var(--space-sm);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .page-contact__avail-warning {
+    background: #fce8e8;
+    border: 1px solid var(--color-error, #ba1a1a);
+    color: var(--color-error, #ba1a1a);
+  }
+
+  .page-contact__avail-title {
+    font-weight: 600;
+    margin: 0 0 var(--space-xs) 0;
+    color: var(--color-error, #ba1a1a);
+  }
+
+  .page-contact__avail-nights {
+    margin: 0;
+    padding-left: var(--space-md);
+    list-style: disc;
+  }
+
+  .page-contact__avail-nights li {
+    line-height: 1.7;
+    color: var(--color-error, #ba1a1a);
+  }
+
+  .page-contact__avail-soft {
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-hairline, var(--color-outline-variant));
+    color: var(--color-ink-soft);
+  }
+
+  /* ── Maintenance notice ───────────────────────────────── */
+  .page-contact__maintenance-notice {
+    padding: var(--space-sm) var(--space-md);
+    background: var(--color-ember-pale, #ffdbca);
+    border: 1px solid var(--color-ember, #ffb690);
+    border-radius: 4px;
+    color: var(--color-on-secondary-container, #5c2400);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
   }
 
   /* ── Info column ──────────────────────────────────────── */

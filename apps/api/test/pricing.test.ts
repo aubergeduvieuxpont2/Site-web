@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toNumberOrNull, resolveEffectiveNightly, computeInvoice } from "../src/pricing";
+import { toNumberOrNull, resolveEffectiveNightly, resolveEffectiveWeekly, computeInvoice, computeBase } from "../src/pricing";
 
 describe("toNumberOrNull", () => {
   it("converts string numeric values to numbers", () => {
@@ -166,5 +166,118 @@ describe("computeInvoice", () => {
     expect(b.tps).toBe(5.18);
     expect(b.tvq).toBe(10.84);
     expect(b.total).toBe(119.52);
+  });
+});
+
+describe("resolveEffectiveWeekly", () => {
+  it("applies fixed price when provided", () => {
+    const effective = resolveEffectiveWeekly(
+      {
+        fixedWeeklyPrice: 600,
+        discountPercent: 10,
+      },
+      560
+    );
+    expect(effective).toBe(600);
+  });
+
+  it("applies discount when fixed price is null", () => {
+    const effective = resolveEffectiveWeekly(
+      {
+        fixedWeeklyPrice: null,
+        discountPercent: toNumberOrNull("10.00"),
+      },
+      560
+    );
+    expect(effective).toBe(504);
+  });
+
+  it("returns public price when both are null", () => {
+    const effective = resolveEffectiveWeekly(
+      {
+        fixedWeeklyPrice: null,
+        discountPercent: null,
+      },
+      560
+    );
+    expect(effective).toBe(560);
+  });
+});
+
+describe("computeBase with weekly pricing", () => {
+  it("computes flat nightly for stays under 7 nights", () => {
+    const base = computeBase(6, 1, 89, 560);
+    expect(base).toBe(6 * 89);
+  });
+
+  it("applies weekly pricing for 7-night stay", () => {
+    const base = computeBase(7, 1, 89, 560);
+    expect(base).toBe(1 * 560 + 0 * 89);
+  });
+
+  it("applies weekly + nightly for 9-night stay", () => {
+    const base = computeBase(9, 1, 89, 560);
+    expect(base).toBe(1 * 560 + 2 * 89);
+  });
+
+  it("applies multiple weeks for 14-night stay", () => {
+    const base = computeBase(14, 1, 89, 560);
+    expect(base).toBe(2 * 560 + 0 * 89);
+  });
+
+  it("applies multiple weeks + remainder for 15-night stay", () => {
+    const base = computeBase(15, 1, 89, 560);
+    expect(base).toBe(2 * 560 + 1 * 89);
+  });
+
+  it("multiplies by room count", () => {
+    const base = computeBase(14, 2, 89, 560);
+    expect(base).toBe((2 * 560) * 2);
+  });
+
+  it("handles zero values gracefully", () => {
+    expect(computeBase(0, 1, 89, 560)).toBe(0);
+    expect(computeBase(7, 0, 89, 560)).toBe(0);
+  });
+
+  it("guards against non-finite values", () => {
+    expect(computeBase(7, 1, NaN, 560)).toBe(0);
+    expect(computeBase(7, 1, 89, Infinity)).toBe(0);
+  });
+
+  it("applies rounding correctly", () => {
+    // 14 nights × 2 rooms × (560/7) per night should round correctly
+    const base = computeBase(14, 2, 89.99, 560);
+    expect(Number.isFinite(base)).toBe(true);
+    expect(base).toBe(2240);
+  });
+});
+
+describe("computeInvoice with weekly rate", () => {
+  it("uses computeBase when weeklyRate provided", () => {
+    const b = computeInvoice({
+      effectiveNightly: 89,
+      nights: 14,
+      roomCount: 1,
+      tps: 5,
+      tvq: 9.975,
+      accommodationTax: 3.5,
+      type: "full",
+      weeklyRate: 560,
+    });
+    expect(b.base).toBe(1120);
+  });
+
+  it("falls back to flat nightly when weeklyRate omitted", () => {
+    const b = computeInvoice({
+      effectiveNightly: 89,
+      nights: 14,
+      roomCount: 1,
+      tps: 5,
+      tvq: 9.975,
+      accommodationTax: 3.5,
+      type: "full",
+    });
+    expect(b.base).toBe(89 * 14);
   });
 });

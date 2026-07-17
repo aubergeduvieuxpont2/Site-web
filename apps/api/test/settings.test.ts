@@ -6,30 +6,97 @@ import {
   toPublicSettings,
   withPublicRoomCount,
   SETTINGS_DEFAULTS,
+  parseBool,
 } from "../src/settings";
 
-// Canonical camelCase settings object used across the tests (6-key contract:
-// nightlyPrice, contactEmail, contactPhone, tps, tvq, accommodationTax).
+// Canonical camelCase settings object used across the tests (8-key public contract:
+// nightlyPrice, weeklyPrice, contactEmail, contactPhone, tps, tvq, accommodationTax, reservationsEnabled).
 const DEFAULT_TAXES = { tps: 5, tvq: 9.975, accommodationTax: 3.5 };
 const CONTACT_PHONE = "418 655-1212";
 const CONTACT = { contactPhone: CONTACT_PHONE };
+// The remaining required settings a valid update must carry beyond the
+// price / email / phone / tax fields the individual assertions vary.
+const EXTRA_REQUIRED = {
+  weeklyPrice: 560,
+  assignableRoomCount: 12,
+  reservationsEnabled: true,
+};
 const SETTINGS_KEYS_SORTED = [
   "accommodationTax",
   "contactEmail",
   "contactPhone",
   "nightlyPrice",
+  "reservationsEnabled",
   "tps",
   "tvq",
+  "weeklyPrice",
 ];
 
 describe("Settings", () => {
+  describe("parseBool", () => {
+    it("converts 'true' string to boolean true", () => {
+      expect(parseBool("true")).toBe(true);
+      expect(parseBool("TRUE")).toBe(true);
+      expect(parseBool("True")).toBe(true);
+    });
+
+    it("converts 'false' string to boolean false", () => {
+      expect(parseBool("false")).toBe(false);
+      expect(parseBool("FALSE")).toBe(false);
+      expect(parseBool("False")).toBe(false);
+    });
+
+    it("converts '1' to boolean true", () => {
+      expect(parseBool("1")).toBe(true);
+    });
+
+    it("converts '0' to boolean false", () => {
+      expect(parseBool("0")).toBe(false);
+    });
+
+    it("passes through boolean values", () => {
+      expect(parseBool(true)).toBe(true);
+      expect(parseBool(false)).toBe(false);
+    });
+
+    it("throws on invalid string", () => {
+      expect(() => parseBool("maybe")).toThrow();
+      expect(() => parseBool("yes")).toThrow();
+    });
+
+    it("throws on other types", () => {
+      expect(() => parseBool(1)).toThrow();
+      expect(() => parseBool(null as any)).toThrow();
+    });
+  });
+
   describe("SettingsUpdateSchema", () => {
-    it("accepts a valid payload", () => {
+    it("accepts a valid payload with new fields", () => {
       const valid = {
         nightlyPrice: 99,
+        weeklyPrice: 560,
         contactEmail: "test@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
+      };
+      const result = SettingsUpdateSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual(valid);
+      }
+    });
+
+    it("accepts a valid payload", () => {
+      const valid = {
+        nightlyPrice: 99,
+        weeklyPrice: 560,
+        contactEmail: "test@example.com",
+        ...CONTACT,
+        ...DEFAULT_TAXES,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -108,6 +175,7 @@ describe("Settings", () => {
         contactEmail: "admin@example.com",
         contactPhone: "  581 555-0199  ",
         ...DEFAULT_TAXES,
+        ...EXTRA_REQUIRED,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);
@@ -144,6 +212,7 @@ describe("Settings", () => {
         contactEmail: "admin@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        ...EXTRA_REQUIRED,
         accommodationTax: 0,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
@@ -153,17 +222,42 @@ describe("Settings", () => {
     it("coerces numeric strings to numbers", () => {
       const stringPayload = {
         nightlyPrice: "99",
+        weeklyPrice: "560",
         contactEmail: "admin@example.com",
         contactPhone: CONTACT_PHONE,
         tps: "5",
         tvq: "9.975",
         accommodationTax: "3.5",
+        assignableRoomCount: "12",
+        reservationsEnabled: "true",
       };
       const result = SettingsUpdateSchema.safeParse(stringPayload);
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.nightlyPrice).toBe(99);
+        expect(result.data.weeklyPrice).toBe(560);
         expect(result.data.tvq).toBe(9.975);
+        expect(result.data.assignableRoomCount).toBe(12);
+        expect(result.data.reservationsEnabled).toBe(true);
+      }
+    });
+
+    it("accepts reservationsEnabled as 'false' string", () => {
+      const payload = {
+        nightlyPrice: "99",
+        weeklyPrice: "560",
+        contactEmail: "admin@example.com",
+        contactPhone: CONTACT_PHONE,
+        tps: "5",
+        tvq: "9.975",
+        accommodationTax: "3.5",
+        assignableRoomCount: "12",
+        reservationsEnabled: "false",
+      };
+      const result = SettingsUpdateSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.reservationsEnabled).toBe(false);
       }
     });
 
@@ -173,6 +267,7 @@ describe("Settings", () => {
         contactEmail: "  admin@example.com  ",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        ...EXTRA_REQUIRED,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);
@@ -183,80 +278,97 @@ describe("Settings", () => {
   });
 
   describe("PUBLIC_SETTING_KEYS", () => {
-    it("contains price, email, phone and the three tax rates, never room counts", () => {
+    it("contains price, email, phone, tax rates, weekly_price, and reservations_enabled", () => {
       expect(PUBLIC_SETTING_KEYS).toContain("nightly_price");
+      expect(PUBLIC_SETTING_KEYS).toContain("weekly_price");
       expect(PUBLIC_SETTING_KEYS).toContain("contact_email");
       expect(PUBLIC_SETTING_KEYS).toContain("contact_phone");
       expect(PUBLIC_SETTING_KEYS).toContain("tps");
       expect(PUBLIC_SETTING_KEYS).toContain("tvq");
       expect(PUBLIC_SETTING_KEYS).toContain("accommodation_tax");
+      expect(PUBLIC_SETTING_KEYS).toContain("reservations_enabled");
       expect(PUBLIC_SETTING_KEYS).not.toContain("marketing_room_count");
       expect(PUBLIC_SETTING_KEYS).not.toContain("assignable_room_count");
     });
   });
 
   describe("rowsToAdminSettings", () => {
-    it("coerces numeric keys from strings", () => {
+    it("coerces numeric keys from strings including new settings", () => {
       const rows = [
         { key: "nightly_price", value: "89" },
+        { key: "weekly_price", value: "560" },
         { key: "contact_email", value: "info@example.com" },
         { key: "contact_phone", value: CONTACT_PHONE },
         { key: "tps", value: "5" },
         { key: "tvq", value: "9.975" },
         { key: "accommodation_tax", value: "3.5" },
+        { key: "assignable_room_count", value: "12" },
+        { key: "reservations_enabled", value: "true" },
       ];
       const result = rowsToAdminSettings(rows);
-      expect(result).toEqual({
-        nightlyPrice: 89,
-        contactEmail: "info@example.com",
-        ...CONTACT,
-        ...DEFAULT_TAXES,
-      });
+      expect(result.nightlyPrice).toBe(89);
+      expect(result.weeklyPrice).toBe(560);
+      expect(result.assignableRoomCount).toBe(12);
+      expect(result.reservationsEnabled).toBe(true);
     });
 
     it("fills missing keys from defaults", () => {
       const rows = [{ key: "nightly_price", value: "100" }];
       const result = rowsToAdminSettings(rows);
       expect(result.nightlyPrice).toBe(100);
+      expect(result.weeklyPrice).toBe(560);
+      expect(result.assignableRoomCount).toBe(12);
+      expect(result.reservationsEnabled).toBe(true);
       expect(result.contactEmail).toBe("info@aubergeduvieuxpont.ca");
-      expect(result.contactPhone).toBe(CONTACT_PHONE);
-      expect(result.tps).toBe(5);
-      expect(result.tvq).toBe(9.975);
-      expect(result.accommodationTax).toBe(3.5);
     });
 
     it("handles empty rows array with all defaults", () => {
       const result = rowsToAdminSettings([]);
-      expect(result).toEqual({
-        nightlyPrice: 89,
-        contactEmail: "info@aubergeduvieuxpont.ca",
-        ...CONTACT,
-        ...DEFAULT_TAXES,
-      });
+      expect(result.nightlyPrice).toBe(89);
+      expect(result.weeklyPrice).toBe(560);
+      expect(result.assignableRoomCount).toBe(12);
+      expect(result.reservationsEnabled).toBe(true);
+    });
+
+    it("parses reservations_enabled='false' correctly", () => {
+      const rows = [
+        { key: "reservations_enabled", value: "false" },
+      ];
+      const result = rowsToAdminSettings(rows);
+      expect(result.reservationsEnabled).toBe(false);
     });
   });
 
   describe("toPublicSettings", () => {
-    it("returns price, email, phone and tax rates", () => {
+    it("includes weekly price and reservations enabled", () => {
       const admin = {
         nightlyPrice: 89,
+        weeklyPrice: 560,
         contactEmail: "info@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
       };
       const result = toPublicSettings(admin);
-      expect(result).toEqual(admin);
+      expect(result.weeklyPrice).toBe(560);
+      expect(result.reservationsEnabled).toBe(true);
+      expect(result).not.toHaveProperty("assignableRoomCount");
     });
 
-    it("public and admin settings expose the same six keys", () => {
+    it("omits assignableRoomCount from public response", () => {
       const admin = {
         nightlyPrice: 99,
+        weeklyPrice: 560,
         contactEmail: "info@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        assignableRoomCount: 25,
+        reservationsEnabled: false,
       };
       const pub = toPublicSettings(admin);
-      expect(Object.keys(pub).sort()).toEqual(SETTINGS_KEYS_SORTED);
+      expect(pub).not.toHaveProperty("assignableRoomCount");
+      expect(pub.reservationsEnabled).toBe(false);
     });
   });
 
@@ -276,9 +388,11 @@ describe("Settings", () => {
 
       expect(publicSettings).toEqual({
         nightlyPrice: 99,
+        weeklyPrice: 560,
         contactEmail: "info@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        reservationsEnabled: true,
       });
     });
 
@@ -306,11 +420,13 @@ describe("Settings", () => {
 
       expect(publicSettings).toEqual({
         nightlyPrice: SETTINGS_DEFAULTS.nightly_price,
+        weeklyPrice: SETTINGS_DEFAULTS.weekly_price,
         contactEmail: SETTINGS_DEFAULTS.contact_email,
         contactPhone: SETTINGS_DEFAULTS.contact_phone,
         tps: SETTINGS_DEFAULTS.tps,
         tvq: SETTINGS_DEFAULTS.tvq,
         accommodationTax: SETTINGS_DEFAULTS.accommodation_tax,
+        reservationsEnabled: SETTINGS_DEFAULTS.reservations_enabled,
       });
     });
   });
@@ -318,9 +434,11 @@ describe("Settings", () => {
   describe("withPublicRoomCount", () => {
     const base = {
       nightlyPrice: 89,
+      weeklyPrice: 560,
       contactEmail: "info@example.com",
       ...CONTACT,
       ...DEFAULT_TAXES,
+      reservationsEnabled: true,
     };
 
     it("includes publicRoomCount when the count succeeds", () => {
@@ -361,7 +479,7 @@ describe("Settings", () => {
   });
 
   describe("HTTP Endpoints - GET /api/admin/settings", () => {
-    it("returns admin settings with the six keys", () => {
+    it("returns admin settings with all keys", () => {
       const mockRows = [
         { key: "nightly_price", value: "99" },
         { key: "contact_email", value: "info@example.com" },
@@ -371,9 +489,12 @@ describe("Settings", () => {
 
       expect(adminSettings).toEqual({
         nightlyPrice: 99,
+        weeklyPrice: 560,
         contactEmail: "info@example.com",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
       });
     });
 
@@ -382,15 +503,18 @@ describe("Settings", () => {
 
       expect(adminSettings).toEqual({
         nightlyPrice: 89,
+        weeklyPrice: 560,
         contactEmail: "info@aubergeduvieuxpont.ca",
         ...CONTACT,
         ...DEFAULT_TAXES,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
       });
     });
   });
 
   describe("Invariants", () => {
-    it("INV-public-keys: public endpoint returns exactly the six settings keys", () => {
+    it("INV-public-keys: public endpoint returns exactly the eight settings keys", () => {
       const rows = [
         { key: "nightly_price", value: "89" },
         { key: "contact_email", value: "info@example.com" },
@@ -401,7 +525,7 @@ describe("Settings", () => {
 
       const publicKeys = Object.keys(publicSettings);
       expect(publicKeys.sort()).toEqual(SETTINGS_KEYS_SORTED);
-      expect(publicKeys.length).toBe(6);
+      expect(publicKeys.length).toBe(8);
     });
 
     it("INV-one-row-per-key: rowsToAdminSettings is idempotent", () => {

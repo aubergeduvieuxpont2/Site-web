@@ -99,9 +99,13 @@ describe("page-contact", () => {
       );
     });
 
-    it("constrains the checkout picker with a min bound to check-in", () => {
+    it("constrains the checkout picker with a min bound the day after check-in", () => {
       const content = read();
-      expect(content).toContain("min={form.checkIn || undefined}");
+      // Strict depart > arrive: the checkout picker's min is the day AFTER
+      // check-in (minCheckOut), so an equal-day checkout can't even be selected.
+      expect(content).toContain("min={minCheckOut || undefined}");
+      // minCheckOut advances one day past check-in.
+      expect(content).toContain("d.setDate(d.getDate() + 1)");
     });
 
     it("renders the checkOut field error with alert + aria wiring", () => {

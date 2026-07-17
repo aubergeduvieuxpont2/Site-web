@@ -338,6 +338,61 @@ describe('+page.svelte (page-accueil SSR)', () => {
     });
   });
 
+  // Both "Réserver" CTAs are gated on settings.reservationsEnabled (change D /
+  // criterion #15): a /contact link when reservations are open, an inert
+  // disabled button (no href) when the maintenance toggle turns them off.
+  describe('reservation toggle gates the "Réserver" CTAs', () => {
+    afterEach(() => {
+      settings.reservationsEnabled = true;
+    });
+
+    /** SSR markup region for the hero "Réserver" CTA wrapper. */
+    function heroCta(html: string): string {
+      const start = html.indexOf('data-testid="hero-cta-reserver"');
+      const end = html.indexOf('data-testid="hero-cta-lesite"');
+      return html.slice(start, end);
+    }
+
+    /** SSR markup region for the closing "Réserver maintenant" CTA wrapper. */
+    function closingCta(html: string): string {
+      const start = html.indexOf('data-testid="cta-reserver"');
+      return html.slice(start);
+    }
+
+    it('renders both CTAs as /contact links when reservations are enabled', () => {
+      settings.reservationsEnabled = true;
+      const html = renderPage();
+      expect(heroCta(html)).toContain('href="/contact"');
+      expect(closingCta(html)).toContain('href="/contact"');
+    });
+
+    it('renders the hero CTA as a disabled, non-navigating button when reservations are off', () => {
+      settings.reservationsEnabled = false;
+      const region = heroCta(renderPage());
+      expect(region).toContain('data-testid="button"');
+      expect(region).toContain('disabled');
+      expect(region).toContain('aria-disabled="true"');
+      expect(region).not.toContain('href="/contact"');
+      // Label copy is unchanged in the disabled state.
+      expect(region).toContain('Réserver');
+    });
+
+    it('renders the closing CTA as a disabled, non-navigating button when reservations are off', () => {
+      settings.reservationsEnabled = false;
+      const region = closingCta(renderPage());
+      expect(region).toContain('data-testid="button"');
+      expect(region).toContain('disabled');
+      expect(region).toContain('aria-disabled="true"');
+      expect(region).not.toContain('href="/contact"');
+      expect(region).toContain('Réserver maintenant');
+    });
+
+    it('exposes no /contact link anywhere when reservations are off', () => {
+      settings.reservationsEnabled = false;
+      expect(renderPage()).not.toContain('href="/contact"');
+    });
+  });
+
   describe('accessibility', () => {
     it('all major sections have accessible labels', () => {
       const html = renderPage();

@@ -2,29 +2,61 @@ import { z } from "zod";
 
 export const SETTINGS_DEFAULTS = {
   nightly_price: 89,
+  weekly_price: 560,
   contact_email: "info@aubergeduvieuxpont.ca",
   contact_phone: "418 655-1212",
   tps: 5,
   tvq: 9.975,
   accommodation_tax: 3.5,
+  assignable_room_count: 12,
+  reservations_enabled: true,
 } as const;
 
 export const PUBLIC_SETTING_KEYS = [
   "nightly_price",
+  "weekly_price",
   "contact_email",
   "contact_phone",
   "tps",
   "tvq",
   "accommodation_tax",
+  "reservations_enabled",
 ] as const;
+
+export function parseBool(v: unknown): boolean {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const lower = v.toLowerCase();
+    if (lower === "true" || lower === "1") return true;
+    if (lower === "false" || lower === "0") return false;
+  }
+  throw new Error(`Invalid boolean value: ${v}`);
+}
+
+// Non-throwing coercion for Zod's preprocess: normalize known boolean-ish
+// strings but pass anything else through unchanged so `z.boolean()` reports a
+// proper validation issue instead of throwing out of `safeParse` (e.g. when the
+// field is absent from the payload).
+function coerceBoolLoose(v: unknown): unknown {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "string") {
+    const lower = v.toLowerCase();
+    if (lower === "true" || lower === "1") return true;
+    if (lower === "false" || lower === "0") return false;
+  }
+  return v;
+}
 
 export const SettingsUpdateSchema = z.object({
   nightlyPrice: z.coerce.number().int().positive(),
+  weeklyPrice: z.coerce.number().int().positive(),
   contactEmail: z.string().trim().email(),
   contactPhone: z.string().trim().min(1, "Le numéro de téléphone est requis"),
   tps: z.coerce.number().min(0),
   tvq: z.coerce.number().min(0),
   accommodationTax: z.coerce.number().min(0),
+  assignableRoomCount: z.coerce.number().int().positive(),
+  reservationsEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
 });
 
 export const settingsHook = (result: any, c: any) =>
@@ -40,20 +72,25 @@ export const settingsHook = (result: any, c: any) =>
 
 export interface AdminSettings {
   nightlyPrice: number;
+  weeklyPrice: number;
   contactEmail: string;
   contactPhone: string;
   tps: number;
   tvq: number;
   accommodationTax: number;
+  assignableRoomCount: number;
+  reservationsEnabled: boolean;
 }
 
 export interface PublicSettings {
   nightlyPrice: number;
+  weeklyPrice: number;
   contactEmail: string;
   contactPhone: string;
   tps: number;
   tvq: number;
   accommodationTax: number;
+  reservationsEnabled: boolean;
   // Live count of publicly-visible rooms. Optional: omitted from the response
   // when the count query fails so the endpoint never 500s and the frontend
   // fallback (DEFAULTS.publicRoomCount) can take over.
@@ -70,6 +107,10 @@ export function rowsToAdminSettings(
       rowMap.get("nightly_price") ?? String(SETTINGS_DEFAULTS.nightly_price),
       10
     ),
+    weeklyPrice: parseInt(
+      rowMap.get("weekly_price") ?? String(SETTINGS_DEFAULTS.weekly_price),
+      10
+    ),
     contactEmail:
       rowMap.get("contact_email") ?? SETTINGS_DEFAULTS.contact_email,
     contactPhone:
@@ -83,17 +124,26 @@ export function rowsToAdminSettings(
     accommodationTax: parseFloat(
       rowMap.get("accommodation_tax") ?? String(SETTINGS_DEFAULTS.accommodation_tax)
     ),
+    assignableRoomCount: parseInt(
+      rowMap.get("assignable_room_count") ?? String(SETTINGS_DEFAULTS.assignable_room_count),
+      10
+    ),
+    reservationsEnabled: parseBool(
+      rowMap.get("reservations_enabled") ?? String(SETTINGS_DEFAULTS.reservations_enabled)
+    ),
   };
 }
 
 export function toPublicSettings(admin: AdminSettings): PublicSettings {
   return {
     nightlyPrice: admin.nightlyPrice,
+    weeklyPrice: admin.weeklyPrice,
     contactEmail: admin.contactEmail,
     contactPhone: admin.contactPhone,
     tps: admin.tps,
     tvq: admin.tvq,
     accommodationTax: admin.accommodationTax,
+    reservationsEnabled: admin.reservationsEnabled,
   };
 }
 

@@ -4,6 +4,7 @@ import { render, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
 import UserPricingForm, {
   initialPricingMode,
   computeEffectivePrice,
+  computeEffectiveWeekly,
   type PricingResult,
 } from "../UserPricingForm.svelte";
 
@@ -13,8 +14,10 @@ function baseProps(overrides: Record<string, unknown> = {}) {
   return {
     userId: 7,
     publicNightlyPrice: 89,
+    publicWeeklyPrice: 490,
     initialDiscount: null,
     initialFixed: null,
+    initialFixedWeekly: null,
     onSavePricing: vi.fn(async (): Promise<PricingResult> => ({ ok: true })),
     ...overrides,
   };
@@ -32,6 +35,35 @@ describe("initialPricingMode (pure)", () => {
   });
   it("prefers fixed when both are set", () => {
     expect(initialPricingMode(10, 75)).toBe("fixed");
+  });
+  it("returns fixed when only the weekly fixed price is set", () => {
+    expect(initialPricingMode(null, null, 490)).toBe("fixed");
+  });
+  it("still returns discount when only a discount is set and weekly is null", () => {
+    expect(initialPricingMode(10, null, null)).toBe("discount");
+  });
+});
+
+describe("computeEffectiveWeekly (pure)", () => {
+  it("returns the public weekly price in public mode", () => {
+    expect(computeEffectiveWeekly("public", 490, 0, 0)).toBe(490);
+  });
+  it("applies a percentage discount to the weekly price", () => {
+    expect(computeEffectiveWeekly("discount", 500, 10, 0)).toBe(450);
+    expect(computeEffectiveWeekly("discount", 490, 50, 0)).toBe(245);
+  });
+  it("returns the fixed weekly price in fixed mode", () => {
+    expect(computeEffectiveWeekly("fixed", 490, 0, 420)).toBe(420);
+  });
+  it("falls back to the public weekly price for an out-of-range discount", () => {
+    expect(computeEffectiveWeekly("discount", 490, -5, 0)).toBe(490);
+    expect(computeEffectiveWeekly("discount", 490, 150, 0)).toBe(490);
+  });
+  it("falls back to the public weekly price for a negative fixed weekly value", () => {
+    expect(computeEffectiveWeekly("fixed", 490, 0, -1)).toBe(490);
+  });
+  it("rounds to two decimals", () => {
+    expect(computeEffectiveWeekly("discount", 490, 33.33, 0)).toBe(326.68);
   });
 });
 
@@ -82,6 +114,60 @@ describe("UserPricingForm — structure", () => {
     const { getByTestId } = render(UserPricingForm, { props: baseProps() });
     expect(getByTestId("upf-preview-amount").textContent).toMatch(/89/);
     expect(getByTestId("upf-preview-amount").textContent).toContain("$");
+  });
+
+  it("shows a dual preview with the public weekly price", () => {
+    const { getByTestId } = render(UserPricingForm, { props: baseProps() });
+    expect(getByTestId("upf-preview-badge")).toBeTruthy();
+    expect(getByTestId("upf-preview-weekly-amount").textContent).toMatch(/490/);
+    expect(getByTestId("upf-preview-weekly-amount").textContent).toContain("$");
+  });
+});
+
+describe("UserPricingForm — weekly pricing", () => {
+  it("starts in fixed mode when only initialFixedWeekly is provided", () => {
+    const { getByTestId } = render(UserPricingForm, {
+      props: baseProps({ initialFixed: null, initialFixedWeekly: 420 }),
+    });
+    expect((getByTestId("upf-mode-fixed") as HTMLInputElement).checked).toBe(true);
+    expect((getByTestId("upf-fixed-weekly-input") as HTMLInputElement).value).toBe("420");
+  });
+
+  it("shows the weekly row only in fixed mode", async () => {
+    const { getByTestId, queryByTestId } = render(UserPricingForm, { props: baseProps() });
+    await fireEvent.click(getByTestId("upf-mode-discount"));
+    expect(queryByTestId("upf-fixed-weekly-row")).toBeNull();
+    await fireEvent.click(getByTestId("upf-mode-fixed"));
+    expect(getByTestId("upf-fixed-weekly-row")).toBeTruthy();
+  });
+
+  it("recomputes the weekly preview from a fixed weekly input", async () => {
+    const { getByTestId } = render(UserPricingForm, { props: baseProps() });
+    await fireEvent.click(getByTestId("upf-mode-fixed"));
+    await fireEvent.input(getByTestId("upf-fixed-weekly-input"), { target: { value: "300" } });
+    await waitFor(() =>
+      expect(getByTestId("upf-preview-weekly-amount").textContent).toMatch(/300/),
+    );
+  });
+
+  it("reflects a discount in the weekly preview (490 − 10% = 441)", async () => {
+    const { getByTestId } = render(UserPricingForm, { props: baseProps() });
+    await fireEvent.click(getByTestId("upf-mode-discount"));
+    await fireEvent.input(getByTestId("upf-discount-input"), { target: { value: "10" } });
+    await waitFor(() =>
+      expect(getByTestId("upf-preview-weekly-amount").textContent).toMatch(/441/),
+    );
+  });
+
+  it("blocks save and shows an error for a negative weekly price", async () => {
+    const onSavePricing = vi.fn(async (): Promise<PricingResult> => ({ ok: true }));
+    const { getByTestId } = render(UserPricingForm, { props: baseProps({ onSavePricing }) });
+    await fireEvent.click(getByTestId("upf-mode-fixed"));
+    await fireEvent.input(getByTestId("upf-fixed-input"), { target: { value: "75" } });
+    await fireEvent.input(getByTestId("upf-fixed-weekly-input"), { target: { value: "-5" } });
+    await fireEvent.click(getByTestId("upf-save-btn"));
+    expect(onSavePricing).not.toHaveBeenCalled();
+    expect(getByTestId("upf-fixed-weekly-error").textContent).toContain("positif");
   });
 });
 
@@ -188,7 +274,11 @@ describe("UserPricingForm — save", () => {
     await fireEvent.click(getByTestId("upf-mode-public"));
     await fireEvent.click(getByTestId("upf-save-btn"));
     await waitFor(() =>
-      expect(onSavePricing).toHaveBeenCalledWith({ discountPercent: null, fixedNightlyPrice: null }),
+      expect(onSavePricing).toHaveBeenCalledWith({
+        discountPercent: null,
+        fixedNightlyPrice: null,
+        fixedWeeklyPrice: null,
+      }),
     );
   });
 
@@ -199,18 +289,27 @@ describe("UserPricingForm — save", () => {
     await fireEvent.input(getByTestId("upf-discount-input"), { target: { value: "20" } });
     await fireEvent.click(getByTestId("upf-save-btn"));
     await waitFor(() =>
-      expect(onSavePricing).toHaveBeenCalledWith({ discountPercent: 20, fixedNightlyPrice: null }),
+      expect(onSavePricing).toHaveBeenCalledWith({
+        discountPercent: 20,
+        fixedNightlyPrice: null,
+        fixedWeeklyPrice: null,
+      }),
     );
   });
 
-  it("sends only the fixed column in fixed mode", async () => {
+  it("sends both fixed columns in fixed mode", async () => {
     const onSavePricing = vi.fn(async (): Promise<PricingResult> => ({ ok: true }));
     const { getByTestId } = render(UserPricingForm, { props: baseProps({ onSavePricing }) });
     await fireEvent.click(getByTestId("upf-mode-fixed"));
     await fireEvent.input(getByTestId("upf-fixed-input"), { target: { value: "75" } });
+    await fireEvent.input(getByTestId("upf-fixed-weekly-input"), { target: { value: "450" } });
     await fireEvent.click(getByTestId("upf-save-btn"));
     await waitFor(() =>
-      expect(onSavePricing).toHaveBeenCalledWith({ discountPercent: null, fixedNightlyPrice: 75 }),
+      expect(onSavePricing).toHaveBeenCalledWith({
+        discountPercent: null,
+        fixedNightlyPrice: 75,
+        fixedWeeklyPrice: 450,
+      }),
     );
   });
 

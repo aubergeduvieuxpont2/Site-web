@@ -32,6 +32,20 @@ export function resolveEffectiveNightly(
   return Math.round(publicPrice * 100) / 100;
 }
 
+export function resolveEffectiveWeekly(
+  userPricing: { fixedWeeklyPrice?: number | null; discountPercent?: number | null },
+  publicPrice: number
+): number {
+  if (userPricing.fixedWeeklyPrice != null) {
+    return Math.round(userPricing.fixedWeeklyPrice * 100) / 100;
+  }
+  if (userPricing.discountPercent != null) {
+    const discounted = publicPrice * (1 - userPricing.discountPercent / 100);
+    return Math.round(discounted * 100) / 100;
+  }
+  return Math.round(publicPrice * 100) / 100;
+}
+
 export function nightsBetween(arrive: string | Date, depart: string | Date): number {
   const arriveDate = parseDate(arrive);
   const departDate = parseDate(depart);
@@ -54,6 +68,25 @@ function parseDate(date: string | Date): Date | null {
   return new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
 }
 
+export function computeBase(
+  nights: number,
+  roomCount: number,
+  nightlyRate: number,
+  weeklyRate: number
+): number {
+  const round2 = (x: number) => Math.round(x * 100) / 100;
+  if (!Number.isFinite(nightlyRate) || !Number.isFinite(weeklyRate)) {
+    return 0;
+  }
+  if (nights < 0 || roomCount < 0) {
+    return 0;
+  }
+  const perRoom = nights >= 7
+    ? Math.floor(nights / 7) * weeklyRate + (nights % 7) * nightlyRate
+    : nights * nightlyRate;
+  return round2(perRoom * roomCount);
+}
+
 export interface ComputeInvoiceParams {
   effectiveNightly: number;
   nights: number;
@@ -63,6 +96,7 @@ export interface ComputeInvoiceParams {
   accommodationTax: number;
   type: "deposit" | "full";
   depositPercent?: number;
+  weeklyRate?: number;
 }
 
 export function computeInvoice(params: ComputeInvoiceParams): InvoiceBreakdown {
@@ -70,7 +104,9 @@ export function computeInvoice(params: ComputeInvoiceParams): InvoiceBreakdown {
 
   // Compounding cascade: each subsequent tax line is computed on the running
   // subtotal of all prior lines, so it matches the frontend `estimateStay` quote.
-  const base = round2(params.effectiveNightly * params.nights * params.roomCount);
+  const base = params.weeklyRate !== undefined
+    ? computeBase(params.nights, params.roomCount, params.effectiveNightly, params.weeklyRate)
+    : round2(params.effectiveNightly * params.nights * params.roomCount);
   const accommodationTax = round2(base * params.accommodationTax / 100);
   const tps = round2((base + accommodationTax) * params.tps / 100);
   // TVQ base includes TPS (compounding cascade).

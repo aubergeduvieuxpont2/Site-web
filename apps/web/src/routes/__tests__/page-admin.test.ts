@@ -56,6 +56,7 @@ function reservation(over: Partial<ReservationRow> = {}): ReservationRow {
 function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
   return {
     nightlyPrice: 89,
+    weeklyPrice: 560,
     contactEmail: "info@aubergeduvieuxpont.ca",
     contactPhone: "418 655-1212",
     marketingRoomCount: 12,
@@ -63,6 +64,7 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
     tps: 5,
     tvq: 9.975,
     accommodationTax: 3.5,
+    reservationsEnabled: true,
     ...over,
   };
 }

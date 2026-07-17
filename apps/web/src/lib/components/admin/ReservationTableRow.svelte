@@ -33,6 +33,15 @@
       ? message.slice(0, MESSAGE_LIMIT) + "…"
       : message;
   }
+
+  // Human-readable French label for a reservation status. Returns one of three
+  // fixed string literals — never interpolates caller data — so it is safe to
+  // render directly. Null/undefined and any unknown value fall back to pending.
+  export function statusLabel(status: string | null | undefined): string {
+    if (status === "confirmed") return "Confirmé";
+    if (status === "cancelled") return "Annulé";
+    return "En attente";
+  }
 </script>
 
 <script lang="ts">
@@ -49,12 +58,19 @@
   let {
     row,
     onCreateInvoice,
+    onSetStatus,
   }: {
     row: ReservationRow;
     onCreateInvoice: (
       reservationId: number,
       req: InvoiceRequest,
     ) => Promise<InvoiceResult>;
+    // Optional so existing callers compile unchanged; the component stays
+    // fetch-free and optimistic — the parent owns the data update.
+    onSetStatus?: (
+      id: number,
+      status: "pending" | "confirmed" | "cancelled",
+    ) => void;
   } = $props();
 
   // ── Derived display values ──────────────────────────────────────────────
@@ -125,6 +141,50 @@
     </span>
   </td>
 
+  <td
+    class="reservation-table-row__cell reservation-table-row__cell--status"
+    data-testid="row-status-cell"
+  >
+    <span
+      class="reservation-table-row__status-badge reservation-table-row__status-badge--{row.status ??
+        'pending'}"
+      data-testid="row-status-badge"
+      aria-label={`Statut: ${statusLabel(row.status)}`}
+    >
+      {statusLabel(row.status)}
+    </span>
+
+    <div
+      class="reservation-table-row__status-actions"
+      role="group"
+      aria-label="Changer le statut"
+    >
+      {#if (row.status ?? "pending") !== "confirmed"}
+        <button
+          class="reservation-table-row__btn reservation-table-row__btn--status-confirm"
+          type="button"
+          data-testid="btn-status-confirm"
+          aria-label="Confirmer la réservation"
+          onclick={() => onSetStatus?.(row.id, "confirmed")}
+        >
+          Confirmer
+        </button>
+      {/if}
+
+      {#if (row.status ?? "pending") !== "cancelled"}
+        <button
+          class="reservation-table-row__btn reservation-table-row__btn--status-cancel"
+          type="button"
+          data-testid="btn-status-cancel"
+          aria-label="Annuler la réservation"
+          onclick={() => onSetStatus?.(row.id, "cancelled")}
+        >
+          Annuler
+        </button>
+      {/if}
+    </div>
+  </td>
+
   <td class="reservation-table-row__cell reservation-table-row__cell--actions">
     <div
       class="reservation-table-row__actions"
@@ -157,7 +217,7 @@
 
 {#if factureOpen}
   <tr class="reservation-table-row__panel-row" data-testid="panel-row-facture">
-    <td colspan="9" class="reservation-table-row__panel-cell">
+    <td colspan="10" class="reservation-table-row__panel-cell">
       <InvoiceCreator
         reservationId={row.id}
         arrive={row.arrive}
@@ -299,5 +359,75 @@
   .reservation-table-row__panel-cell {
     padding: 0;
     border-bottom: 2px solid var(--border-strong);
+  }
+
+  /* ── Status cell ─────────────────────────────────────────────────── */
+  .reservation-table-row__cell--status {
+    padding: 8px 12px;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .reservation-table-row__status-badge {
+    display: inline-block;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 2px 7px;
+    border-radius: 2px;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+
+  /* pending — grey neutral */
+  .reservation-table-row__status-badge--pending {
+    background-color: var(--color-badge-guest-bg, #e6e8ea);
+    color: var(--color-badge-guest-fg, #45464d);
+  }
+
+  /* confirmed — forest green */
+  .reservation-table-row__status-badge--confirmed {
+    background-color: var(--color-forest-surface, #d4ede0);
+    color: var(--color-forest, #1a5c2d);
+  }
+
+  /* cancelled — error red */
+  .reservation-table-row__status-badge--cancelled {
+    background-color: #fce8e8;
+    color: var(--color-error, #ba1a1a);
+  }
+
+  /* ── Status action buttons ───────────────────────────────────────── */
+  .reservation-table-row__status-actions {
+    display: inline-flex;
+    gap: 4px;
+    margin-top: 5px;
+    align-items: center;
+  }
+
+  .reservation-table-row__btn--status-confirm {
+    background-color: transparent;
+    border-color: var(--color-forest, #1a5c2d);
+    color: var(--color-forest, #1a5c2d);
+  }
+  .reservation-table-row__btn--status-confirm:hover {
+    background-color: var(--color-forest-surface, #d4ede0);
+  }
+
+  .reservation-table-row__btn--status-cancel {
+    background-color: transparent;
+    border-color: var(--color-error, #ba1a1a);
+    color: var(--color-error, #ba1a1a);
+  }
+  .reservation-table-row__btn--status-cancel:hover {
+    background-color: #fce8e8;
+  }
+
+  .reservation-table-row__btn--status-confirm:focus-visible,
+  .reservation-table-row__btn--status-cancel:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
   }
 </style>
