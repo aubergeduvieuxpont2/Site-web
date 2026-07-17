@@ -64,8 +64,14 @@ export function parseAirbnb(bodyText: string, subject: string, sentAt: Date): Pa
 
   // Year inference: candidate in the sent year; if that day/month is already
   // past at send time, it's next year. checkOut before checkIn rolls again.
-  const sentY = sentAt.getUTCFullYear();
-  const sentOrd = (sentAt.getUTCMonth() + 1) * 100 + sentAt.getUTCDate();
+  // The "past" check is timezone-independent by design (email sentAt is in
+  // UTC, the property is UTC-4/-5): back off 1 day of grace before deriving
+  // the ordinal, since a booking is never for "yesterday" — an evening local
+  // confirmation for a same-day arrival that has already rolled to the next
+  // UTC calendar day must not wrongly push the year forward.
+  const graceSentAt = new Date(sentAt.getTime() - 24 * 3600 * 1000);
+  const sentY = graceSentAt.getUTCFullYear();
+  const sentOrd = (graceSentAt.getUTCMonth() + 1) * 100 + graceSentAt.getUTCDate();
   let inY = sentY;
   if (arrive.month * 100 + arrive.day < sentOrd) inY++;
   let outY = inY;

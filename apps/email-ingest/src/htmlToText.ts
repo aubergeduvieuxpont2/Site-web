@@ -27,8 +27,14 @@ export function htmlToText(html: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|td|th|tr|li|h[1-6]|table|section|header|footer)\s*>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
-    .replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (_, n: string) => {
+      const cp = Number(n);
+      return !Number.isFinite(cp) || cp < 0 || cp > 0x10ffff ? "" : String.fromCodePoint(cp);
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, n: string) => {
+      const cp = parseInt(n, 16);
+      return !Number.isFinite(cp) || cp < 0 || cp > 0x10ffff ? "" : String.fromCodePoint(cp);
+    })
     .replace(/&([a-z]+);/gi, (m, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
     .replace(/[ \t]+/g, " ")
     .replace(/ ?\n ?/g, "\n")

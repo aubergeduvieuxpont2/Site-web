@@ -98,6 +98,39 @@ describe("parseAirbnb", () => {
     expect(b!.checkOut).toBe("2027-02-05");
   });
 
+  it("does not roll the year forward for an evening same-day booking (UTC crosses midnight)", () => {
+    // Sent 2026-07-15 21:40 local (UTC-4) = 2026-07-16 01:40 UTC. Arrival is
+    // literally the same day as the send, in property-local time; the 1-day
+    // grace must keep the year at 2026 instead of treating "15 juil." as
+    // already past and rolling to 2027.
+    const snippet = [
+      "Arrivée",
+      "",
+      "mer. 15 juil.",
+      "",
+      "16:00",
+      "Départ",
+      "",
+      "jeu. 16 juil.",
+      "",
+      "10:00",
+      "Voyageurs",
+      "",
+      "2 adultes",
+      "",
+      "Code de confirmation",
+      "",
+      "HMCCCC3333",
+    ].join("\n");
+    const b = parseAirbnb(
+      snippet,
+      "Réservation confirmée : Ada L arrive le 15 juil.",
+      new Date("2026-07-15T21:40:00-04:00"),
+    );
+    expect(b!.checkIn).toBe("2026-07-15");
+    expect(b!.checkOut).toBe("2026-07-16");
+  });
+
   it("returns null when the confirmation code is missing", () => {
     expect(parseAirbnb("Arrivée\njeu. 30 juil.\nDépart\nven. 31 juil.", SUBJECT, SENT_AT)).toBeNull();
   });

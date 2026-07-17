@@ -24,7 +24,16 @@ export const OtaParsedSchema = z
     subject: z.string().optional().default(""),
     firstName: z.string().trim().min(1),
     lastName: trimToNull,
-    guestEmail: z.string().trim().email().nullish().transform((v) => v ?? null),
+    // Empty/whitespace guestEmail (common for Airbnb, sometimes for Expedia)
+    // must not 400 the whole booking: trim, treat "" as absent, then still
+    // validate any non-empty value as a real email.
+    guestEmail: z
+      .preprocess((v) => {
+        if (typeof v !== "string") return v ?? null;
+        const t = v.trim();
+        return t.length > 0 ? t : null;
+      }, z.string().email().nullish())
+      .transform((v) => v ?? null),
     phone: trimToNull,
     checkIn: z.string().regex(DATE_RE),
     checkOut: z.string().regex(DATE_RE),

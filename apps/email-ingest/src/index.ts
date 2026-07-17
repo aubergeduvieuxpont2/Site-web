@@ -29,7 +29,9 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
     if (cls.kind === "ignored") {
       body = { status: "ignored", provider: cls.provider, subject, error: cls.reason };
     } else {
-      const text = parsed.text?.trim() ? parsed.text : htmlToText(parsed.html ?? "");
+      // Cap parser input: parsers do bounded-but-unbounded-input regex work
+      // (findDate/table scans etc.) over attacker-influenced email content.
+      const text = (parsed.text?.trim() ? parsed.text : htmlToText(parsed.html ?? "")).slice(0, 200_000);
       const sentAt = parsed.date ? new Date(parsed.date) : new Date();
       const booking =
         cls.provider === "airbnb" ? parseAirbnb(text, subject, sentAt) : parseExpedia(text, subject);
@@ -44,7 +46,31 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error("email-ingest: API rejected ingest", res.status, await res.text());
+      const status = res.status;
+      const responseText = await res.text();
+      console.error("email-ingest: API rejected ingest", status, responseText);
+      // The parsed booking itself was lost (API 4xx/5xx'd it) — without this,
+      // nothing lands in email_ingest_log and the admin tab never shows it.
+      // Best-effort re-report as a failure; a second rejection is only logged.
+      if (body.status === "parsed") {
+        try {
+          const retryRes = await env.API.fetch("http://api/internal/ota-bookings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              status: "parse_failed",
+              provider: cls.provider,
+              subject,
+              error: `API rejected parsed booking: ${status} ${responseText}`,
+            }),
+          });
+          if (!retryRes.ok) {
+            console.error("email-ingest: parse_failed fallback also rejected", retryRes.status, await retryRes.text());
+          }
+        } catch (fallbackErr) {
+          console.error("email-ingest: parse_failed fallback POST threw", fallbackErr);
+        }
+      }
     }
   } catch (err) {
     console.error("email-ingest: processing failed (email was forwarded)", err);

@@ -139,6 +139,16 @@ describe("OtaParsedSchema", () => {
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.guests).toBe(1);
   });
+
+  it("treats an empty guestEmail as absent (null), not invalid", () => {
+    const r = OtaParsedSchema.safeParse({ ...parsed, guestEmail: "" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.guestEmail).toBeNull();
+  });
+
+  it("still rejects a malformed non-empty guestEmail", () => {
+    expect(OtaParsedSchema.safeParse({ ...parsed, guestEmail: "not-an-email" }).success).toBe(false);
+  });
 });
 
 describe("OtaFailureSchema", () => {

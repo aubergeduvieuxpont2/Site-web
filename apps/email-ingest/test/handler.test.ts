@@ -114,6 +114,40 @@ describe("handleEmail", () => {
     expect(calls).toHaveLength(0);
   });
 
+  it("falls back to a parse_failed report when the API rejects a parsed booking", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const calls: { url: string; body: any }[] = [];
+    const env = {
+      FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      API: {
+        fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : (input as Request).url;
+          const bodyText =
+            typeof input !== "string" && input instanceof Request
+              ? await input.clone().text()
+              : String(init?.body ?? "");
+          calls.push({ url, body: JSON.parse(bodyText) });
+          if (calls.length === 1) {
+            return new Response("bad request", { status: 400 });
+          }
+          return new Response(JSON.stringify({ ok: true }), { status: 202 });
+        }),
+      },
+    } as any;
+
+    await handleEmail(message, env);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].body.status).toBe("parsed");
+    expect(calls[1].body.status).toBe("parse_failed");
+    expect(calls[1].body.provider).toBe("airbnb");
+    expect(calls[1].body.error).toContain("400");
+  });
+
   it("never throws after a successful forward, even if the API is down", async () => {
     const message = makeMessage(
       "automated@airbnb.com",
