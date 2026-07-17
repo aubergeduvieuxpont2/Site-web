@@ -15,6 +15,9 @@ function mergeSettings(
     ...(incoming.contactEmail !== undefined && {
       contactEmail: incoming.contactEmail,
     }),
+    ...(incoming.contactPhone !== undefined && {
+      contactPhone: incoming.contactPhone,
+    }),
     ...(incoming.marketingRoomCount !== undefined && {
       marketingRoomCount: incoming.marketingRoomCount,
     }),
@@ -46,6 +49,7 @@ describe("Settings", () => {
       const current: PublicSettings = {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -59,6 +63,7 @@ describe("Settings", () => {
       expect(result).toEqual({
         nightlyPrice: 89,
         contactEmail: "new@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -67,10 +72,26 @@ describe("Settings", () => {
       });
     });
 
+    it("overlays an incoming contactPhone", () => {
+      const current: PublicSettings = {
+        nightlyPrice: 89,
+        contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
+        marketingRoomCount: 12,
+        publicRoomCount: 12,
+        tps: 5,
+        tvq: 9.975,
+        accommodationTax: 3.5,
+      };
+      const result = mergeSettings(current, { contactPhone: "581 000-0000" });
+      expect(result.contactPhone).toBe("581 000-0000");
+    });
+
     it("leaves current values unchanged when incoming is empty", () => {
       const current: PublicSettings = {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -85,6 +106,7 @@ describe("Settings", () => {
       const current: PublicSettings = {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -99,6 +121,7 @@ describe("Settings", () => {
       expect(result).toEqual({
         nightlyPrice: 99,
         contactEmail: "new@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -111,6 +134,7 @@ describe("Settings", () => {
       const current: PublicSettings = {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -128,6 +152,7 @@ describe("Settings", () => {
       const current: PublicSettings = {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
@@ -147,6 +172,7 @@ describe("Settings", () => {
           JSON.stringify({
             nightlyPrice: 89,
             contactEmail: "info@example.com",
+            contactPhone: "418 655-1212",
             marketingRoomCount: 12,
             publicRoomCount: 8,
             tps: 5,
@@ -160,6 +186,7 @@ describe("Settings", () => {
       expect(result).toEqual({
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         publicRoomCount: 8,
         tps: 5,
@@ -188,6 +215,7 @@ describe("Settings", () => {
           JSON.stringify({
             nightlyPrice: 99,
             contactEmail: "new@example.com",
+            contactPhone: "418 655-1212",
             marketingRoomCount: 12,
             assignableRoomCount: 12,
             tps: 5,
@@ -200,6 +228,7 @@ describe("Settings", () => {
       const settings: AdminSettings = {
         nightlyPrice: 99,
         contactEmail: "new@example.com",
+        contactPhone: "418 655-1212",
         marketingRoomCount: 12,
         assignableRoomCount: 12,
         tps: 5,
@@ -227,6 +256,7 @@ describe("Settings", () => {
       const settings: AdminSettings = {
         nightlyPrice: 0,
         contactEmail: "invalid",
+        contactPhone: "",
         marketingRoomCount: 0,
         assignableRoomCount: 0,
         tps: -1,

@@ -3,6 +3,7 @@ import { getPublicSettings, type PublicSettings } from "./api";
 const DEFAULTS: PublicSettings = {
   nightlyPrice: 89,
   contactEmail: "info@aubergeduvieuxpont.ca",
+  contactPhone: "418 655-1212",
   marketingRoomCount: 12,
   publicRoomCount: 12,
   tps: 5,
@@ -23,6 +24,9 @@ export function mergeSettings(
     }),
     ...(incoming.contactEmail !== undefined && {
       contactEmail: incoming.contactEmail,
+    }),
+    ...(incoming.contactPhone !== undefined && {
+      contactPhone: incoming.contactPhone,
     }),
     ...(incoming.marketingRoomCount !== undefined && {
       marketingRoomCount: incoming.marketingRoomCount,

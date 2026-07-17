@@ -6,6 +6,8 @@
     capacity: number;
     imageKey: string;
     isPublic: boolean;
+    passkeyEnabled: boolean;
+    passkey?: string;
   };
 </script>
 
@@ -68,11 +70,14 @@
   let capacity = $state<number>(initialValues?.capacity ?? 1);
   let imageKey = $state(initialValues?.imageKey ?? "");
   let isPublic = $state(initialValues?.isPublic ?? true);
+  let passkeyEnabled = $state(initialValues?.passkeyEnabled ?? false);
+  let passkey = $state(initialValues?.passkey ?? "");
 
   // ─── Per-field validation errors (French) ───
   let nameError = $state("");
   let capacityError = $state("");
   let imageKeyError = $state("");
+  let passkeyError = $state("");
 
   // Reset local state whenever the caller swaps `initialValues` (e.g. an inline
   // edit row is collapsed and re-opened for a different room). Tracking the
@@ -83,9 +88,12 @@
     capacity = initialValues?.capacity ?? 1;
     imageKey = initialValues?.imageKey ?? "";
     isPublic = initialValues?.isPublic ?? true;
+    passkeyEnabled = initialValues?.passkeyEnabled ?? false;
+    passkey = initialValues?.passkey ?? "";
     nameError = "";
     capacityError = "";
     imageKeyError = "";
+    passkeyError = "";
   });
 
   function validateName() {
@@ -106,6 +114,13 @@
       : "";
   }
 
+  function validatePasskey() {
+    passkeyError =
+      passkeyEnabled && passkey.trim().length === 0
+        ? "La clé est requise lorsqu'elle est activée."
+        : "";
+  }
+
   async function handleSubmit(e: Event) {
     e.preventDefault();
 
@@ -113,13 +128,16 @@
     validateName();
     validateCapacity();
     validateImageKey();
-    if (nameError || capacityError || imageKeyError) return;
+    validatePasskey();
+    if (nameError || capacityError || imageKeyError || passkeyError) return;
 
     await onSubmit({
       name: name.trim(),
       capacity: Number(capacity),
       imageKey,
       isPublic,
+      passkeyEnabled,
+      passkey: passkeyEnabled ? passkey.trim() : "",
     });
     // The parent owns the post-success reset (clear on create / collapse on
     // edit) via `initialValues` — we deliberately do not clear state here.
@@ -228,6 +246,49 @@
       <span class="page-admin__field-label rooms-form__checkbox-text">Publique</span>
     </label>
   </div>
+
+  <!-- passkeyEnabled -->
+  <div class="page-admin__field rooms-form__field--checkbox">
+    <label class="rooms-form__checkbox-label" for="rooms-form-passkey-enabled">
+      <input
+        class="rooms-form__checkbox"
+        id="rooms-form-passkey-enabled"
+        type="checkbox"
+        name="passkeyEnabled"
+        bind:checked={passkeyEnabled}
+        onchange={validatePasskey}
+        data-testid="rooms-form-passkey-enabled"
+      />
+      <span class="page-admin__field-label rooms-form__checkbox-text">Clé d'accès activée</span>
+    </label>
+  </div>
+
+  <!-- passkey (only when enabled) -->
+  {#if passkeyEnabled}
+    <div class="page-admin__field">
+      <label class="page-admin__field-label" for="rooms-form-passkey">Clé d'accès</label>
+      <input
+        class="page-admin__search-input rooms-form__input"
+        class:rooms-form__input--error={!!passkeyError}
+        id="rooms-form-passkey"
+        type="text"
+        name="passkey"
+        bind:value={passkey}
+        onblur={validatePasskey}
+        aria-describedby="rooms-form-passkey-error"
+        aria-invalid={!!passkeyError}
+        aria-required="true"
+        autocomplete="off"
+        data-testid="rooms-form-passkey"
+      />
+      <span
+        class="rooms-form__field-error"
+        id="rooms-form-passkey-error"
+        role="alert"
+        aria-live="polite">{passkeyError}</span
+      >
+    </div>
+  {/if}
 
   <!-- Server error -->
   {#if error}

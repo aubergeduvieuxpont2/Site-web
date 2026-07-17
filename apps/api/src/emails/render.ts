@@ -8,6 +8,15 @@ export interface RenderedEmail {
   text: string;
 }
 
+// Contact details rendered in the shared footer. Callers (e.g. the preview
+// route, and the future send path) override these with the live `settings`
+// values; the defaults keep the footer populated when they aren't provided.
+export const EMAIL_DEFAULTS = {
+  contactPhone: "418 655-1212",
+  contactPhoneHref: "tel:+14186551212",
+  contactEmail: "info@aubergeduvieuxpont.ca",
+} as const;
+
 function htmlToText(html: string): string {
   return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
@@ -74,7 +83,7 @@ export function renderEmail(key: TemplateKey, locale: Locale, data: Record<strin
     }
   }
 
-  const dataWithLocale = { ...data, locale };
+  const dataWithLocale = { ...EMAIL_DEFAULTS, ...data, locale };
 
   // Render the precompiled base with per-call helpers + locale partials. The
   // partials are precompiled template delegates (functions), never strings, so

@@ -8,12 +8,15 @@ import {
   SETTINGS_DEFAULTS,
 } from "../src/settings";
 
-// Canonical camelCase settings object used across the tests (new 5-key contract:
-// nightlyPrice, contactEmail, tps, tvq, accommodationTax).
+// Canonical camelCase settings object used across the tests (6-key contract:
+// nightlyPrice, contactEmail, contactPhone, tps, tvq, accommodationTax).
 const DEFAULT_TAXES = { tps: 5, tvq: 9.975, accommodationTax: 3.5 };
+const CONTACT_PHONE = "418 655-1212";
+const CONTACT = { contactPhone: CONTACT_PHONE };
 const SETTINGS_KEYS_SORTED = [
   "accommodationTax",
   "contactEmail",
+  "contactPhone",
   "nightlyPrice",
   "tps",
   "tvq",
@@ -25,6 +28,7 @@ describe("Settings", () => {
       const valid = {
         nightlyPrice: 99,
         contactEmail: "test@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
@@ -38,6 +42,7 @@ describe("Settings", () => {
       const invalid = {
         nightlyPrice: -50,
         contactEmail: "test@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(invalid);
@@ -48,6 +53,7 @@ describe("Settings", () => {
       const invalid = {
         nightlyPrice: 0,
         contactEmail: "test@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(invalid);
@@ -58,6 +64,7 @@ describe("Settings", () => {
       const invalid = {
         nightlyPrice: 89,
         contactEmail: "not-an-email",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(invalid);
@@ -67,16 +74,53 @@ describe("Settings", () => {
     it("rejects payload missing nightlyPrice", () => {
       const invalid = {
         contactEmail: "admin@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(invalid);
       expect(result.success).toBe(false);
     });
 
+    it("rejects payload missing contactPhone", () => {
+      const invalid = {
+        nightlyPrice: 99,
+        contactEmail: "admin@example.com",
+        ...DEFAULT_TAXES,
+      };
+      const result = SettingsUpdateSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects an empty contactPhone", () => {
+      const invalid = {
+        nightlyPrice: 99,
+        contactEmail: "admin@example.com",
+        contactPhone: "   ",
+        ...DEFAULT_TAXES,
+      };
+      const result = SettingsUpdateSchema.safeParse(invalid);
+      expect(result.success).toBe(false);
+    });
+
+    it("trims whitespace from contactPhone", () => {
+      const payload = {
+        nightlyPrice: 99,
+        contactEmail: "admin@example.com",
+        contactPhone: "  581 555-0199  ",
+        ...DEFAULT_TAXES,
+      };
+      const result = SettingsUpdateSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.contactPhone).toBe("581 555-0199");
+      }
+    });
+
     it("rejects payload missing tax rates", () => {
       const invalid = {
         nightlyPrice: 99,
         contactEmail: "admin@example.com",
+        ...CONTACT,
       };
       const result = SettingsUpdateSchema.safeParse(invalid);
       expect(result.success).toBe(false);
@@ -86,6 +130,7 @@ describe("Settings", () => {
       const invalid = {
         nightlyPrice: 99,
         contactEmail: "admin@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
         tvq: -1,
       };
@@ -97,6 +142,7 @@ describe("Settings", () => {
       const valid = {
         nightlyPrice: 99,
         contactEmail: "admin@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
         accommodationTax: 0,
       };
@@ -108,6 +154,7 @@ describe("Settings", () => {
       const stringPayload = {
         nightlyPrice: "99",
         contactEmail: "admin@example.com",
+        contactPhone: CONTACT_PHONE,
         tps: "5",
         tvq: "9.975",
         accommodationTax: "3.5",
@@ -124,6 +171,7 @@ describe("Settings", () => {
       const payload = {
         nightlyPrice: 99,
         contactEmail: "  admin@example.com  ",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
@@ -135,9 +183,10 @@ describe("Settings", () => {
   });
 
   describe("PUBLIC_SETTING_KEYS", () => {
-    it("contains price, email and the three tax rates, never room counts", () => {
+    it("contains price, email, phone and the three tax rates, never room counts", () => {
       expect(PUBLIC_SETTING_KEYS).toContain("nightly_price");
       expect(PUBLIC_SETTING_KEYS).toContain("contact_email");
+      expect(PUBLIC_SETTING_KEYS).toContain("contact_phone");
       expect(PUBLIC_SETTING_KEYS).toContain("tps");
       expect(PUBLIC_SETTING_KEYS).toContain("tvq");
       expect(PUBLIC_SETTING_KEYS).toContain("accommodation_tax");
@@ -151,6 +200,7 @@ describe("Settings", () => {
       const rows = [
         { key: "nightly_price", value: "89" },
         { key: "contact_email", value: "info@example.com" },
+        { key: "contact_phone", value: CONTACT_PHONE },
         { key: "tps", value: "5" },
         { key: "tvq", value: "9.975" },
         { key: "accommodation_tax", value: "3.5" },
@@ -159,6 +209,7 @@ describe("Settings", () => {
       expect(result).toEqual({
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       });
     });
@@ -168,6 +219,7 @@ describe("Settings", () => {
       const result = rowsToAdminSettings(rows);
       expect(result.nightlyPrice).toBe(100);
       expect(result.contactEmail).toBe("info@aubergeduvieuxpont.ca");
+      expect(result.contactPhone).toBe(CONTACT_PHONE);
       expect(result.tps).toBe(5);
       expect(result.tvq).toBe(9.975);
       expect(result.accommodationTax).toBe(3.5);
@@ -178,26 +230,29 @@ describe("Settings", () => {
       expect(result).toEqual({
         nightlyPrice: 89,
         contactEmail: "info@aubergeduvieuxpont.ca",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       });
     });
   });
 
   describe("toPublicSettings", () => {
-    it("returns price, email and tax rates", () => {
+    it("returns price, email, phone and tax rates", () => {
       const admin = {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const result = toPublicSettings(admin);
       expect(result).toEqual(admin);
     });
 
-    it("public and admin settings expose the same five keys", () => {
+    it("public and admin settings expose the same six keys", () => {
       const admin = {
         nightlyPrice: 99,
         contactEmail: "info@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       };
       const pub = toPublicSettings(admin);
@@ -210,6 +265,7 @@ describe("Settings", () => {
       const mockRows = [
         { key: "nightly_price", value: "99" },
         { key: "contact_email", value: "info@example.com" },
+        { key: "contact_phone", value: CONTACT_PHONE },
         { key: "tps", value: "5" },
         { key: "tvq", value: "9.975" },
         { key: "accommodation_tax", value: "3.5" },
@@ -221,6 +277,7 @@ describe("Settings", () => {
       expect(publicSettings).toEqual({
         nightlyPrice: 99,
         contactEmail: "info@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       });
     });
@@ -250,6 +307,7 @@ describe("Settings", () => {
       expect(publicSettings).toEqual({
         nightlyPrice: SETTINGS_DEFAULTS.nightly_price,
         contactEmail: SETTINGS_DEFAULTS.contact_email,
+        contactPhone: SETTINGS_DEFAULTS.contact_phone,
         tps: SETTINGS_DEFAULTS.tps,
         tvq: SETTINGS_DEFAULTS.tvq,
         accommodationTax: SETTINGS_DEFAULTS.accommodation_tax,
@@ -261,6 +319,7 @@ describe("Settings", () => {
     const base = {
       nightlyPrice: 89,
       contactEmail: "info@example.com",
+      ...CONTACT,
       ...DEFAULT_TAXES,
     };
 
@@ -302,7 +361,7 @@ describe("Settings", () => {
   });
 
   describe("HTTP Endpoints - GET /api/admin/settings", () => {
-    it("returns admin settings with the five keys", () => {
+    it("returns admin settings with the six keys", () => {
       const mockRows = [
         { key: "nightly_price", value: "99" },
         { key: "contact_email", value: "info@example.com" },
@@ -313,6 +372,7 @@ describe("Settings", () => {
       expect(adminSettings).toEqual({
         nightlyPrice: 99,
         contactEmail: "info@example.com",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       });
     });
@@ -323,13 +383,14 @@ describe("Settings", () => {
       expect(adminSettings).toEqual({
         nightlyPrice: 89,
         contactEmail: "info@aubergeduvieuxpont.ca",
+        ...CONTACT,
         ...DEFAULT_TAXES,
       });
     });
   });
 
   describe("Invariants", () => {
-    it("INV-public-keys: public endpoint returns exactly the five settings keys", () => {
+    it("INV-public-keys: public endpoint returns exactly the six settings keys", () => {
       const rows = [
         { key: "nightly_price", value: "89" },
         { key: "contact_email", value: "info@example.com" },
@@ -340,7 +401,7 @@ describe("Settings", () => {
 
       const publicKeys = Object.keys(publicSettings);
       expect(publicKeys.sort()).toEqual(SETTINGS_KEYS_SORTED);
-      expect(publicKeys.length).toBe(5);
+      expect(publicKeys.length).toBe(6);
     });
 
     it("INV-one-row-per-key: rowsToAdminSettings is idempotent", () => {

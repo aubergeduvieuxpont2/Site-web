@@ -1,10 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import { NAV, SITE } from "../content";
+  import { NAV, SITE, phoneToHref } from "../content";
+  import { settings } from "../settings.svelte";
   import Wordmark from "./Wordmark.svelte";
   import { auth, clearUser } from "../auth.svelte";
   import { logout } from "../api";
+
+  // Configured contact phone with graceful fallback to the static default.
+  const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
+  const phoneHref = $derived(phoneToHref(settings.contactPhone));
 
   let scrolled = $state(false);
   let open = $state(false);
@@ -147,9 +152,9 @@
 
     <div class="flex items-center gap-3">
       <a
-        href={SITE.phoneHref}
+        href={phoneHref}
         class="tech-label hidden whitespace-nowrap text-ink-soft transition-colors hover:text-terracotta xl:block"
-        >{SITE.phone}</a
+        >{phoneDisplay}</a
       >
       <a
         href="/contact"

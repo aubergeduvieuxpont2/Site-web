@@ -3,6 +3,7 @@ import { z } from "zod";
 export const SETTINGS_DEFAULTS = {
   nightly_price: 89,
   contact_email: "info@aubergeduvieuxpont.ca",
+  contact_phone: "418 655-1212",
   tps: 5,
   tvq: 9.975,
   accommodation_tax: 3.5,
@@ -11,6 +12,7 @@ export const SETTINGS_DEFAULTS = {
 export const PUBLIC_SETTING_KEYS = [
   "nightly_price",
   "contact_email",
+  "contact_phone",
   "tps",
   "tvq",
   "accommodation_tax",
@@ -19,6 +21,7 @@ export const PUBLIC_SETTING_KEYS = [
 export const SettingsUpdateSchema = z.object({
   nightlyPrice: z.coerce.number().int().positive(),
   contactEmail: z.string().trim().email(),
+  contactPhone: z.string().trim().min(1, "Le numéro de téléphone est requis"),
   tps: z.coerce.number().min(0),
   tvq: z.coerce.number().min(0),
   accommodationTax: z.coerce.number().min(0),
@@ -38,6 +41,7 @@ export const settingsHook = (result: any, c: any) =>
 export interface AdminSettings {
   nightlyPrice: number;
   contactEmail: string;
+  contactPhone: string;
   tps: number;
   tvq: number;
   accommodationTax: number;
@@ -46,6 +50,7 @@ export interface AdminSettings {
 export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
+  contactPhone: string;
   tps: number;
   tvq: number;
   accommodationTax: number;
@@ -67,6 +72,8 @@ export function rowsToAdminSettings(
     ),
     contactEmail:
       rowMap.get("contact_email") ?? SETTINGS_DEFAULTS.contact_email,
+    contactPhone:
+      rowMap.get("contact_phone") ?? SETTINGS_DEFAULTS.contact_phone,
     tps: parseFloat(
       rowMap.get("tps") ?? String(SETTINGS_DEFAULTS.tps)
     ),
@@ -83,6 +90,7 @@ export function toPublicSettings(admin: AdminSettings): PublicSettings {
   return {
     nightlyPrice: admin.nightlyPrice,
     contactEmail: admin.contactEmail,
+    contactPhone: admin.contactPhone,
     tps: admin.tps,
     tvq: admin.tvq,
     accommodationTax: admin.accommodationTax,

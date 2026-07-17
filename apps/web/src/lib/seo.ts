@@ -6,7 +6,7 @@
  * the machine-readable NAP (name/address/phone) stays in lock-step with the
  * visible copy.
  */
-import { SITE, AMENITIES, FAQ, DEFAULTS, type Faq } from "./content";
+import { SITE, AMENITIES, FAQ, DEFAULTS, phoneToHref, type Faq } from "./content";
 
 /** Canonical production origin, no trailing slash. */
 export const SITE_URL = SITE.url;
@@ -28,7 +28,11 @@ export type JsonLd = Record<string, unknown>;
  * full NAP, geo, price band and the CITQ registration number so search and
  * answer engines can surface a rich lodging entity.
  */
-export function lodgingBusinessSchema(): JsonLd {
+export function lodgingBusinessSchema(phone?: string): JsonLd {
+  // Machine-readable NAP phone: prefer the configured settings value (threaded
+  // in by the caller), else the static SITE default. `phoneToHref` normalises
+  // to E.164; strip the `tel:` scheme for the JSON-LD `telephone` field.
+  const telephone = phoneToHref(phone).replace(/^tel:/, "");
   return {
     "@context": "https://schema.org",
     "@type": "LodgingBusiness",
@@ -37,7 +41,7 @@ export function lodgingBusinessSchema(): JsonLd {
     description:
       "Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres insonorisées, stockage d'équipement et tarifs d'entreprise.",
     url: `${SITE_URL}/`,
-    telephone: "+14186551212",
+    telephone,
     email: SITE.email,
     image: OG_IMAGE,
     priceRange: "$$",

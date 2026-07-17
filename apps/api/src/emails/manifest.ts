@@ -59,6 +59,14 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
     sampleFile: "review-request.json",
     requiredFields: ["firstName", "checkIn", "checkOut", "roomLabel", "reviewUrl"],
   },
+  "room-assigned": {
+    name: { fr: "Chambre assignée", en: "Room Assigned" },
+    subject: { fr: "Votre chambre pour la réservation #{{confirmationCode}}", en: "Your room for booking #{{confirmationCode}}" },
+    sampleFile: "room-assigned.json",
+    // `passkey` is intentionally NOT required — it is referenced only inside
+    // {{#if passkeyEnabled}}, so a room with no pass-key still renders.
+    requiredFields: ["name", "roomLabel", "checkIn", "checkOut", "passkeyEnabled"],
+  },
 };
 
 export const TEMPLATE_KEYS: TemplateKey[] = [
@@ -68,6 +76,7 @@ export const TEMPLATE_KEYS: TemplateKey[] = [
   "reservation-cancellation",
   "invoice-receipt",
   "review-request",
+  "room-assigned",
 ];
 
 export function isTemplateKey(value: unknown): value is TemplateKey {

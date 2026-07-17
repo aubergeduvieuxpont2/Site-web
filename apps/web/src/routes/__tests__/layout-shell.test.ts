@@ -29,6 +29,11 @@ vi.mock("$lib/content", () => ({
     address: { street: "111, avenue Saint-Michel", city: "Saint-Raymond" },
   },
   NAV: [],
+  phoneToHref: (phone: string | null | undefined) => {
+    const digits = (phone ?? "").replace(/\D/g, "");
+    if (!digits) return "tel:+14186551212";
+    return digits.length === 10 ? `tel:+1${digits}` : `tel:+${digits}`;
+  },
 }));
 
 // The layout and the composed Footer query `window.matchMedia` (reduced

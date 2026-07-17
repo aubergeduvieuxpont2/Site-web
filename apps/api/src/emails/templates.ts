@@ -7,6 +7,7 @@ import reservationConfirmationSample from "../../emails/samples/reservation-conf
 import reservationCancellationSample from "../../emails/samples/reservation-cancellation.json";
 import invoiceReceiptSample from "../../emails/samples/invoice-receipt.json";
 import reviewRequestSample from "../../emails/samples/review-request.json";
+import roomAssignedSample from "../../emails/samples/room-assigned.json";
 
 export type Locale = "fr" | "en";
 export type TemplateKey =
@@ -15,7 +16,8 @@ export type TemplateKey =
   | "reservation-confirmation"
   | "reservation-cancellation"
   | "invoice-receipt"
-  | "review-request";
+  | "review-request"
+  | "room-assigned";
 
 export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   welcome: welcomeSample,
@@ -24,4 +26,5 @@ export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   "reservation-cancellation": reservationCancellationSample,
   "invoice-receipt": invoiceReceiptSample,
   "review-request": reviewRequestSample,
+  "room-assigned": roomAssignedSample,
 };

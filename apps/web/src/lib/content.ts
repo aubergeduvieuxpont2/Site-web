@@ -28,6 +28,18 @@ export const SITE = {
 } as const;
 
 /**
+ * Derive a `tel:` href from a human-formatted phone string. Non-digits are
+ * stripped; a 10-digit number is assumed North-American (`tel:+1…`), anything
+ * else is prefixed with a bare `+`. Falls back to the static `SITE.phoneHref`
+ * when the input is empty so a missing/blank configured value is safe.
+ */
+export function phoneToHref(phone: string | null | undefined): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (!digits) return SITE.phoneHref;
+  return digits.length === 10 ? `tel:+1${digits}` : `tel:+${digits}`;
+}
+
+/**
  * Frequently-asked questions surfaced on the home page and emitted as
  * `FAQPage` structured data. The visible copy and the JSON-LD are built from
  * this single source so they always match (a Google rich-result requirement).

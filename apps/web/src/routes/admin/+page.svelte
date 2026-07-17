@@ -52,6 +52,7 @@
   let settings = $state<AdminSettings>({
     nightlyPrice: 89,
     contactEmail: "info@aubergeduvieuxpont.ca",
+    contactPhone: "418 655-1212",
     marketingRoomCount: 12,
     assignableRoomCount: 12,
     tps: 5,
@@ -165,6 +166,9 @@
     }
     if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
       errors.contactEmail = "Courriel invalide";
+    }
+    if (!settings.contactPhone || !settings.contactPhone.trim()) {
+      errors.contactPhone = "Téléphone requis";
     }
     for (const key of TAX_KEYS) {
       const err = taxError(settings[key]);
@@ -703,6 +707,29 @@
                       id="err-contact-email"
                       role="alert"
                       data-testid="error-contact-email">{settingsErrors.contactEmail}</span
+                    >
+                  {/if}
+                </div>
+
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-contact-phone">
+                    Téléphone
+                  </label>
+                  <input
+                    id="input-contact-phone"
+                    type="text"
+                    bind:value={settings.contactPhone}
+                    class="page-admin__search-input"
+                    data-testid="input-contact-phone"
+                    aria-describedby={settingsErrors.contactPhone ? "err-contact-phone" : undefined}
+                    aria-invalid={!!settingsErrors.contactPhone}
+                  />
+                  {#if settingsErrors.contactPhone}
+                    <span
+                      class="page-admin__field-error"
+                      id="err-contact-phone"
+                      role="alert"
+                      data-testid="error-contact-phone">{settingsErrors.contactPhone}</span
                     >
                   {/if}
                 </div>

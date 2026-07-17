@@ -9,6 +9,8 @@ type RoomInput = {
   capacity: number;
   imageKey: string;
   isPublic: boolean;
+  passkeyEnabled: boolean;
+  passkey?: string;
 };
 
 afterEach(() => cleanup());
@@ -22,6 +24,8 @@ const filled: RoomInput = {
   capacity: 3,
   imageKey: "bedroom",
   isPublic: false,
+  passkeyEnabled: false,
+  passkey: "",
 };
 
 describe("RoomsForm", () => {
@@ -156,7 +160,58 @@ describe("RoomsForm", () => {
         capacity: 5,
         imageKey: "balcony",
         isPublic: false,
+        passkeyEnabled: false,
+        passkey: "",
       });
+    });
+  });
+
+  describe("passkey", () => {
+    it("hides the passkey input until the toggle is enabled", async () => {
+      const { getByTestId, queryByTestId } = render(RoomsForm, {
+        props: { onSubmit: noopSubmit },
+      });
+      expect(queryByTestId("rooms-form-passkey")).toBeNull();
+      await fireEvent.click(getByTestId("rooms-form-passkey-enabled"));
+      expect(queryByTestId("rooms-form-passkey")).not.toBeNull();
+    });
+
+    it("errors on submit when enabled but the key is empty", async () => {
+      const onSubmit = vi.fn(noopSubmit);
+      const { getByTestId } = render(RoomsForm, { props: { onSubmit } });
+      await fireEvent.input(getByTestId("rooms-form-name"), {
+        target: { value: "Chambre" },
+      });
+      await fireEvent.change(getByTestId("rooms-form-image-key"), {
+        target: { value: "bedroom" },
+      });
+      await fireEvent.click(getByTestId("rooms-form-passkey-enabled"));
+      await fireEvent.submit(getByTestId("rooms-form"));
+      expect(getByTestId("rooms-form").textContent).toContain(
+        "La clé est requise lorsqu'elle est activée.",
+      );
+      expect(onSubmit).not.toHaveBeenCalled();
+    });
+
+    it("emits passkeyEnabled and the trimmed key on valid submit", async () => {
+      const onSubmit = vi.fn(noopSubmit);
+      const { getByTestId } = render(RoomsForm, { props: { onSubmit } });
+      await fireEvent.input(getByTestId("rooms-form-name"), {
+        target: { value: "Chambre" },
+      });
+      await fireEvent.change(getByTestId("rooms-form-image-key"), {
+        target: { value: "bedroom" },
+      });
+      await fireEvent.click(getByTestId("rooms-form-passkey-enabled"));
+      await fireEvent.input(getByTestId("rooms-form-passkey"), {
+        target: { value: "  1234  " },
+      });
+      await fireEvent.submit(getByTestId("rooms-form"));
+
+      await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+      expect(onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ passkeyEnabled: true, passkey: "1234" }),
+      );
     });
   });
 

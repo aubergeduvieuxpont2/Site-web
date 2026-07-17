@@ -689,5 +689,5 @@
   title="Auberge du Vieux Pont — hébergement pour travailleurs de terrain"
   description="Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres insonorisées, stockage d'équipement, tarifs d'entreprise, à 30 min des chantiers."
   path="/"
-  schema={[lodgingBusinessSchema(), faqSchema(FAQ)]}
+  schema={[lodgingBusinessSchema(settings.contactPhone), faqSchema(FAQ)]}
 />

@@ -24,7 +24,7 @@ import {
   withPublicRoomCount,
 } from "./settings";
 import { createEmailsRouter } from "./emails";
-import type { RoomRow } from "./rooms";
+import type { RoomRow, PublicRoomRow } from "./rooms";
 import {
   RoomCreateSchema,
   RoomUpdateSchema,
@@ -625,12 +625,13 @@ app.get("/api/profile", async (c) => {
 // Public rooms endpoint
 app.get("/api/rooms", async (c) => {
   const sql = neon(c.env.DB_CONN);
+  // Public endpoint: never selects/returns the pass-key (a door/lock code).
   const rows = (await sql`
     SELECT slug, name, capacity, image_key, is_public
     FROM rooms
     WHERE is_public = true
     ORDER BY slug
-  `) as RoomRow[];
+  `) as PublicRoomRow[];
 
   return c.json(rows);
 });
@@ -728,7 +729,7 @@ app.get("/api/admin/rooms", async (c) => {
 
   const sql = neon(c.env.DB_CONN);
   const rooms = (await sql`
-    SELECT slug, name, capacity, image_key, is_public, created_at, updated_at
+    SELECT slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
     FROM rooms
     ORDER BY slug
   `) as RoomRow[];
@@ -756,9 +757,9 @@ app.post(
 
     try {
       const rows = (await sql`
-        INSERT INTO rooms (slug, name, capacity, image_key, is_public, created_at, updated_at)
-        VALUES (${slug}, ${data.name}, ${data.capacity}, ${data.imageKey}, ${data.isPublic}, now(), now())
-        RETURNING slug, name, capacity, image_key, is_public, created_at, updated_at
+        INSERT INTO rooms (slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at)
+        VALUES (${slug}, ${data.name}, ${data.capacity}, ${data.imageKey}, ${data.isPublic}, ${data.passkeyEnabled}, ${data.passkey ?? null}, now(), now())
+        RETURNING slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
       `) as RoomRow[];
 
       return c.json({ room: rows[0] }, 201);
@@ -791,9 +792,9 @@ app.put(
 
     const rows = (await sql`
       UPDATE rooms
-      SET name = ${data.name}, capacity = ${data.capacity}, image_key = ${data.imageKey}, is_public = ${data.isPublic}, updated_at = now()
+      SET name = ${data.name}, capacity = ${data.capacity}, image_key = ${data.imageKey}, is_public = ${data.isPublic}, passkey_enabled = ${data.passkeyEnabled}, passkey = ${data.passkey ?? null}, updated_at = now()
       WHERE slug = ${slug}
-      RETURNING slug, name, capacity, image_key, is_public, created_at, updated_at
+      RETURNING slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
     `) as RoomRow[];
 
     if (rows.length === 0) {
@@ -1340,6 +1341,7 @@ app.post(
     await Promise.all([
       sql`INSERT INTO settings (key, value) VALUES ('nightly_price', ${data.nightlyPrice.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('contact_email', ${data.contactEmail}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('contact_phone', ${data.contactPhone}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('tps', ${data.tps.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('tvq', ${data.tvq.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('accommodation_tax', ${data.accommodationTax.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
