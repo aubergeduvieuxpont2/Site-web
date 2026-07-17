@@ -1,0 +1,52 @@
+
+
+
+
+Envoyé depuis mon appareil Galaxy
+
+
+
+-------- Message d'origine --------
+De : Expedia Group <booknotif@expedia.com>
+Date : 2026-07-17 12 h 09 a.m. (GMT-05:00)
+À : forwarder@example.com
+Objet : Expedia - New Booking - Arriving on 5 Sep 2026
+
+NOTICE: The following notice is for hotel partners only. All other vendors (including Activity Service Providers) please disregard.
+HOTEL RESERVATION CONFIRMATIONS: Please provide booking confirmation code.
+Enter confirmation code at www.expediapartnercentral.com <https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjAiLCJ1biI6IiIsInUiOiJodHRwOi8vd3d3LmV4cGVkaWFwYXJ0bmVyY2VudHJhbC5jb20ifQ/uIssL3MRJPiH5k9N0PLI-Q>
+
+New Reservation
+[Expedia Logo]  Auberge du vieux pont   [Expedia Lodging Partner Services Logo]
+Saint-Raymond,QC,CAN
+
+Guest has PRE-PAID
+Reservation ID: 2511634261<https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjEiLCJ1biI6IiIsInUiOiJodHRwczovL2FwcHMuZXhwZWRpYXBhcnRuZXJjZW50cmFsLmNvbS9sb2RnaW5nL3Jlc2VydmF0aW9ucy9yZXNlcnZhdGlvbkRldGFpbHMuaHRtbD9yZXNlcnZhdGlvbklkcz0yNTExNjM0MjYxJmh0aWQ9MTI4NzM4NjExIn0/vLflJxPRAFAQ4y41qcsbxA> Guest: Marie Gagnon  Booked on: Jul 16, 2026 9:10 PM PST
+1 1111111111
+Guest Email: ntvrowuydj@m.expediapartnercentral.com
+Room Type Code: RoomCode
+Room Type Name:                 Economy Double Room, River View - Standard
+Pricing Model: Per Day Pricing
+Payment Instructions: Expedia collects payment from traveler: Hotel invoices Expedia.
+PaymentInstructionsMatch PaymentInstructionTest: Expedia collects payment from traveler: Hotel invoices Expedia. StrongCustomerAuthenticationTest: false NotificationType: BookingReserve NotificationTypeTest: BookingReserve
+Check-In        Check-Out       Adults  Kids/Ages       Room Nights     Hotel Conf
+Sep 5, 2026     Sep 6, 2026     2       0       1
+Special Request
+Daily Rate - 73.80 CAD
+Sat, Sep 05
+Rate Code: RateCode
+Extra Person:   0.00 CAD
+Taxes:  11.44 CAD
+Extra Charges:  0.00 CAD
+Total Cost:     85.24 CAD
+________________________________
+Receive instant notifications for Expedia Group bookings as they happen, with the Partner Central App.
+Download it today from the App Store®<https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjIiLCJ1biI6IiIsInUiOiJodHRwczovL2l0dW5lcy5hcHBsZS5jb20vYXBwL2FwcGxlLXN0b3JlL2lkOTg3Njc1OTk1P3B0PTI0NzkyMCZjdD1Cb29raW5nRW1haWxzJm10PTgifQ/Mwk1Umh0M1wS8phcSycL7A> or Google Play™<https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjMiLCJ1biI6IiIsInUiOiJodHRwczovL3BsYXkuZ29vZ2xlLmNvbS9zdG9yZS9hcHBzL2RldGFpbHM_aWQ9Y29tLmV4cGVkaWFwYXJ0bmVyY2VudHJhbCZyZWZlcnJlcj11dG1fc291cmNlJTNEU1NMJTI2dXRtX21lZGl1bSUzREVtYWlsJTI2dXRtX3Rlcm0lM0RCb29raW5nRW1haWwlMjZ1dG1fY29udGVudCUzREdldEluc3RhbnRCb29raW5nTm90aWZpY2F0aW9ucyUyNnV0bV9jYW1wYWlnbiUzREJvb2tpbmdFbWFpbHMifQ/e8QB7N0pt6l-CdqypiLgqg>
+________________________________
+DO NOT DISCLOSE CONTRACTED RATES TO GUESTS
+For suppliers in US only: Unless properly and timely modified by the hotel as provided in Expedia Partner Central, the total transaction amounts including, the room rate, taxes charged, and other fees or charges enumerated here will serve as the official tax invoice for both the hotel and Expedia for the identified bookings. This official tax invoice will supersede any other tax invoices issued by hotel to Expedia. Expedia may present this communication to taxing authorities as the official tax invoice and documentation of the amount of taxes charged by hotel to Expedia with respect to the identified bookings should taxing authorities request such documentation in the course of an audit examination or other inquiry.
+View or confirm the reservation <https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjQiLCJ1biI6IiIsInUiOiJodHRwczovL2FwcHMuZXhwZWRpYXBhcnRuZXJjZW50cmFsLmNvbS9sb2RnaW5nL3Jlc2VydmF0aW9ucy9yZXNlcnZhdGlvbkRldGFpbHMuaHRtbD9yZXNlcnZhdGlvbklkcz0yNTExNjM0MjYxJmh0aWQ9MTI4NzM4NjExIn0/6Qi28vdWVcGWM4H7WX-7hw> at ExpediaPartnerCentral.com
+________________________________
+Contact us<https://link.expedia.com/c/7/eyJhaSI6NDc2ODk4ODcsImUiOiJtZy1lbmM6clYxWEpOV1NscFdZeE1qQkgrNWtoU2RBWmQ3M2VyNklGUkFzeldEdS93QT0iLCJycSI6IjAyLXQyNjE5OC00YWU2ZTI0ZTFmNjk0ZjY1YjUyMTMwYzRmMjE0YzZkYiIsIm0iOmZhbHNlLCJ1aSI6IjUiLCJ1biI6IiIsInUiOiJodHRwczovL2FwcHMuZXhwZWRpYXBhcnRuZXJjZW50cmFsLmNvbS9sb2RnaW5nL2hlbHAvY29udGFjdHVzLmh0bWwifQ/puMgeuyH1uNbqP11Hf4zeQ>      Phone: 1-888-EXP-1STOP  Fax: 1 (702)6426228
+Report Date: Jul 16, 2026 9:09 PM PST   Hotel Code: Not Applicable      Chain Code: Not Applicable      Brand Code: Not Applicable
+
