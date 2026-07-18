@@ -1,7 +1,7 @@
 export type Env = {
   API: Fetcher;
   FORWARD_TO: string;
-  // Operator address whose forwarded OTA emails are processed (provider
-  // inferred from subject) but never forwarded to FORWARD_TO.
-  DEV_SENDER?: string;
+  // Shared secret attached (as X-Internal-Auth) on every internal POST to the
+  // API Worker. Unset means the API will reject the call (fail-closed).
+  INTERNAL_OTA_SECRET?: string;
 };

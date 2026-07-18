@@ -109,13 +109,20 @@ export function buildReservationHubspotOps(input: ReservationSyncInput): Hubspot
   ];
 }
 
-export async function enqueueHubspotOps(hubspot: Fetcher, ops: HubspotOp[]): Promise<void> {
+export async function enqueueHubspotOps(
+  hubspot: Fetcher,
+  ops: HubspotOp[],
+  authSecret?: string,
+): Promise<void> {
   try {
     for (const op of ops) {
       await hubspot.fetch(
         new Request("http://hubspot/ops/enqueue", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Auth": authSecret ?? "",
+          },
           body: JSON.stringify(op),
         }),
       );
