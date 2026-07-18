@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Env } from "../env";
 import { hubspotFetch } from "../hubspotClient";
 import { resolveOrCreateContactByEmail } from "./contact";
+import { encodeIdSegment } from "./ids";
 
 export const DealCreateSchema = z.object({
   contactEmail: z.string().trim().min(1),
@@ -63,9 +64,10 @@ async function ensureDealContactAssociation(
   // The v4 single-association PUT expects a bare array body; failures propagate
   // so the outbox retries until the association exists.
   const ASSOCIATION_TYPE_DEAL_TO_CONTACT = 3;
+  // M13: percent-encode ids before interpolating them into the path.
   await hubspotFetch(
     env,
-    `/crm/v4/objects/deals/${dealId}/associations/contacts/${contactId}`,
+    `/crm/v4/objects/deals/${encodeIdSegment(dealId)}/associations/contacts/${encodeIdSegment(contactId)}`,
     {
       method: "PUT",
       body: JSON.stringify([

@@ -691,6 +691,14 @@ describe("Operations", () => {
               )
             );
           }
+          if (url.includes("/crm/v3/objects/notes/search")) {
+            return Promise.resolve(
+              new Response(JSON.stringify({ results: [] }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              })
+            );
+          }
           if (url.includes("/crm/v3/objects/notes")) {
             return Promise.resolve(
               new Response(JSON.stringify({ id: "note-111" }), {
@@ -716,7 +724,8 @@ describe("Operations", () => {
         expect(result.hubspotId).toBe("note-111");
 
         const noteCreateCall = mockFetch.mock.calls.find((call: any) =>
-          call[0].includes("/crm/v3/objects/notes")
+          call[0].includes("/crm/v3/objects/notes") &&
+          !call[0].includes("/search")
         );
         expect(noteCreateCall).toBeDefined();
         if (noteCreateCall) {
