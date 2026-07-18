@@ -39,7 +39,7 @@
 </script>
 
 <header
-  class="fixed inset-x-0 top-0 z-50 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] {scrolled ||
+  class="fixed inset-x-0 top-[var(--maintenance-h,0px)] z-50 transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] {scrolled ||
   open
     ? 'border-b border-hairline-2 bg-surface/90 backdrop-blur-md'
     : 'border-b border-transparent bg-transparent'}"
