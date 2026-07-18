@@ -7,7 +7,7 @@ export interface OutboxRow {
   kind: string;
   payload: Record<string, unknown>;
   dedupe_key: string | null;
-  status: "pending" | "delivered" | "failed";
+  status: "pending" | "processing" | "delivered" | "failed";
   attempts: number;
   next_attempt_at: string;
   last_error: string | null;
@@ -53,14 +53,29 @@ export async function enqueue(
   return rows[0].id.toString();
 }
 
+// How long a claimed row is hidden from other drains. Neon HTTP autocommits
+// per statement, so `FOR UPDATE SKIP LOCKED` only guards the claiming UPDATE
+// instant; the durable guard is flipping the row to 'processing' and pushing
+// `next_attempt_at` a lease into the future within that same UPDATE.
+export const CLAIM_LEASE_SECONDS = 5 * 60;
+
+// Claim a batch atomically (finding H5). The claiming UPDATE sets
+// status='processing' AND advances next_attempt_at by the lease, so a claimed
+// row leaves the claimable set for the whole lease window — overlapping cron
+// drains can no longer re-claim an in-flight row. The selection also acts as
+// the reaper: a row still in 'processing' past its lease/next_attempt_at (a
+// drain that died mid-flight) is treated as claimable again.
 export async function claimBatch(env: Env, limit: number = 25): Promise<OutboxRow[]> {
   const sql = neon(env.DB_CONN);
   const rows = await sql`
     UPDATE hubspot_outbox
-    SET attempts = attempts + 1, updated_at = now()
+    SET status = 'processing',
+        next_attempt_at = now() + (${CLAIM_LEASE_SECONDS} * interval '1 second'),
+        attempts = attempts + 1,
+        updated_at = now()
     WHERE id IN (
       SELECT id FROM hubspot_outbox
-      WHERE status = 'pending' AND next_attempt_at <= now()
+      WHERE status IN ('pending', 'processing') AND next_attempt_at <= now()
       ORDER BY next_attempt_at ASC
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED

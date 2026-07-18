@@ -47,28 +47,26 @@ export async function resolveOrCreateContactByEmail(
   email: string,
   extra?: { name?: string; phone?: string; firstname?: string; lastname?: string; company?: string }
 ): Promise<string> {
-  let existingId: string | null = null;
-  try {
-    const searchResult = (await hubspotFetch(
-      env,
-      `/crm/v3/objects/contacts/search`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          filterGroups: [
-            { filters: [{ propertyName: "email", operator: "EQ", value: email }] },
-          ],
-          limit: 1,
-        }),
-      }
-    )) as any;
-    if (searchResult?.results?.length > 0) {
-      existingId = searchResult.results[0].id;
+  // Finding M15: only an empty search result means "not found → create". A
+  // transient failure (429/5xx surfaced by hubspotFetch as a thrown
+  // NormalizedError) must propagate so the outbox retries — swallowing it here
+  // would create a DUPLICATE contact on every rate-limit blip.
+  const searchResult = (await hubspotFetch(
+    env,
+    `/crm/v3/objects/contacts/search`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        filterGroups: [
+          { filters: [{ propertyName: "email", operator: "EQ", value: email }] },
+        ],
+        limit: 1,
+      }),
     }
-  } catch {}
+  )) as any;
 
-  if (existingId) {
-    return existingId;
+  if (searchResult?.results?.length > 0) {
+    return searchResult.results[0].id;
   }
 
   const properties: Record<string, string> = { email };
@@ -94,33 +92,34 @@ export async function executeContactUpsert(
   let existingId: string | null = payload.contactId || null;
 
   if (!existingId) {
-    try {
-      const searchResult = (await hubspotFetch(
-        env,
-        `/crm/v3/objects/contacts/search`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            filterGroups: [
-              {
-                filters: [
-                  {
-                    propertyName: "email",
-                    operator: "EQ",
-                    value: payload.email,
-                  },
-                ],
-              },
-            ],
-            limit: 1,
-          }),
-        }
-      )) as any;
-
-      if (searchResult?.results?.length > 0) {
-        existingId = searchResult.results[0].id;
+    // Finding M15: do NOT swallow search errors. Only an empty result set is a
+    // genuine "not found" that justifies a CREATE; a transient error must
+    // propagate so the outbox retries instead of minting a duplicate contact.
+    const searchResult = (await hubspotFetch(
+      env,
+      `/crm/v3/objects/contacts/search`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          filterGroups: [
+            {
+              filters: [
+                {
+                  propertyName: "email",
+                  operator: "EQ",
+                  value: payload.email,
+                },
+              ],
+            },
+          ],
+          limit: 1,
+        }),
       }
-    } catch {}
+    )) as any;
+
+    if (searchResult?.results?.length > 0) {
+      existingId = searchResult.results[0].id;
+    }
   }
 
   if (existingId) {

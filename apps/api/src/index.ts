@@ -1006,7 +1006,12 @@ app.post(
             await c.env.HUBSPOT.fetch(
               new Request("http://hubspot/ops/enqueue", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  // Batch-1 shared secret: the gateway fails /ops/enqueue closed
+                  // with 401 without it, which previously silenced this sync.
+                  "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+                },
                 body: JSON.stringify({
                   kind: "contact.updateById",
                   payload: { contactId: user.hubspot_contact_id, properties: { email: newEmail } },
