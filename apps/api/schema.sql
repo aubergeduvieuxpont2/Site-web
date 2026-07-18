@@ -74,12 +74,6 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS room_visibility (
-  slug TEXT PRIMARY KEY,
-  is_public BOOLEAN NOT NULL DEFAULT true,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS rooms (
   slug TEXT PRIMARY KEY,
   name TEXT NOT NULL,

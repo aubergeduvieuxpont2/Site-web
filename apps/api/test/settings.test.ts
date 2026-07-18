@@ -105,6 +105,20 @@ describe("Settings", () => {
       }
     });
 
+    it("accepts assignableRoomCount of 0 (no public rooms; server-derived)", () => {
+      const valid = {
+        nightlyPrice: 99,
+        weeklyPrice: 560,
+        contactEmail: "test@example.com",
+        ...CONTACT,
+        ...DEFAULT_TAXES,
+        assignableRoomCount: 0,
+        reservationsEnabled: true,
+      };
+      const result = SettingsUpdateSchema.safeParse(valid);
+      expect(result.success).toBe(true);
+    });
+
     it("rejects negative price", () => {
       const invalid = {
         nightlyPrice: -50,
