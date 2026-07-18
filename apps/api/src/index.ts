@@ -20,6 +20,7 @@ import {
   type User,
 } from "./auth/session";
 import { authRateLimiter } from "./auth/middleware";
+import { checkSharedSecret, INTERNAL_AUTH_HEADER } from "./auth/internalAuth";
 import {
   SettingsUpdateSchema,
   settingsHook,
@@ -62,6 +63,10 @@ type Bindings = {
   DB_CONN: string;
   HUBSPOT: Fetcher;
   ADMIN_EMAIL: string;
+  // Shared secret presented to the HubSpot gateway on every /ops/* call.
+  GATEWAY_AUTH_SECRET?: string;
+  // Shared secret required from the email-ingest Worker on /internal/ota-bookings.
+  INTERNAL_OTA_SECRET?: string;
   RESEND_API_KEY: string;
 };
 
@@ -445,6 +450,7 @@ app.post(
           roomCount: data.roomCount,
           description: data.message,
         }),
+        c.env.GATEWAY_AUTH_SECRET,
       )
     );
 
@@ -490,6 +496,11 @@ app.get("/api/availability", rateLimitMiddleware, async (c) => {
 // path is unreachable from the internet — same isolation model as the
 // route-less HubSpot gateway.
 app.post("/internal/ota-bookings", async (c) => {
+  // Authenticate the service-binding caller BEFORE reading the body: an absent
+  // or mismatched X-Internal-Auth fails closed with 401.
+  if (!checkSharedSecret(c.req.header(INTERNAL_AUTH_HEADER), c.env.INTERNAL_OTA_SECRET)) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
   let raw: unknown;
   try {
     raw = await c.req.json();
@@ -558,6 +569,7 @@ app.post("/internal/ota-bookings", async (c) => {
         roomCount: 1,
         description: message,
       }),
+      c.env.GATEWAY_AUTH_SECRET,
     )
   );
 
@@ -643,7 +655,10 @@ app.post(
             await c.env.HUBSPOT.fetch(
               new Request("http://hubspot/ops/enqueue", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+                },
                 body: JSON.stringify({
                   kind: "contact.upsert",
                   payload: contactPayload,
@@ -1547,7 +1562,10 @@ app.post(
     await c.env.HUBSPOT.fetch(
       new Request("http://hubspot/ops/enqueue", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+        },
         body: JSON.stringify({
           kind: "invoice.create",
           payload: {
@@ -1607,7 +1625,10 @@ app.get("/api/admin/users/:id", async (c) => {
       const hsResult = await c.env.HUBSPOT.fetch(
         new Request("http://hubspot/ops/execute", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+          },
           body: JSON.stringify({
             kind: "contact.getById",
             payload: { contactId: userRows[0].hubspot_contact_id },

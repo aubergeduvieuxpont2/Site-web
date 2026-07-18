@@ -5,24 +5,41 @@ import { handleEmail } from "../src/index";
 
 const FIXTURES = join(__dirname, "fixtures");
 
-function rawEmail(from: string, subject: string, textBody: string): Uint8Array {
+// A domain-aligned DKIM pass for airbnb.com — the default "verified" header so
+// the happy-path tests reach reservation creation.
+const AIRBNB_AUTH = "mx.google.com; dkim=pass header.d=airbnb.com; spf=pass smtp.mailfrom=bounce.airbnb.com";
+
+function rawEmail(
+  from: string,
+  subject: string,
+  textBody: string,
+  authResults: string | null = AIRBNB_AUTH,
+): Uint8Array {
   // Minimal RFC 5322 message; postal-mime handles UTF-8 8bit bodies.
-  const msg = [
+  const lines = [
     `From: Airbnb <${from}>`,
     `To: bookings@aubergeduvieuxpont.ca`,
     `Subject: ${subject}`,
     `Date: Fri, 17 Jul 2026 10:13:00 -0400`,
+  ];
+  if (authResults) lines.push(`Authentication-Results: ${authResults}`);
+  lines.push(
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset=utf-8`,
     `Content-Transfer-Encoding: 8bit`,
     ``,
     textBody,
-  ].join("\r\n");
-  return new TextEncoder().encode(msg);
+  );
+  return new TextEncoder().encode(lines.join("\r\n"));
 }
 
-function makeMessage(from: string, subject: string, textBody: string) {
-  const raw = rawEmail(from, subject, textBody);
+function makeMessage(
+  from: string,
+  subject: string,
+  textBody: string,
+  authResults: string | null = AIRBNB_AUTH,
+) {
+  const raw = rawEmail(from, subject, textBody, authResults);
   return {
     from,
     to: "bookings@aubergeduvieuxpont.ca",
@@ -35,11 +52,21 @@ function makeMessage(from: string, subject: string, textBody: string) {
   } as any;
 }
 
+function headerFrom(input: RequestInfo | URL, init?: RequestInit): string | null {
+  if (typeof input !== "string" && input instanceof Request) {
+    return input.headers.get("X-Internal-Auth");
+  }
+  const h = init?.headers as Record<string, string> | undefined;
+  return h?.["X-Internal-Auth"] ?? null;
+}
+
+const OTA_SECRET = "ota-secret";
+
 function makeEnv() {
-  const calls: { url: string; body: any }[] = [];
+  const calls: { url: string; body: any; authHeader: string | null }[] = [];
   const env = {
     FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
-    DEV_SENDER: "ychasse01@gmail.com",
+    INTERNAL_OTA_SECRET: OTA_SECRET,
     API: {
       fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : (input as Request).url;
@@ -47,7 +74,7 @@ function makeEnv() {
           typeof input !== "string" && input instanceof Request
             ? await input.clone().text()
             : String(init?.body ?? "");
-        calls.push({ url, body: JSON.parse(bodyText) });
+        calls.push({ url, body: JSON.parse(bodyText), authHeader: headerFrom(input, init) });
         return new Response(JSON.stringify({ ok: true }), { status: 202 });
       }),
     },
@@ -108,7 +135,7 @@ describe("handleEmail", () => {
   });
 
   it("rejects unknown senders — no forward, no API call", async () => {
-    const message = makeMessage("news@example.com", "Promo", "hello");
+    const message = makeMessage("news@example.com", "Promo", "hello", null);
     const { env, calls } = makeEnv();
     await handleEmail(message, env);
     expect(message.setReject).toHaveBeenCalled();
@@ -116,29 +143,66 @@ describe("handleEmail", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("processes a dev-sender forward end-to-end without forwarding it", async () => {
+  it("T-EI-001c: forwards but creates NO reservation when auth is missing", async () => {
     const message = makeMessage(
-      "ychasse01@gmail.com",
-      "FW: Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
       airbnbText,
+      null, // no Authentication-Results header
     );
     const { env, calls } = makeEnv();
     await handleEmail(message, env);
-    expect(message.forward).not.toHaveBeenCalled();
-    expect(message.setReject).not.toHaveBeenCalled();
-    expect(calls).toHaveLength(1);
-    expect(calls[0].body.status).toBe("parsed");
-    expect(calls[0].body.source).toBe("airbnb");
-    expect(calls[0].body.externalRef).toBe("HM45MDTHZ4");
+    expect(message.forward).toHaveBeenCalledWith("aubergeduvieuxpont2@hotmail.com");
+    // No parsed booking POST (in fact no internal POST at all).
+    expect(calls).toHaveLength(0);
+    expect(calls.some((c) => c.body.status === "parsed")).toBe(false);
   });
 
-  it("rejects dev-sender emails with unrelated subjects", async () => {
-    const message = makeMessage("ychasse01@gmail.com", "Lunch tomorrow?", "hello");
+  it("T-EI-001c: forwards but creates NO reservation when auth fails / is unaligned", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+      "mx.google.com; dkim=fail header.d=airbnb.com; spf=pass smtp.mailfrom=evil.com",
+    );
     const { env, calls } = makeEnv();
     await handleEmail(message, env);
-    expect(message.setReject).toHaveBeenCalled();
-    expect(message.forward).not.toHaveBeenCalled();
+    expect(message.forward).toHaveBeenCalled();
     expect(calls).toHaveLength(0);
+  });
+
+  it("T-EI-003a: attaches X-Internal-Auth on every internal POST", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const calls: { url: string; body: any; authHeader: string | null }[] = [];
+    const env = {
+      FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      INTERNAL_OTA_SECRET: OTA_SECRET,
+      API: {
+        fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : (input as Request).url;
+          const bodyText =
+            typeof input !== "string" && input instanceof Request
+              ? await input.clone().text()
+              : String(init?.body ?? "");
+          calls.push({ url, body: JSON.parse(bodyText), authHeader: headerFrom(input, init) });
+          // Reject the first (parsed) POST so a fallback POST also fires:
+          // both must carry the header.
+          return calls.length === 1
+            ? new Response("bad request", { status: 400 })
+            : new Response(JSON.stringify({ ok: true }), { status: 202 });
+        }),
+      },
+    } as any;
+
+    await handleEmail(message, env);
+    expect(calls).toHaveLength(2);
+    for (const c of calls) {
+      expect(c.authHeader).toBe(OTA_SECRET);
+    }
   });
 
   it("still forwards OTA mail when MIME parsing fails, using the envelope sender", async () => {
@@ -173,6 +237,7 @@ describe("handleEmail", () => {
     const calls: { url: string; body: any }[] = [];
     const env = {
       FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      INTERNAL_OTA_SECRET: OTA_SECRET,
       API: {
         fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
           const url = typeof input === "string" ? input : (input as Request).url;
@@ -206,6 +271,7 @@ describe("handleEmail", () => {
     );
     const env = {
       FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      INTERNAL_OTA_SECRET: OTA_SECRET,
       API: { fetch: vi.fn(async () => { throw new Error("binding down"); }) },
     } as any;
     await expect(handleEmail(message, env)).resolves.toBeUndefined();

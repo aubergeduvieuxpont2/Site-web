@@ -73,6 +73,23 @@ describe("enqueueHubspotOps", () => {
     expect(body.kind).toBe("contact.upsert");
   });
 
+  it("attaches X-Internal-Auth = GATEWAY_AUTH_SECRET on every op (T-API-002a)", async () => {
+    const calls: Request[] = [];
+    const fetcher = { fetch: vi.fn(async (req: Request) => { calls.push(req); return new Response("{}", { status: 202 }); }) } as any;
+    await enqueueHubspotOps(
+      fetcher,
+      buildReservationHubspotOps({
+        reservationId: 1, email: "a@b.co", firstName: "A", lastName: null,
+        checkIn: null, checkOut: null, room: null, guests: 1, roomCount: 1, description: null,
+      }),
+      "gw-secret",
+    );
+    expect(calls).toHaveLength(2);
+    for (const req of calls) {
+      expect(req.headers.get("X-Internal-Auth")).toBe("gw-secret");
+    }
+  });
+
   it("swallows fetch errors", async () => {
     const fetcher = { fetch: vi.fn(async () => { throw new Error("down"); }) } as any;
     await expect(

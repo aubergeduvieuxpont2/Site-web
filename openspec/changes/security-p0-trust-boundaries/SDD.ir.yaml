@@ -1,0 +1,421 @@
+REQ:
+  R-GW-001:
+    actor: API Worker (service binding)
+    capability: authenticate to the HubSpot gateway with a shared secret header
+    constraints: 401 on missing/mismatched header; constant-time compare; before any
+      op runs
+    priority: MUST
+    tests:
+    - T-GW-001a
+    - T-GW-001b
+  R-GW-002:
+    actor: Operator / monitoring
+    capability: read gateway health without leaking token/DB error text
+    constraints: generic {status:ok|degraded}; 200 ok / 503 degraded
+    priority: MUST
+    tests:
+    - T-GW-002a
+  R-GW-003:
+    actor: HubSpot gateway config
+    capability: disable public workers.dev and preview URLs
+    constraints: workers_dev=false and preview_urls=false
+    priority: MUST
+    tests:
+    - T-GW-003a
+  R-EI-001:
+    actor: Email-ingest Worker
+    capability: verify inbound OTA mail is DKIM/SPF domain-aligned before creating
+      a reservation
+    constraints: pass required (dkim preferred, spf accepted) aligned to provider
+      registrable domain; else forward+log only
+    priority: MUST
+    tests:
+    - T-EI-001a
+    - T-EI-001b
+    - T-EI-001c
+  R-EI-002:
+    actor: Email-ingest config/runtime
+    capability: remove spoofable DEV_SENDER bypass from production
+    constraints: no DEV_SENDER in prod vars; no bare-From trust; forwarding never
+      suppressed in prod
+    priority: MUST
+    tests:
+    - T-EI-002a
+  R-EI-003:
+    actor: Email-ingest Worker
+    capability: authenticate to the API internal endpoint with a shared secret header
+    constraints: attach X-Internal-Auth on both internal POSTs
+    priority: MUST
+    tests:
+    - T-EI-003a
+  R-API-001:
+    actor: API Worker
+    capability: require X-Internal-Auth on /internal/ota-bookings
+    constraints: 401 on missing/mismatch; constant-time compare; before body handling
+    priority: MUST
+    tests:
+    - T-API-001a
+    - T-API-001b
+  R-API-002:
+    actor: API Worker
+    capability: attach X-Internal-Auth on all HUBSPOT.fetch calls
+    constraints: GATEWAY_AUTH_SECRET on all five call sites
+    priority: MUST
+    tests:
+    - T-API-002a
+  R-CI-001:
+    actor: CI deploy workflows
+    capability: scope Cloudflare credentials to the deploy step only
+    constraints: no job-level env token; step-level env on wrangler deploy; --ignore-scripts
+      where feasible
+    priority: MUST
+    tests:
+    - T-CI-001a
+E:
+  E-InternalAuthHeader:
+    fields:
+      name: string ("X-Internal-Auth")
+      value: string (shared secret)
+    invariants:
+    - INV-constant-time-compare
+    - INV-fail-closed
+  E-AuthResults:
+    fields:
+      raw: string (Authentication-Results header)
+      method: string (dkim|spf)
+      result: string (pass|fail|none|...)
+      domain: string (header.d / smtp.mailfrom / smtp.helo)
+    invariants:
+    - INV-domain-aligned
+OP:
+  OP-Gateway.opsAuth:
+    input:
+      header: X-Internal-Auth
+      secret: GATEWAY_AUTH_SECRET
+    auth:
+    - gateway-shared-secret
+    pre: []
+    err:
+    - ERR-UNAUTH-GW
+    out:
+      pass: boolean
+  OP-Api.internalAuth:
+    input:
+      header: X-Internal-Auth
+      secret: INTERNAL_OTA_SECRET
+    auth:
+    - internal-shared-secret
+    pre: []
+    err:
+    - ERR-UNAUTH-API
+    out:
+      pass: boolean
+  OP-EmailIngest.verifyAuth:
+    input: '{ authResults: string|null, allowedDomains: string[] }'
+    auth: []
+    pre: []
+    err: []
+    out:
+      verified: boolean
+ERR:
+  ERR-UNAUTH-GW:
+    code: 401
+    meaning: "gateway shared secret missing or mismatched \u2014 body {ok:false,status:401,message:\"\
+      Unauthorized\"}"
+  ERR-UNAUTH-API:
+    code: 401
+    meaning: "internal shared secret missing or mismatched \u2014 body {error:\"Unauthorized\"\
+      }"
+AUTH:
+  gateway-shared-secret: caller must present X-Internal-Auth equal to GATEWAY_AUTH_SECRET
+    (API and HubSpot Workers share the value)
+  internal-shared-secret: caller must present X-Internal-Auth equal to INTERNAL_OTA_SECRET
+    (API and email-ingest Workers share the value)
+INV:
+  INV-constant-time-compare: all secret comparisons use length-guarded XOR with no
+    early return
+  INV-fail-closed: an unset/empty secret yields 401, never open access
+  INV-domain-aligned: trust is granted only when a pass result's domain equals or
+    is a subdomain of an allowed provider domain
+  INV-no-secret-in-web: no new secret appears in apps/web or the client bundle
+  INV-forward-preserved: verification failure suppresses the reservation but never
+    suppresses forwarding in production
+API:
+  POST /ops/enqueue:
+    input: EnvelopeSchema + X-Internal-Auth
+    output:
+      id: null
+    errors:
+    - ERR-UNAUTH-GW
+    auth: gateway-shared-secret
+  POST /ops/execute:
+    input: EnvelopeSchema + X-Internal-Auth
+    output:
+      ok: null
+      hubspotId: null
+      data: null
+    errors:
+    - ERR-UNAUTH-GW
+    auth: gateway-shared-secret
+  GET /health:
+    input: none
+    output: '{ status: "ok" | "degraded" }'
+    errors: []
+    auth: none
+  POST /internal/ota-bookings:
+    input: OTA payload + X-Internal-Auth
+    output: '{ ok } | { reservationId } | { ok, duplicate }'
+    errors:
+    - ERR-UNAUTH-API
+    auth: internal-shared-secret
+UI: {}
+DATA:
+  migrations: none (no schema change this batch)
+  secrets:
+  - GATEWAY_AUTH_SECRET (API + HubSpot Workers)
+  - INTERNAL_OTA_SECRET (API + email-ingest Workers)
+  - DEV_INGEST_SECRET (email-ingest dev environment only)
+TEST:
+  T-GW-001a:
+    verifies: R-GW-001
+    behaviour: POST /ops/enqueue and /ops/execute with missing or wrong X-Internal-Auth
+      return 401 Unauthorized
+    steps:
+    - app.request /ops/enqueue with no header -> assert 401
+    - app.request /ops/execute with wrong header -> assert 401
+  T-GW-001b:
+    verifies: R-GW-001
+    behaviour: correct X-Internal-Auth passes through to enqueue/execute (202/200)
+    steps:
+    - app.request with header == GATEWAY_AUTH_SECRET -> assert not 401
+  T-GW-002a:
+    verifies: R-GW-002
+    behaviour: /health returns {status:ok} on success and {status:degraded} on failure
+      with no error text
+    steps:
+    - stub passing token+db -> assert 200 {status:ok}
+    - stub failing token check -> assert 503 {status:degraded}, body has no token
+      message
+  T-GW-003a:
+    verifies: R-GW-003
+    behaviour: wrangler.jsonc has workers_dev:false and preview_urls:false
+    steps:
+    - read config
+    - assert both keys false
+  T-EI-001a:
+    verifies: R-EI-001
+    behaviour: verifyAuth true only for domain-aligned dkim/spf pass; false for other-domain/non-pass/null
+    steps:
+    - dkim=pass header.d=airbnb.com, allowed airbnb -> true
+    - spf=pass smtp.mailfrom=bounce.expedia.com, allowed expedia -> true
+    - dkim=pass header.d=evil.com -> false
+    - null / fail / none -> false
+  T-EI-001b:
+    verifies: R-EI-001
+    behaviour: OTA booking with passing aligned Authentication-Results creates a reservation
+    steps:
+    - handler with valid header -> assert internal POST body.status == parsed
+  T-EI-001c:
+    verifies: R-EI-001
+    behaviour: OTA booking without passing aligned auth is forwarded but creates no
+      reservation
+    steps:
+    - handler with empty/failing header -> assert forward called
+    - internal POST not a parsed booking
+  T-EI-002a:
+    verifies: R-EI-002
+    behaviour: production wrangler vars contain no DEV_SENDER; no bare-From trust
+      path in prod
+    steps:
+    - read config
+    - assert DEV_SENDER absent from top-level vars
+  T-EI-003a:
+    verifies: R-EI-003
+    behaviour: 'both internal POSTs carry X-Internal-Auth: INTERNAL_OTA_SECRET'
+    steps:
+    - handler run -> assert outgoing header present on both fetches
+  T-API-001a:
+    verifies: R-API-001
+    behaviour: /internal/ota-bookings with missing/wrong header returns 401 {error:Unauthorized}
+    steps:
+    - POST without header -> assert 401
+  T-API-001b:
+    verifies: R-API-001
+    behaviour: /internal/ota-bookings with correct header processes the body
+    steps:
+    - POST with header == INTERNAL_OTA_SECRET -> assert 2xx
+  T-API-002a:
+    verifies: R-API-002
+    behaviour: enqueueHubspotOps sets X-Internal-Auth on the outgoing /ops/enqueue
+      request
+    steps:
+    - call enqueueHubspotOps with a stub Fetcher -> assert header present
+  T-CI-001a:
+    verifies: R-CI-001
+    behaviour: deploy workflows have no job-level CLOUDFLARE_API_TOKEN; token is step-level
+      on deploy
+    steps:
+    - read yaml
+    - assert token only under a step env on wrangler deploy
+NFR:
+  security: constant-time secret compare; fail-closed; secrets never in apps/web
+  performance: O(1) header compare + one bounded Authentication-Results parse per
+    request
+  availability: verification failure forwards mail; /health signals degraded without
+    leaking detail
+  compatibility: npm run typecheck green across workspaces; existing suites remain
+    green
+FILE:
+  apps/hubspot/src/env.ts: TASK-hubspot
+  apps/hubspot/src/auth.ts: TASK-hubspot
+  apps/hubspot/src/index.ts: TASK-hubspot
+  apps/hubspot/test/gateway-auth.test.ts: TASK-hubspot
+  apps/api/src/index.ts: TASK-api
+  apps/api/src/ota.ts: TASK-api
+  apps/api/src/auth/internalAuth.ts: TASK-api
+  apps/api/test/internal-ota-auth.test.ts: TASK-api
+  apps/api/test/ota.test.ts: TASK-api
+  apps/email-ingest/src/verifyAuth.ts: TASK-email-ingest
+  apps/email-ingest/src/index.ts: TASK-email-ingest
+  apps/email-ingest/src/classify.ts: TASK-email-ingest
+  apps/email-ingest/src/types.ts: TASK-email-ingest
+  apps/email-ingest/test/verifyAuth.test.ts: TASK-email-ingest
+  apps/email-ingest/test/handler.test.ts: TASK-email-ingest
+  apps/hubspot/wrangler.jsonc: TASK-config
+  apps/api/wrangler.jsonc: TASK-config
+  apps/email-ingest/wrangler.jsonc: TASK-config
+  .dev.env.example: TASK-config
+  .github/workflows/deploy-prod.yml: TASK-ci
+  .github/workflows/deploy-path-a.yml: TASK-ci
+  .github/workflows/deploy-path-b.yml: TASK-ci
+TASK:
+  TASK-hubspot:
+    scope:
+    - R-GW-001
+    - R-GW-002
+    - R-GW-003
+    - OP-Gateway.opsAuth
+    - ERR-UNAUTH-GW
+    - T-GW-001a
+    - T-GW-001b
+    - T-GW-002a
+    - T-GW-003a
+    files:
+    - apps/hubspot/src/env.ts
+    - apps/hubspot/src/auth.ts
+    - apps/hubspot/src/index.ts
+    - apps/hubspot/test/gateway-auth.test.ts
+    must_preserve:
+    - INV-constant-time-compare
+    - INV-fail-closed
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-GW-001
+    - R-GW-002
+    - R-GW-003
+  TASK-api:
+    scope:
+    - R-API-001
+    - R-API-002
+    - OP-Api.internalAuth
+    - ERR-UNAUTH-API
+    - T-API-001a
+    - T-API-001b
+    - T-API-002a
+    files:
+    - apps/api/src/index.ts
+    - apps/api/src/ota.ts
+    - apps/api/src/auth/internalAuth.ts
+    - apps/api/test/internal-ota-auth.test.ts
+    - apps/api/test/ota.test.ts
+    must_preserve:
+    - INV-constant-time-compare
+    - INV-fail-closed
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-API-001
+    - R-API-002
+  TASK-email-ingest:
+    scope:
+    - R-EI-001
+    - R-EI-002
+    - R-EI-003
+    - OP-EmailIngest.verifyAuth
+    - T-EI-001a
+    - T-EI-001b
+    - T-EI-001c
+    - T-EI-002a
+    - T-EI-003a
+    files:
+    - apps/email-ingest/src/verifyAuth.ts
+    - apps/email-ingest/src/index.ts
+    - apps/email-ingest/src/classify.ts
+    - apps/email-ingest/src/types.ts
+    - apps/email-ingest/test/verifyAuth.test.ts
+    - apps/email-ingest/test/handler.test.ts
+    must_preserve:
+    - INV-domain-aligned
+    - INV-forward-preserved
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-EI-001
+    - R-EI-002
+    - R-EI-003
+  TASK-config:
+    scope:
+    - R-GW-003
+    - R-EI-002
+    files:
+    - apps/hubspot/wrangler.jsonc
+    - apps/api/wrangler.jsonc
+    - apps/email-ingest/wrangler.jsonc
+    - .dev.env.example
+    must_preserve:
+    - INV-no-secret-in-web
+    produce:
+    - config
+    verifies:
+    - R-GW-003
+    - R-EI-002
+  TASK-ci:
+    scope:
+    - R-CI-001
+    - T-CI-001a
+    files:
+    - .github/workflows/deploy-prod.yml
+    - .github/workflows/deploy-path-a.yml
+    - .github/workflows/deploy-path-b.yml
+    must_preserve: []
+    produce:
+    - config
+    verifies:
+    - R-CI-001
+STATE:
+  ST-01:
+    status: locked
+    decision: Two separate shared secrets (GATEWAY_AUTH_SECRET, INTERNAL_OTA_SECRET)
+      rather than one
+    rationale: a leak of one hop must not compromise the other
+  ST-02:
+    status: locked
+    decision: DKIM preferred over SPF for domain alignment
+    rationale: SPF aligns to the envelope sender which forwarding can break; DKIM
+      signature domain is stable
+  ST-03:
+    status: locked
+    decision: Remove DEV_SENDER from prod; dev path (if kept) requires operator DKIM
+      + body secret token
+    rationale: bare From match is spoofable; must never be a trust signal in prod
+  ST-04:
+    status: locked
+    decision: Step-level token scoping is the primary H4 fix; apply --ignore-scripts
+      only if typecheck/build/deploy stay green, otherwise omit it
+    rationale: moving the token to step-level env already closes the lifecycle-script
+      exposure; --ignore-scripts is a best-effort add that must not break wrangler/esbuild/workerd
+      install

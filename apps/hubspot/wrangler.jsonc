@@ -6,6 +6,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
 
+  // Internal service-binding-only Worker: keep it off the public internet so
+  // /ops/* is never reachable except through the API binding.
+  "workers_dev": false,
+  "preview_urls": false,
+
   // HubSpot gateway Worker — internal service binding, no public route.
   // Cron-triggered to drain the outbox every minute.
   "vars": {
