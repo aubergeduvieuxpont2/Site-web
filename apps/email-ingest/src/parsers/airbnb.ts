@@ -28,7 +28,7 @@ const DATE_TOKEN = new RegExp(`(\\d{1,2})(?:er)?\\s+(${MONTH_ALT})\\.?`, "iu");
 function findDate(bodyText: string, label: string): { day: number; month: number } | null {
   // The label ("Arrivée"/"Départ") is followed (possibly across blank lines
   // and a weekday abbreviation) by the date token.
-  const section = new RegExp(`${label}\\s*\\n+\\s*(?:[a-zéû]+\\.?\\s+)?${DATE_TOKEN.source}`, "iu");
+  const section = new RegExp(`${label}[ \\t]*\\n+[ \\t]*(?:[a-zéû]+\\.?\\s+)?${DATE_TOKEN.source}`, "iu");
   const m = bodyText.match(section);
   if (!m) return null;
   const month = FR_MONTHS[m[2].toLowerCase()];
@@ -87,7 +87,7 @@ export function parseAirbnb(bodyText: string, subject: string, sentAt: Date): Pa
   // Fixtures are CRLF-terminated, so a stray \r can sit between blank-line
   // \n's; exclude \r from the capture and allow \s* padding around the \n+
   // so the gap still matches with either line-ending style.
-  const listing = body.match(/([^\r\n\[\]<>]{3,80})\s*\n+\s*Chambre\b/)?.[1]?.trim() ?? null;
+  const listing = body.match(/([^\r\n\[\]<>]{3,80})[ \t]*\n+[ \t]*Chambre\b/)?.[1]?.trim() ?? null;
 
   return {
     source: "airbnb",
