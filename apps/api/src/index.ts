@@ -1,8 +1,10 @@
 import { Hono, type Context } from "hono";
+import type { ExportedHandler, ScheduledEvent, ExecutionContext } from "@cloudflare/workers-types";
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon } from "@neondatabase/serverless";
+import { drainEmailOutbox } from "./emailOutbox";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
   createSession,
@@ -58,6 +60,7 @@ type Bindings = {
   DB_CONN: string;
   HUBSPOT: Fetcher;
   ADMIN_EMAIL: string;
+  RESEND_API_KEY: string;
 };
 
 type MessageRow = {
@@ -199,6 +202,11 @@ const ReservationStatusSchema = z.object({
 const BlackoutUpsertSchema = z.object({
   roomsBlocked: z.coerce.number().int().min(0),
   note: z.string().trim().nullable().optional(),
+});
+
+export const ProfileEmailSchema = z.object({
+  newEmail: z.string().trim().email("email invalide"),
+  currentPassword: z.string().min(1, "mot de passe requis"),
 });
 
 const authHook = (result: any, c: any) =>
@@ -758,7 +766,7 @@ app.get("/api/profile", async (c) => {
   const reservations = (await sql`
     SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
-    WHERE lower(email) = lower(${user.email})
+    WHERE user_id = ${user.id} OR lower(email) = lower(${user.email})
     ORDER BY created_at DESC
   `) as ReservationRow[];
 
@@ -772,6 +780,82 @@ app.get("/api/profile", async (c) => {
 
   return c.json({ user: userResponse, reservations });
 });
+
+app.post(
+  "/api/profile/email",
+  zValidator("json", ProfileEmailSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const { newEmail, currentPassword } = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    // Verify password
+    const userRow = (await sql`
+      SELECT password_hash FROM users WHERE id = ${user.id}
+    `) as { password_hash: string }[];
+
+    if (userRow.length === 0) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    const passwordValid = await verifyPassword(currentPassword, userRow[0].password_hash);
+    if (!passwordValid) {
+      return c.json({ error: "Invalid password" }, 401);
+    }
+
+    // Check if email is already taken by another user
+    const existing = (await sql`
+      SELECT id FROM users WHERE lower(email) = lower(${newEmail}) AND id != ${user.id}
+    `) as { id: number }[];
+
+    if (existing.length > 0) {
+      return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+    }
+
+    // Update the user's email
+    await sql`
+      UPDATE users SET email = ${newEmail}, updated_at = now()
+      WHERE id = ${user.id}
+    `;
+
+    // Fire-and-forget HubSpot update if hubspot_contact_id is set
+    if (user.hubspot_contact_id) {
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            const hubspotRes = await c.env.HUBSPOT.fetch("http://internal/ops/contact.updateById", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contactId: user.hubspot_contact_id,
+                properties: { email: newEmail },
+              }),
+            });
+            if (!hubspotRes.ok) {
+              console.error("HubSpot contact update failed:", hubspotRes.status);
+            }
+          } catch (err) {
+            console.error("HubSpot contact update error:", err);
+          }
+        })()
+      );
+    }
+
+    const updatedUserResponse = {
+      id: user.id,
+      email: newEmail,
+      name: user.name,
+      role: user.role,
+      hubspotContactId: user.hubspot_contact_id || null,
+    };
+
+    return c.json({ user: updatedUserResponse }, 200);
+  }
+);
 
 // Public rooms endpoint
 app.get("/api/rooms", async (c) => {
@@ -1685,4 +1769,9 @@ app.notFound((c) => {
   return c.json({ error: "Not Found" }, 404);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled: async (event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) => {
+    ctx.waitUntil(drainEmailOutbox(env));
+  },
+} satisfies ExportedHandler<Bindings>;

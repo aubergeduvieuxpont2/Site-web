@@ -479,6 +479,13 @@ describe("Settings", () => {
   });
 
   describe("HTTP Endpoints - GET /api/admin/settings", () => {
+    const EMAIL_TOGGLE_DEFAULTS = {
+      emailConfirmationEnabled: false,
+      emailPasswordResetEnabled: false,
+      emailRoomAssignmentEnabled: false,
+      emailWelcomeEnabled: false,
+    };
+
     it("returns admin settings with all keys", () => {
       const mockRows = [
         { key: "nightly_price", value: "99" },
@@ -495,6 +502,7 @@ describe("Settings", () => {
         ...DEFAULT_TAXES,
         assignableRoomCount: 12,
         reservationsEnabled: true,
+        ...EMAIL_TOGGLE_DEFAULTS,
       });
     });
 
@@ -509,7 +517,63 @@ describe("Settings", () => {
         ...DEFAULT_TAXES,
         assignableRoomCount: 12,
         reservationsEnabled: true,
+        ...EMAIL_TOGGLE_DEFAULTS,
       });
+    });
+
+    it("defaults all four email toggles to false when rows are empty", () => {
+      const result = rowsToAdminSettings([]);
+      expect(result.emailConfirmationEnabled).toBe(false);
+      expect(result.emailPasswordResetEnabled).toBe(false);
+      expect(result.emailRoomAssignmentEnabled).toBe(false);
+      expect(result.emailWelcomeEnabled).toBe(false);
+    });
+
+    it("parses email toggle 'true' rows correctly", () => {
+      const rows = [
+        { key: "email_confirmation_enabled", value: "true" },
+        { key: "email_welcome_enabled", value: "true" },
+      ];
+      const result = rowsToAdminSettings(rows);
+      expect(result.emailConfirmationEnabled).toBe(true);
+      expect(result.emailWelcomeEnabled).toBe(true);
+      expect(result.emailPasswordResetEnabled).toBe(false);
+      expect(result.emailRoomAssignmentEnabled).toBe(false);
+    });
+
+    it("email toggle keys are absent from toPublicSettings", () => {
+      const admin = rowsToAdminSettings([]);
+      const pub = toPublicSettings(admin);
+      expect(pub).not.toHaveProperty("emailConfirmationEnabled");
+      expect(pub).not.toHaveProperty("emailPasswordResetEnabled");
+      expect(pub).not.toHaveProperty("emailRoomAssignmentEnabled");
+      expect(pub).not.toHaveProperty("emailWelcomeEnabled");
+    });
+
+    it("SettingsUpdateSchema accepts boolean email toggle fields", () => {
+      const payload = {
+        nightlyPrice: 99,
+        weeklyPrice: 560,
+        contactEmail: "admin@example.com",
+        contactPhone: CONTACT_PHONE,
+        tps: 5,
+        tvq: 9.975,
+        accommodationTax: 3.5,
+        assignableRoomCount: 12,
+        reservationsEnabled: true,
+        emailConfirmationEnabled: true,
+        emailPasswordResetEnabled: false,
+        emailRoomAssignmentEnabled: "true",
+        emailWelcomeEnabled: "false",
+      };
+      const result = SettingsUpdateSchema.safeParse(payload);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.emailConfirmationEnabled).toBe(true);
+        expect(result.data.emailPasswordResetEnabled).toBe(false);
+        expect(result.data.emailRoomAssignmentEnabled).toBe(true);
+        expect(result.data.emailWelcomeEnabled).toBe(false);
+      }
     });
   });
 

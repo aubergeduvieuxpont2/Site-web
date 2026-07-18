@@ -28,6 +28,7 @@ const KEYS = [
   "invoice-receipt",
   "review-request",
   "room-assigned",
+  "ota-welcome",
 ];
 
 const read = (rel) => readFileSync(join(emailsDir, rel), "utf8");

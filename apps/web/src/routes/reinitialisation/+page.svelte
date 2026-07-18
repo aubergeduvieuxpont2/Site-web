@@ -10,6 +10,11 @@
   // server is the sole authority on whether a token is valid/expired/used.
   const token = $derived($page.url.searchParams.get("token"));
 
+  // Welcome variant — read-only from URL, never mutated after derivation. Only
+  // gates display branches (heading/subhead/tag text + a class modifier); it is
+  // never reflected into the DOM as raw HTML.
+  const isWelcome = $derived($page.url.searchParams.get("welcome") === "1");
+
   type ViewState = "form" | "submitting" | "error" | "success";
   // A missing token can never yield a valid reset, so start in the error state.
   let viewState = $state<ViewState>($page.url.searchParams.get("token") ? "form" : "error");
@@ -69,19 +74,37 @@
 
 <main class="reinitialisation" data-testid="reinitialisation-page">
   <div class="reinitialisation__container">
-    <SectionLabel text="Réinitialisation" showHairline={true} />
+    <SectionLabel text={isWelcome ? "Bienvenue" : "Réinitialisation"} showHairline={true} />
 
     {#if viewState === "form" || viewState === "submitting"}
       <section
         class="reinitialisation__card"
+        class:reinitialisation__card--welcome={isWelcome}
         aria-labelledby="reset-heading"
         data-testid="reset-form-section"
+        data-welcome={isWelcome ? "true" : "false"}
       >
         <header class="reinitialisation__card-header">
-          <span class="reinitialisation__card-tag" aria-hidden="true">PASS-RESET</span>
-          <h1 class="reinitialisation__heading" id="reset-heading">Nouveau mot de passe</h1>
-          <p class="reinitialisation__subhead">
-            Choisissez un mot de passe d'au moins 8 caractères.
+          <span
+            class="reinitialisation__card-tag"
+            class:reinitialisation__card-tag--welcome={isWelcome}
+            aria-hidden="true"
+            data-testid="reset-card-tag"
+          >
+            {isWelcome ? "BIENVENUE" : "PASS-RESET"}
+          </span>
+          <h1
+            class="reinitialisation__heading"
+            class:reinitialisation__heading--welcome={isWelcome}
+            id="reset-heading"
+            data-testid="reset-heading"
+          >
+            {isWelcome ? "Bienvenue !" : "Nouveau mot de passe"}
+          </h1>
+          <p class="reinitialisation__subhead" data-testid="reset-subhead">
+            {isWelcome
+              ? "Choisissez votre mot de passe pour accéder à votre espace client."
+              : "Choisissez un mot de passe d'au moins 8 caractères."}
           </p>
         </header>
 
@@ -234,6 +257,35 @@
 
   .reinitialisation__card:focus-within::before {
     background-color: var(--color-outline);
+  }
+
+  /* ── Welcome variant — forest accent bar (static in welcome mode) ── */
+  .reinitialisation__card--welcome::before,
+  .reinitialisation__card--welcome:focus-within::before {
+    background-color: var(--color-forest);
+    /* Longer bar to match the taller welcome header */
+    height: calc(var(--space-2xl) + var(--space-sm));
+    transition: none;
+  }
+
+  /* ── Welcome variant — tag label colour ──────────────────── */
+  .reinitialisation__card-tag--welcome {
+    color: var(--color-forest);
+  }
+
+  /* ── Welcome variant — serif heading for a warm arrival feel ── */
+  .reinitialisation__heading--welcome {
+    font-family: var(--font-serif);
+    font-size: 26px;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    color: var(--color-forest);
+  }
+
+  @media (max-width: 479px) {
+    .reinitialisation__heading--welcome {
+      font-size: 22px;
+    }
   }
 
   /* ── Card header ─────────────────────────────────────────── */
@@ -541,5 +593,9 @@
 </style>
 
 <svelte:head>
-  <title>Réinitialisation du mot de passe — Auberge du Vieux Pont</title>
+  <title>
+    {isWelcome
+      ? "Créez votre espace client — Auberge du Vieux Pont"
+      : "Réinitialisation du mot de passe — Auberge du Vieux Pont"}
+  </title>
 </svelte:head>

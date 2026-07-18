@@ -15,7 +15,7 @@ function telHref(phone: string): string {
   return digits.length === 10 ? `tel:+1${digits}` : `tel:+${digits}`;
 }
 
-async function contactContext(dbConn: string | undefined) {
+export async function contactContext(dbConn: string | undefined) {
   if (!dbConn) return { ...EMAIL_DEFAULTS };
   try {
     const sql = neon(dbConn);

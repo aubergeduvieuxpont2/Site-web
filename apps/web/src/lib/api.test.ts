@@ -9,6 +9,7 @@ import {
   resetPassword,
   logout,
   changePassword,
+  changeProfileEmail,
   getProfile,
   adminReservations,
   adminSetReservationStatus,
@@ -243,6 +244,35 @@ describe("profile", () => {
     stubFetch({ error: "Non authentifié" }, 401);
     const res = await getProfile();
     expect(isError(res)).toBe(true);
+  });
+
+  it("changeProfileEmail POSTs newEmail + currentPassword to /api/profile/email", async () => {
+    const payload = { user: { id: 1, email: "new@b.c", name: "A", role: "guest" } };
+    const { calls } = stubFetch(payload);
+    const res = await changeProfileEmail("new@b.c", "current-pass");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/profile/email");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({
+      newEmail: "new@b.c",
+      currentPassword: "current-pass",
+    });
+    expect(res).toEqual(payload);
+  });
+
+  it("changeProfileEmail surfaces a 401 wrong-password error", async () => {
+    stubFetch({ error: "Mot de passe actuel incorrect." }, 401);
+    const res = await changeProfileEmail("new@b.c", "wrong");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Mot de passe actuel incorrect." });
+  });
+
+  it("changeProfileEmail surfaces a 409 email-already-taken conflict", async () => {
+    stubFetch({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+    const res = await changeProfileEmail("taken@b.c", "current-pass");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Cette adresse courriel est déjà utilisée." });
   });
 });
 

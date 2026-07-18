@@ -65,6 +65,10 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
     tvq: 9.975,
     accommodationTax: 3.5,
     reservationsEnabled: true,
+    emailConfirmationEnabled: false,
+    emailPasswordResetEnabled: false,
+    emailRoomAssignmentEnabled: false,
+    emailWelcomeEnabled: false,
     ...over,
   };
 }
