@@ -81,28 +81,58 @@ export type ReservationSyncInput = {
   description: string | null;
 };
 
+// OTA free-text (guest name, listing name, externalRef-bearing message) arrives
+// from booking emails WITHOUT authentication, so it must never reach the CRM
+// verbatim: strip control characters and markup (`<>`) that downstream HubSpot
+// rendering could misinterpret, collapse the residue, and length-cap it. Returns
+// null for empty/absent input so optional fields stay omitted from the payload.
+export function sanitizeHubspotText(
+  value: string | null | undefined,
+  maxLen: number,
+): string | null {
+  if (value == null) return null;
+  const cleaned = value
+    // Drop C0/C1 control characters (incl. NUL, newlines, tabs, DEL).
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, " ")
+    // Drop angle brackets so no markup/tag survives into CRM rendering.
+    .replace(/[<>]/g, "")
+    // Collapse the whitespace left behind by the substitutions.
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return null;
+  return cleaned.slice(0, maxLen);
+}
+
 // A reservation with no usable guest email (Airbnb confirmations carry none)
 // has nothing to sync: contact.upsert needs an email and deal.create resolves
 // its contact by email.
 export function buildReservationHubspotOps(input: ReservationSyncInput): HubspotOp[] {
   if (!input.email) return [];
+  // Sanitize every unauthenticated OTA free-text field before it becomes a
+  // HubSpot property. The reservation DB row keeps the raw values; only the CRM
+  // payload is neutralized here.
+  const firstName = sanitizeHubspotText(input.firstName, 200) ?? "";
+  const lastName = sanitizeHubspotText(input.lastName, 200);
+  const room = sanitizeHubspotText(input.room, 200);
+  const description = sanitizeHubspotText(input.description, 500);
+
   const deal: Record<string, unknown> = {
     contactEmail: input.email,
     dealname: `Reservation #${input.reservationId}`,
   };
   if (input.checkIn) deal.arrive = input.checkIn;
   if (input.checkOut) deal.depart = input.checkOut;
-  if (input.room) deal.room = input.room;
+  if (room) deal.room = room;
   if (input.guests) deal.people = input.guests;
   if (input.roomCount != null) deal.roomCount = input.roomCount;
-  if (input.description) deal.description = input.description;
+  if (description) deal.description = description;
   return [
     {
       kind: "contact.upsert",
       payload: {
         email: input.email,
-        firstname: input.firstName,
-        ...(input.lastName ? { lastname: input.lastName } : {}),
+        firstname: firstName,
+        ...(lastName ? { lastname: lastName } : {}),
       },
     },
     { kind: "deal.create", payload: deal, dedupeKey: `reservation-${input.reservationId}` },

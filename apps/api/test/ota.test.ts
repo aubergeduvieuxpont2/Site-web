@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { buildReservationHubspotOps, enqueueHubspotOps } from "../src/ota";
+import { buildReservationHubspotOps, enqueueHubspotOps, sanitizeHubspotText } from "../src/ota";
 
 describe("buildReservationHubspotOps", () => {
   const base = {
@@ -55,6 +55,76 @@ describe("buildReservationHubspotOps", () => {
   it("returns no ops when there is no guest email (Airbnb case)", () => {
     expect(buildReservationHubspotOps({ ...base, email: null })).toEqual([]);
     expect(buildReservationHubspotOps({ ...base, email: "" })).toEqual([]);
+  });
+
+  // M16: guest name / listing name / externalRef-bearing message arrive from OTA
+  // emails WITHOUT authentication, so they must be neutralized before reaching
+  // HubSpot: control chars stripped, `<>` markup removed, overlong values capped.
+  it("neutralizes control chars and <...> markup in the HubSpot payload (M16)", () => {
+    const NUL = String.fromCharCode(0);
+    const BELL = String.fromCharCode(7);
+    const TAB = String.fromCharCode(9);
+    const LF = String.fromCharCode(10);
+    const SOH = String.fromCharCode(1);
+    const ops = buildReservationHubspotOps({
+      ...base,
+      firstName: "Ada" + NUL + BELL + "<script>alert(1)</script>",
+      lastName: "Love" + TAB + "lace" + LF + "<b>",
+      room: "Suite <img src=x onerror=1>" + SOH + "River",
+      description: "Reservation" + NUL + "Airbnb #<b>HM45MDTHZ4</b>",
+    });
+    const contact = ops[0].payload as Record<string, string>;
+    const deal = ops[1].payload as Record<string, string>;
+
+    // No angle brackets or control characters survive into any CRM property.
+    const CONTROL = /[\x00-\x1F\x7F-\x9F]/;
+    for (const v of [contact.firstname, contact.lastname, deal.room, deal.description]) {
+      expect(v).not.toMatch(/[<>]/);
+      expect(v).not.toMatch(CONTROL);
+    }
+    expect(contact.firstname).toBe("Ada scriptalert(1)/script");
+    expect(contact.lastname).toBe("Love lace b");
+    expect(deal.room).toBe("Suite img src=x onerror=1 River");
+    expect(deal.description).toBe("Reservation Airbnb #bHM45MDTHZ4/b");
+  });
+
+  it("length-caps overlong OTA fields before they become HubSpot properties (M16)", () => {
+    const ops = buildReservationHubspotOps({
+      ...base,
+      firstName: "a".repeat(500),
+      room: "r".repeat(500),
+      description: "d".repeat(1000),
+    });
+    const contact = ops[0].payload as Record<string, string>;
+    const deal = ops[1].payload as Record<string, string>;
+    expect(contact.firstname.length).toBe(200);
+    expect(deal.room.length).toBe(200);
+    expect(deal.description.length).toBe(500);
+  });
+
+  it("drops fields that sanitize to empty (only markup/control chars) from the deal", () => {
+    const ops = buildReservationHubspotOps({
+      ...base,
+      room: "<> ",
+      description: "",
+    });
+    const deal = ops[1].payload as Record<string, unknown>;
+    expect("room" in deal).toBe(false);
+    expect("description" in deal).toBe(false);
+  });
+});
+
+describe("sanitizeHubspotText", () => {
+  it("strips control chars and <> markup, collapses whitespace, trims", () => {
+    const input = "  a" + String.fromCharCode(9) + String.fromCharCode(10) + "b<x>c  ";
+    expect(sanitizeHubspotText(input, 200)).toBe("a bxc");
+  });
+
+  it("caps to maxLen and returns null for empty/absent/blank-after-clean", () => {
+    expect(sanitizeHubspotText("x".repeat(10), 4)).toBe("xxxx");
+    expect(sanitizeHubspotText(null, 10)).toBeNull();
+    expect(sanitizeHubspotText(undefined, 10)).toBeNull();
+    expect(sanitizeHubspotText("<> ", 10)).toBeNull();
   });
 });
 
