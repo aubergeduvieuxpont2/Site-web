@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { tick } from 'svelte';
   import Modal from '$lib/components/Modal.svelte';
   import {
     adminReservationAssignments,
@@ -27,8 +26,6 @@
   let freeRooms = $state<{ slug: string; name: string }[]>([]);
 
   const roomNameCache = new Map<string, string>();
-
-  let panelEl: HTMLDivElement | undefined;
 
   // ── Derived ─────────────────────────────────────────────────────────────
   function parseCalDate(s: string | null): Date | null {
@@ -128,7 +125,14 @@
 </button>
 
 <!-- ── Drawer (portaled to body via Modal) ── -->
-<Modal open={isOpen} onClose={close} backdropTestid="rad-backdrop">
+<!-- Modal.svelte provides the role="dialog"/aria-modal/focus-trap/Escape
+     wrapper; this drawer supplies the slide-in panel and its content. -->
+<Modal
+  open={isOpen}
+  onClose={close}
+  backdropTestid="rad-backdrop"
+  labelId={`rad-title-${reservationId}`}
+>
   <!-- CSS-variable host + aria-hidden for transition selectors -->
   <div
     class="room-assignment-drawer"
@@ -136,15 +140,7 @@
     data-testid="room-assignment-drawer"
   >
     <!-- Panel -->
-    <div
-      bind:this={panelEl}
-      class="room-assignment-drawer__panel"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={`rad-title-${reservationId}`}
-      tabindex="-1"
-      data-testid="rad-panel"
-    >
+    <div class="room-assignment-drawer__panel" data-testid="rad-panel">
       <!-- ── Header ── -->
       <div class="room-assignment-drawer__header">
         <div class="room-assignment-drawer__header-left">

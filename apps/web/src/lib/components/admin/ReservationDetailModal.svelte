@@ -8,16 +8,11 @@
   import type { ReservationRow } from '$lib/api';
   import { formatDateOnly, displayNameOf, statusLabel } from './ReservationTableRow.svelte';
 
-  // Extended row shape — `code`, `source`, `external_ref` arrive in WS-D.
-  type ExtendedRow = ReservationRow & {
-    code?: string | null;
-    source?: string | null;
-    external_ref?: string | null;
-  };
-
   interface Props {
     open: boolean;
-    row: ExtendedRow;
+    // Nullable so the parent can keep the modal mounted (for focus return)
+    // while no reservation is selected; content only renders when open && row.
+    row: ReservationRow | null;
     onClose: () => void;
     onCreateInvoice: (reservationId: number, req: InvoiceRequest) => Promise<InvoiceResult>;
   }
@@ -26,7 +21,13 @@
 
   let factureOpen = $state(false);
 
-  const displayName = $derived(displayNameOf(row));
+  const displayName = $derived(row ? displayNameOf(row) : '');
+
+  // Reset the Facture panel whenever the modal is dismissed so re-opening for
+  // another reservation starts collapsed.
+  $effect(() => {
+    if (!open) factureOpen = false;
+  });
 
   function formatDateTime(iso: string | null | undefined): string {
     if (!iso) return '—';
@@ -44,16 +45,11 @@
   }
 </script>
 
-<Modal {open} {onClose}>
-  {#if open}
-    <div
-      class="rdm__panel"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="rdm-title"
-      tabindex="-1"
-      data-testid="reservation-detail-modal"
-    >
+<Modal {open} {onClose} labelId="rdm-title" backdropTestid="rdm-backdrop">
+  {#if open && row}
+    <!-- Modal.svelte provides the role="dialog"/aria-modal/focus-trap wrapper;
+         this panel is the visible, styled surface inside it. -->
+    <div class="rdm__panel" data-testid="reservation-detail-modal">
       <!-- Header -->
       <div class="rdm__header">
         <div class="rdm__header-left">

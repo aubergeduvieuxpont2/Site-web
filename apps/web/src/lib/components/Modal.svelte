@@ -13,12 +13,19 @@
      * the panel is outside the scoped style tree.
      */
     panelClass?: string;
-    children: Snippet;
-    /** Forwarded as data-testid on the backdrop element. */
+    children?: Snippet;
+    /** Forwarded as data-testid on the backdrop element (default "modal-backdrop"). */
     backdropTestid?: string;
   }
 
-  let { open, onClose, labelId, panelClass = '', children, backdropTestid }: Props = $props();
+  let {
+    open,
+    onClose,
+    labelId,
+    panelClass = '',
+    children,
+    backdropTestid = 'modal-backdrop',
+  }: Props = $props();
 
   let panelEl: HTMLElement | undefined;
   // Captured just before we steal focus; restored when the dialog closes.
@@ -92,8 +99,9 @@
     aria-modal="true"
     aria-labelledby={labelId}
     tabindex="-1"
+    data-testid="modal-dialog"
   >
-    {@render children()}
+    {#if children}{@render children()}{/if}
   </div>
 </div>
 

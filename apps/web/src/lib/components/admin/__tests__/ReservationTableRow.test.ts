@@ -17,7 +17,6 @@ import ReservationTableRow, {
   truncateMessage,
   statusLabel,
 } from "../ReservationTableRow.svelte";
-import type { InvoiceResult } from "../InvoiceCreator.svelte";
 import type { ReservationRow } from "$lib/api";
 
 afterEach(() => cleanup());
@@ -116,18 +115,6 @@ describe("statusLabel", () => {
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-const breakdown = {
-  nights: 2,
-  roomCount: 2,
-  effectiveNightly: 89,
-  base: 356,
-  accommodationTax: 12.46,
-  tps: 18.42,
-  tvq: 34.89,
-  total: 421.77,
-  amount: 126.53,
-};
-
 function baseRow(overrides: Partial<ReservationRow> = {}): ReservationRow {
   return {
     id: 7,
@@ -152,9 +139,6 @@ function baseRow(overrides: Partial<ReservationRow> = {}): ReservationRow {
 function props(rowOverrides: Partial<ReservationRow> = {}) {
   return {
     row: baseRow(rowOverrides),
-    onCreateInvoice: vi.fn(
-      async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
-    ),
     onSetStatus: vi.fn(),
   };
 }
@@ -258,9 +242,6 @@ describe("ReservationTableRow — status cell", () => {
     const { getByTestId } = render(ReservationTableRow, {
       props: {
         row: baseRow({ status: "pending" }),
-        onCreateInvoice: vi.fn(
-          async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
-        ),
         onSetStatus,
       },
     });
@@ -276,9 +257,6 @@ describe("ReservationTableRow — status cell", () => {
     const { getByTestId } = render(ReservationTableRow, {
       props: {
         row: baseRow({ status: "pending" }),
-        onCreateInvoice: vi.fn(
-          async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
-        ),
       },
     });
     await fireEvent.click(getByTestId("btn-status-confirm"));

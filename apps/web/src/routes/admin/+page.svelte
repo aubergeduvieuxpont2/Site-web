@@ -8,6 +8,7 @@
   import AdminDisponibilitesTab from "$lib/components/admin/AdminDisponibilitesTab.svelte";
   import AdminEmailsOtaTab from "$lib/components/admin/AdminEmailsOtaTab.svelte";
   import ReservationTableRow from "$lib/components/admin/ReservationTableRow.svelte";
+  import ReservationDetailModal from "$lib/components/admin/ReservationDetailModal.svelte";
   import type { InvoiceRequest, InvoiceResult } from "$lib/components/admin/InvoiceCreator.svelte";
   import {
     getMe,
@@ -46,6 +47,13 @@
   let reservationsLoading = $state(false);
   let reservationsError = $state<string | null>(null);
   let searchTimer: ReturnType<typeof setTimeout>;
+
+  // The reservation whose detail modal is open (null = closed). Holds the row
+  // captured at open time; the modal is a read-only detail view.
+  let detailRow = $state<ReservationRow | null>(null);
+  function openDetail(id: number) {
+    detailRow = reservations.find((r) => r.id === id) ?? null;
+  }
 
   // ─── Outbox ───
   let statusFilter = $state<"all" | "pending" | "failed" | "done">("all");
@@ -561,13 +569,9 @@
                 <thead>
                   <tr>
                     <th scope="col">Nom</th>
-                    <th scope="col">Courriel</th>
-                    <th scope="col">Téléphone</th>
-                    <th scope="col">Pers.</th>
                     <th scope="col">Arrivée</th>
                     <th scope="col">Départ</th>
                     <th scope="col">Chambres</th>
-                    <th scope="col">Message</th>
                     <th scope="col">Statut</th>
                     <th scope="col">Actions</th>
                   </tr>
@@ -575,14 +579,14 @@
                 <tbody>
                   {#if reservations.length === 0 && !reservationsLoading}
                     <tr>
-                      <td colspan="10" class="page-admin__empty">Aucune réservation trouvée.</td>
+                      <td colspan="6" class="page-admin__empty">Aucune réservation trouvée.</td>
                     </tr>
                   {:else}
                     {#each reservations as row (row.id)}
                       <ReservationTableRow
                         {row}
-                        onCreateInvoice={createInvoice}
                         onSetStatus={handleSetStatus}
+                        onOpenDetail={openDetail}
                       />
                     {/each}
                   {/if}
@@ -590,6 +594,14 @@
               </table>
             </div>
           {/if}
+
+          <!-- Detail modal: kept mounted so focus returns to the row on close. -->
+          <ReservationDetailModal
+            open={detailRow !== null}
+            row={detailRow}
+            onClose={() => (detailRow = null)}
+            onCreateInvoice={createInvoice}
+          />
         </div>
       </div>
 

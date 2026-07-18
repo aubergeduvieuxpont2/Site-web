@@ -1,7 +1,7 @@
 <script module lang="ts">
   // Date-only-safe formatter — parses "YYYY-MM-DD" as a *local* calendar date
   // (no UTC day-shift) and renders it fr-CA, or "—" for null/invalid input.
-  // Exported for unit testing. Never touches innerHTML; the returned value is a
+  // Exported for unit testing. Never injects raw markup; the returned value is a
   // primitive string from Intl.DateTimeFormat.
   const dateFmt = new Intl.DateTimeFormat("fr-CA");
 
@@ -46,69 +46,69 @@
 
 <script lang="ts">
   import type { ReservationRow } from "$lib/api";
-  import RoomAssignmentDrawer from "./RoomAssignmentDrawer.svelte";
-  import InvoiceCreator, {
-    type InvoiceRequest,
-    type InvoiceResult,
-  } from "./InvoiceCreator.svelte";
 
   // ── Props ───────────────────────────────────────────────────────────────
-  // The row is display-only data; `onCreateInvoice` is threaded through to the
-  // InvoiceCreator so this component never performs a fetch itself.
+  // The row is display-only data. Details (email, phone, people, message,
+  // facture, room assignment) live in the ReservationDetailModal, opened by
+  // clicking the row; the parent owns that modal via `onOpenDetail`.
   let {
     row,
-    onCreateInvoice,
     onSetStatus,
+    onOpenDetail,
   }: {
     row: ReservationRow;
-    onCreateInvoice: (
-      reservationId: number,
-      req: InvoiceRequest,
-    ) => Promise<InvoiceResult>;
     // Optional so existing callers compile unchanged; the component stays
     // fetch-free and optimistic — the parent owns the data update.
     onSetStatus?: (
       id: number,
       status: "pending" | "confirmed" | "cancelled",
     ) => void;
+    // Fired when the row body (not an action button) is clicked or activated
+    // via keyboard. The parent opens the detail modal for this reservation.
+    onOpenDetail?: (id: number) => void;
   } = $props();
 
   // ── Derived display values ──────────────────────────────────────────────
   const displayName = $derived(displayNameOf(row));
-  const truncatedMessage = $derived(truncateMessage(row.message));
 
-  // ── Panel state ─────────────────────────────────────────────────────────
-  let factureOpen = $state(false);
+  // ── Interaction ─────────────────────────────────────────────────────────
+  function openDetail() {
+    onOpenDetail?.(row.id);
+  }
 
-  function toggleFacture() {
-    factureOpen = !factureOpen;
+  function onRowKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      openDetail();
+    }
+  }
+
+  // Action buttons must never bubble to the row-level open handler.
+  function setStatus(
+    e: MouseEvent,
+    status: "pending" | "confirmed" | "cancelled",
+  ) {
+    e.stopPropagation();
+    onSetStatus?.(row.id, status);
   }
 </script>
 
+<!-- Compact row: Nom · Arrivée · Départ · Chambres · Statut · Actions.
+     The whole row is a button-like control that opens the detail modal;
+     the action buttons inside stopPropagation so they never open it. -->
 <tr
   class="reservation-table-row"
   data-testid="reservation-row"
   data-reservation-id={row.id}
+  role="button"
+  tabindex="0"
+  aria-label={`Voir le détail de la réservation de ${displayName}`}
+  onclick={openDetail}
+  onkeydown={onRowKeydown}
 >
   <td class="reservation-table-row__cell reservation-table-row__cell--name">
     <span class="reservation-table-row__name" data-testid="row-name">
       {displayName}
-    </span>
-  </td>
-
-  <td class="reservation-table-row__cell reservation-table-row__cell--email">
-    <span class="reservation-table-row__email" data-testid="row-email">
-      {row.email}
-    </span>
-  </td>
-
-  <td class="reservation-table-row__cell">
-    <span data-testid="row-phone">{row.phone ?? "—"}</span>
-  </td>
-
-  <td class="reservation-table-row__cell reservation-table-row__cell--numeric">
-    <span class="reservation-table-row__mono" data-testid="row-people">
-      {row.people}
     </span>
   </td>
 
@@ -130,17 +130,6 @@
     </span>
   </td>
 
-  <td class="reservation-table-row__cell reservation-table-row__cell--message">
-    <span
-      class="reservation-table-row__message"
-      data-testid="row-message"
-      title={row.message ?? ""}
-      aria-label={row.message ? "Message : " + row.message : "Aucun message"}
-    >
-      {truncatedMessage}
-    </span>
-  </td>
-
   <td
     class="reservation-table-row__cell reservation-table-row__cell--status"
     data-testid="row-status-cell"
@@ -153,11 +142,13 @@
     >
       {statusLabel(row.status)}
     </span>
+  </td>
 
+  <td class="reservation-table-row__cell reservation-table-row__cell--actions">
     <div
-      class="reservation-table-row__status-actions"
+      class="reservation-table-row__actions"
       role="group"
-      aria-label="Changer le statut"
+      aria-label={`Actions pour ${displayName}`}
     >
       {#if (row.status ?? "pending") !== "confirmed"}
         <button
@@ -165,7 +156,7 @@
           type="button"
           data-testid="btn-status-confirm"
           aria-label="Confirmer la réservation"
-          onclick={() => onSetStatus?.(row.id, "confirmed")}
+          onclick={(e) => setStatus(e, "confirmed")}
         >
           Confirmer
         </button>
@@ -177,58 +168,14 @@
           type="button"
           data-testid="btn-status-cancel"
           aria-label="Annuler la réservation"
-          onclick={() => onSetStatus?.(row.id, "cancelled")}
+          onclick={(e) => setStatus(e, "cancelled")}
         >
           Annuler
         </button>
       {/if}
     </div>
   </td>
-
-  <td class="reservation-table-row__cell reservation-table-row__cell--actions">
-    <div
-      class="reservation-table-row__actions"
-      role="group"
-      aria-label={`Actions pour ${displayName}`}
-    >
-      <!-- RoomAssignmentDrawer renders its own "Chambres" trigger and portals
-           its drawer to <body>, so it is dropped in directly. -->
-      <RoomAssignmentDrawer
-        reservationId={row.id}
-        arrive={row.arrive}
-        depart={row.depart}
-        roomCount={row.room_count}
-      />
-
-      <button
-        class="reservation-table-row__btn reservation-table-row__btn--facture"
-        data-testid="btn-facture"
-        type="button"
-        aria-label={`Créer une facture pour ${displayName}`}
-        aria-expanded={factureOpen}
-        aria-haspopup="true"
-        onclick={toggleFacture}
-      >
-        Facture
-      </button>
-    </div>
-  </td>
 </tr>
-
-{#if factureOpen}
-  <tr class="reservation-table-row__panel-row" data-testid="panel-row-facture">
-    <td colspan="10" class="reservation-table-row__panel-cell">
-      <InvoiceCreator
-        reservationId={row.id}
-        arrive={row.arrive}
-        depart={row.depart}
-        roomCount={row.room_count}
-        onCreateInvoice={(req) => onCreateInvoice(row.id, req)}
-        onClose={() => (factureOpen = false)}
-      />
-    </td>
-  </tr>
-{/if}
 
 <style>
   .reservation-table-row {
@@ -259,6 +206,14 @@
     background-color: var(--surface-raised);
     transition: background-color 80ms ease;
   }
+  /* The whole row is an activatable control that opens the detail modal. */
+  .reservation-table-row {
+    cursor: pointer;
+  }
+  .reservation-table-row:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: -2px;
+  }
 
   .reservation-table-row__cell {
     font-family: var(--font-ui);
@@ -284,25 +239,6 @@
   .reservation-table-row__name {
     font-weight: 500;
     color: var(--text);
-  }
-
-  .reservation-table-row__email {
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  .reservation-table-row__cell--message {
-    max-width: 200px;
-    white-space: nowrap;
-  }
-  .reservation-table-row__message {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-muted);
-    font-size: 13px;
-    cursor: default;
   }
 
   .reservation-table-row__cell--actions {
@@ -336,29 +272,6 @@
   .reservation-table-row__btn:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
-  }
-
-  .reservation-table-row__btn--facture {
-    background-color: var(--accent);
-    border-color: var(--accent);
-    color: var(--primary-text);
-  }
-  .reservation-table-row__btn--facture:hover {
-    background-color: var(--accent-hover);
-    border-color: var(--accent-hover);
-  }
-  .reservation-table-row__btn--facture[aria-expanded="true"] {
-    background-color: var(--accent-hover);
-    border-color: var(--accent-hover);
-  }
-
-  .reservation-table-row__panel-row {
-    background-color: var(--surface-raised);
-  }
-
-  .reservation-table-row__panel-cell {
-    padding: 0;
-    border-bottom: 2px solid var(--border-strong);
   }
 
   /* ── Status cell ─────────────────────────────────────────────────── */
@@ -399,14 +312,7 @@
     color: var(--color-error, #ba1a1a);
   }
 
-  /* ── Status action buttons ───────────────────────────────────────── */
-  .reservation-table-row__status-actions {
-    display: inline-flex;
-    gap: 4px;
-    margin-top: 5px;
-    align-items: center;
-  }
-
+  /* ── Status action buttons (in the Actions cell) ─────────────────── */
   .reservation-table-row__btn--status-confirm {
     background-color: transparent;
     border-color: var(--color-forest, #1a5c2d);
