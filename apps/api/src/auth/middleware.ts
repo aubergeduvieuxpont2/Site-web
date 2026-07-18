@@ -1,6 +1,8 @@
 import type { Context, Next } from "hono";
+import { neon } from "@neondatabase/serverless";
 import { validateSession } from "./session";
 import type { User } from "./session";
+import { rateLimitAllow } from "./rateLimit";
 
 type ContextWithUser = Context & {
   user?: User;
@@ -72,26 +74,21 @@ function extractSessionToken(cookieHeader: string): string | null {
   return null;
 }
 
-// Rate limiter for auth endpoints (stricter than general limiter)
-const authLimitMap = new Map<string, { count: number; resetTime: number }>();
+// Rate limiter for auth endpoints (stricter than the general limiter): durable,
+// Neon-backed, shared across all Worker isolates. 10 requests / 15 min per IP.
+//
+// Keyed ONLY on cf-connecting-ip (Cloudflare-populated, unspoofable). We never
+// trust x-forwarded-for. When cf-connecting-ip is absent we still rate-limit
+// under a single fixed "noip" bucket (no unlimited fallback). The DB round-trip
+// per request is the accepted tradeoff; rateLimitAllow fails OPEN on DB errors.
+export async function authRateLimiter(c: Context, next: Next): Promise<Response | void> {
+  const ip = c.req.header("cf-connecting-ip") || "noip";
+  const sql = neon((c.env as { DB_CONN: string }).DB_CONN);
 
-export async function authRateLimiter(c: Context, next: Next): Promise<void> {
-  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "anonymous";
-  const now = Date.now();
-  const windowMs = 15 * 60 * 1000; // 15 minutes
-  const limit = 10; // 10 requests per 15 minutes
-
-  let record = authLimitMap.get(ip);
-  if (!record || now > record.resetTime) {
-    record = { count: 0, resetTime: now + windowMs };
-    authLimitMap.set(ip, record);
+  const allowed = await rateLimitAllow(sql, `auth:${ip}`, 10, 15 * 60 * 1000, Date.now());
+  if (!allowed) {
+    return c.json({ error: "Rate limit exceeded" }, 429);
   }
 
-  if (record.count >= limit) {
-    c.json({ error: "Rate limit exceeded" }, 429);
-    return;
-  }
-
-  record.count++;
   await next();
 }
