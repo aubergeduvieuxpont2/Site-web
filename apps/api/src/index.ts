@@ -722,18 +722,35 @@ app.post(
 
     // M1: per-account lockout — too many recent failed logins → generic 429.
     // Checked before verifying the password so a locked account can't be probed.
-    if (await isAccountLocked(sql, data.email, Date.now(), 10, 15 * 60 * 1000)) {
+    // All lockout DB calls are best-effort: if the login_failures table is
+    // unavailable (e.g. migration 0033 not yet applied on deploy), we fail OPEN
+    // so login never 500s — lockout simply doesn't engage until the DB is healthy.
+    let locked = false;
+    try {
+      locked = await isAccountLocked(sql, data.email, Date.now(), 10, 15 * 60 * 1000);
+    } catch {
+      /* fail open */
+    }
+    if (locked) {
       return c.json({ error: "Identifiants invalides" }, 429);
     }
 
     if (!(await verifyPassword(data.password, user.password_hash))) {
       // Record the failure toward the per-account lockout, then generic 401.
-      await recordLoginFailure(sql, data.email, Date.now());
+      try {
+        await recordLoginFailure(sql, data.email, Date.now());
+      } catch {
+        /* fail open */
+      }
       return c.json({ error: "Identifiants invalides" }, 401);
     }
 
     // Successful login clears the account's failed-login history.
-    await clearLoginFailures(sql, data.email);
+    try {
+      await clearLoginFailures(sql, data.email);
+    } catch {
+      /* fail open */
+    }
 
     // Link any unclaimed guest reservations under this account's email so the
     // profile (which reads strictly by user_id) shows them without an email match.
