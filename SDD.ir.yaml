@@ -1,0 +1,292 @@
+REQ:
+  R-TAX-001:
+    actor: Pricing engine (api + web)
+    capability: round a dollar amount to the cent with true half-up, FP-robust across magnitudes
+    constraints: exact x.xx5 rounds UP at any magnitude; non-finite returns 0; no bare Number.EPSILON
+    priority: MUST
+    tests: [T-TAX-002a, T-TAX-002b]
+  R-TAX-002:
+    actor: Pricing engine (api + web)
+    capability: compute the compounding QC tax cascade (rates in percent -> amounts) with per-line cent rounding
+    constraints: fully compounding base x1.035 x1.05 x1.09975; TVQ=9.975%; round-then-compound
+    priority: MUST
+    tests: [T-TAX-001a, T-TAX-001b]
+  R-TAX-003:
+    actor: Both workspaces
+    capability: mirrored tax.ts in api and web with identical behaviour, pinned by a shared table
+    constraints: no cross-workspace import; identical cross-checked test table in each suite
+    priority: MUST
+    tests: [T-TAX-001a, T-TAX-001b]
+  R-TAX-004:
+    actor: API invoice path
+    capability: computeInvoice derives base then delegates cascade, InvoiceBreakdown shape preserved
+    constraints: deposit amount routed through roundCents; field names unchanged
+    priority: MUST
+    tests: [T-TAX-003a]
+  R-TAX-005:
+    actor: Web quote path
+    capability: estimateStay derives base then delegates cascade, mapping accommodationTax->hebergementTax
+    constraints: StayEstimate output shape preserved
+    priority: MUST
+    tests: [T-TAX-003a]
+  R-TAX-006:
+    actor: Quote vs invoice
+    capability: estimateStay and computeInvoice agree to the cent for identical inputs
+    constraints: base 89 -> hebergement 3.12 / total 106.38 in both
+    priority: MUST
+    tests: [T-TAX-003a]
+  R-EMAIL-001:
+    actor: Confirmation/invoice email templates
+    capability: render tax-rate labels from live settings values instead of hardcoded percents
+    constraints: raw settings number printed; precompiled.ts regenerated via build step, never runtime compile
+    priority: MUST
+    tests: [T-EMAIL-001a, T-EMAIL-001b]
+
+E:
+  E-TaxBreakdownInput:
+    fields:
+      base: number (dollars, cents-rounded subtotal)
+      accommodationTax: number (RATE percent e.g. 3.5)
+      tps: number (RATE percent e.g. 5)
+      tvq: number (RATE percent e.g. 9.975)
+    tenancy: none
+    invariants: [INV-input-rates-output-amounts]
+  E-TaxBreakdown:
+    fields:
+      base: number (AMOUNT)
+      accommodationTax: number (AMOUNT = roundCents(base*rate/100))
+      tps: number (AMOUNT = roundCents((base+accommodationTax)*rate/100))
+      tvq: number (AMOUNT = roundCents((base+accommodationTax+tps)*rate/100))
+      total: number (AMOUNT = roundCents(base+accommodationTax+tps+tvq))
+    tenancy: none
+    invariants: [INV-cascade-compounding, INV-half-up]
+  E-ReservationConfirmationPayload:
+    fields:
+      accommodationTaxRate: number (raw settings percent)
+      tpsRate: number (raw settings percent)
+      tvqRate: number (raw settings percent)
+    tenancy: none
+    invariants: [INV-shape-preserved]
+
+OP:
+  OP-Tax.roundCents:
+    input: { x: number }
+    auth: [internal-pure]
+    pre: []
+    err: [ERR-NONFINITE]
+    out: { cents: number }
+  OP-Tax.computeTaxBreakdown:
+    input: E-TaxBreakdownInput
+    auth: [internal-pure]
+    pre: []
+    err: []
+    out: E-TaxBreakdown
+  OP-Invoice.compute:
+    input: { effectiveNightly: number, nights: number, roomCount: number, weeklyRate: number, tps: number, tvq: number, accommodationTax: number, type: string, depositPercent: number }
+    auth: [internal-pure]
+    pre: []
+    err: []
+    out: { InvoiceBreakdown: object }
+  OP-Estimate.stay:
+    input: { nights: number, rooms: number, nightlyRate: number, rates: object, weeklyRate: number }
+    auth: [internal-pure]
+    pre: []
+    err: []
+    out: { StayEstimate: object }
+  OP-Email.buildConfirmation:
+    input: { reservation: object, invoice: object, rates: object }
+    auth: [internal-pure]
+    pre: []
+    err: []
+    out: E-ReservationConfirmationPayload
+
+AUTH:
+  internal-pure: internal pure functions; no HTTP auth boundary, no roles, no tenancy
+
+INV:
+  INV-cascade-compounding: each tax line is computed on the running compounding subtotal of all prior lines
+  INV-half-up: an exact x.xx5 amount rounds up at any magnitude
+  INV-input-rates-output-amounts: computeTaxBreakdown input keys are rates in percent; output keys are amounts in dollars
+  INV-shape-preserved: computeInvoice keeps InvoiceBreakdown and estimateStay keeps StayEstimate (hebergementTax) field names
+  INV-mirror-parity: apps/api/src/tax.ts and apps/web/src/lib/tax.ts stay behaviourally identical
+  INV-no-runtime-codegen: email templates are precompiled at build time; the Worker never calls Handlebars.compile
+
+ERR:
+  ERR-NONFINITE:
+    code: 0
+    meaning: roundCents returns 0 for NaN/Infinity/non-finite input
+
+API:
+  internal-no-http-change:
+    input: none
+    output: none
+    errors: []
+    auth: internal-pure
+
+UI:
+  no-ui-surface:
+    actions: []
+    state: { none }
+
+DATA:
+  no-schema-change: no migration, table, column, or index is added or modified by this stream
+
+TEST:
+  T-TAX-001a:
+    verifies: R-TAX-002
+    behaviour: "computeTaxBreakdown base 89 default rates -> accommodationTax 3.12, tps 4.61, tvq 9.65, total 106.38 (both workspaces)"
+    steps:
+      - "call computeTaxBreakdown({base:89, accommodationTax:3.5, tps:5, tvq:9.975})"
+      - "assert accommodationTax===3.12 && tps===4.61 && tvq===9.65 && total===106.38"
+  T-TAX-001b:
+    verifies: R-TAX-002
+    behaviour: "computeTaxBreakdown base 100 default rates -> accommodationTax 3.50, total 119.52 (both workspaces)"
+    steps:
+      - "call computeTaxBreakdown({base:100, accommodationTax:3.5, tps:5, tvq:9.975})"
+      - "assert accommodationTax===3.50 && total===119.52"
+  T-TAX-002a:
+    verifies: R-TAX-001
+    behaviour: "roundCents(3.115)===3.12 — small-magnitude half-cent rounds up"
+    steps:
+      - "assert roundCents(3.115)===3.12"
+  T-TAX-002b:
+    verifies: R-TAX-001
+    behaviour: "roundCents(12345.005)===12345.01 — large-magnitude half-cent rounds up (FP robustness)"
+    steps:
+      - "assert roundCents(12345.005)===12345.01"
+      - "assert roundCents non-finite input returns 0"
+  T-TAX-003a:
+    verifies: R-TAX-006
+    behaviour: "estimateStay and computeInvoice agree to the cent for base 89"
+    steps:
+      - "estimateStay(1,1,89,{accommodationTax:3.5,tps:5,tvq:9.975}) -> hebergementTax 3.12, total 106.38"
+      - "computeInvoice({effectiveNightly:89,nights:1,roomCount:1,tps:5,tvq:9.975,accommodationTax:3.5,type:'full'}) -> accommodationTax 3.12, total 106.38"
+  T-EMAIL-001a:
+    verifies: R-EMAIL-001
+    behaviour: "reservation-confirmation FR renders rate labels from sample rate fields"
+    steps:
+      - "renderEmail('reservation-confirmation','fr',sample) html contains 'Taxe d''hébergement (3.5%)' and 'TVQ (9.975%)'"
+      - "changing sample.accommodationTaxRate changes the rendered label"
+  T-EMAIL-001b:
+    verifies: R-EMAIL-001
+    behaviour: "buildReservationConfirmationData populates rate fields from the rates argument"
+    steps:
+      - "buildReservationConfirmationData(reservation, invoice, {accommodationTax:3.5,tps:5,tvq:9.975})"
+      - "assert payload.accommodationTaxRate===3.5 && payload.tpsRate===5 && payload.tvqRate===9.975"
+
+NFR:
+  correctness: TVQ 9.975%; fully compounding; per-line cent rounding
+  purity: tax.ts pure, dependency-free, isolate- and browser-safe
+  codegen: email rendering stays on precompiled templates; no runtime Handlebars.compile
+  green_gate: npm run typecheck passes; all apps/api and apps/web Vitest suites green
+  anti_drift: identical cross-checked table asserted in both tax.test.ts files
+
+FILE:
+  apps/api/src/tax.ts: TASK-tax-module
+  apps/web/src/lib/tax.ts: TASK-tax-module
+  apps/api/src/__tests__/tax.test.ts: TASK-tax-module
+  apps/web/src/lib/__tests__/tax.test.ts: TASK-tax-module
+  apps/api/src/pricing.ts: TASK-rewire-callers
+  apps/web/src/lib/utils.ts: TASK-rewire-callers
+  apps/api/src/emailPayloads.ts: TASK-email-labels
+  apps/api/src/index.ts: TASK-email-labels
+  apps/api/emails/templates/reservation-confirmation.fr.hbs: TASK-email-labels
+  apps/api/emails/templates/reservation-confirmation.en.hbs: TASK-email-labels
+  apps/api/emails/templates/invoice-receipt.fr.hbs: TASK-email-labels
+  apps/api/emails/templates/invoice-receipt.en.hbs: TASK-email-labels
+  apps/api/src/emails/manifest.ts: TASK-email-labels
+  apps/api/emails/samples/reservation-confirmation.json: TASK-email-labels
+  apps/api/emails/samples/invoice-receipt.json: TASK-email-labels
+  apps/api/src/emails/precompiled.ts: TASK-email-labels
+  apps/api/test/emailPayloads.test.ts: TASK-email-labels
+
+TASK:
+  TASK-tax-module:
+    scope:
+      - R-TAX-001
+      - R-TAX-002
+      - R-TAX-003
+      - OP-Tax.roundCents
+      - OP-Tax.computeTaxBreakdown
+      - E-TaxBreakdownInput
+      - E-TaxBreakdown
+      - ERR-NONFINITE
+      - T-TAX-001a
+      - T-TAX-001b
+      - T-TAX-002a
+      - T-TAX-002b
+    files:
+      - apps/api/src/tax.ts
+      - apps/web/src/lib/tax.ts
+      - apps/api/src/__tests__/tax.test.ts
+      - apps/web/src/lib/__tests__/tax.test.ts
+    must_preserve:
+      - INV-cascade-compounding
+      - INV-half-up
+      - INV-input-rates-output-amounts
+      - INV-mirror-parity
+    produce: [code, tests]
+    verifies: [R-TAX-001, R-TAX-002, R-TAX-003]
+  TASK-rewire-callers:
+    scope:
+      - R-TAX-004
+      - R-TAX-005
+      - R-TAX-006
+      - OP-Invoice.compute
+      - OP-Estimate.stay
+      - T-TAX-003a
+    files:
+      - apps/api/src/pricing.ts
+      - apps/web/src/lib/utils.ts
+    must_preserve:
+      - INV-shape-preserved
+      - INV-cascade-compounding
+      - INV-half-up
+    produce: [code]
+    verifies: [R-TAX-004, R-TAX-005, R-TAX-006]
+  TASK-email-labels:
+    scope:
+      - R-EMAIL-001
+      - OP-Email.buildConfirmation
+      - E-ReservationConfirmationPayload
+      - T-EMAIL-001a
+      - T-EMAIL-001b
+    files:
+      - apps/api/src/emailPayloads.ts
+      - apps/api/src/index.ts
+      - apps/api/emails/templates/reservation-confirmation.fr.hbs
+      - apps/api/emails/templates/reservation-confirmation.en.hbs
+      - apps/api/emails/templates/invoice-receipt.fr.hbs
+      - apps/api/emails/templates/invoice-receipt.en.hbs
+      - apps/api/src/emails/manifest.ts
+      - apps/api/emails/samples/reservation-confirmation.json
+      - apps/api/emails/samples/invoice-receipt.json
+      - apps/api/src/emails/precompiled.ts
+      - apps/api/test/emailPayloads.test.ts
+    must_preserve:
+      - INV-no-runtime-codegen
+      - INV-shape-preserved
+    produce: [code, templates, tests]
+    verifies: [R-EMAIL-001]
+
+STATE:
+  ST-01:
+    status: locked
+    decision: Two mirrored tax.ts files (api authoritative, web verbatim) instead of one shared cross-workspace package
+    rationale: "no ergonomic cross-import between the Vite SPA and the Worker; drift prevented by an identical cross-checked test table in both suites"
+  ST-02:
+    status: locked
+    decision: roundCents uses a relative/scale-aware epsilon (or integer-cents), never a bare absolute Number.EPSILON
+    rationale: "absolute EPSILON is too small at large magnitudes; a large-magnitude half-cent test guards the choice"
+  ST-03:
+    status: locked
+    decision: Cascade structure frozen (fully compounding, round-then-compound); only rounding corrected and impls unified
+    rationale: "operator-confirmed; base 89 must total 106.38 with hebergement 3.12"
+  ST-04:
+    status: locked
+    decision: Live rate labels threaded as three new payload fields via a rates argument; InvoiceBreakdown not widened
+    rationale: "InvoiceBreakdown carries amounts not rates; rates already read via rowsToAdminSettings at the send site; invoice-receipt is preview-only and driven by its sample JSON"
+  ST-05:
+    status: locked
+    decision: precompiled.ts regenerated only by scripts/precompile-emails.mjs, never hand-edited or runtime-compiled
+    rationale: "Cloudflare Workers forbid runtime code generation"
