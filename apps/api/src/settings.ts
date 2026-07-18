@@ -64,10 +64,10 @@ export const SettingsUpdateSchema = z.object({
   // and allowed to be 0 when no rooms are public.
   assignableRoomCount: z.coerce.number().int().nonnegative(),
   reservationsEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
-  emailConfirmationEnabled: z.preprocess(coerceBoolLoose, z.boolean()).optional(),
-  emailPasswordResetEnabled: z.preprocess(coerceBoolLoose, z.boolean()).optional(),
-  emailRoomAssignmentEnabled: z.preprocess(coerceBoolLoose, z.boolean()).optional(),
-  emailWelcomeEnabled: z.preprocess(coerceBoolLoose, z.boolean()).optional(),
+  emailConfirmationEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailPasswordResetEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailRoomAssignmentEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailWelcomeEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
 });
 
 export const settingsHook = (result: any, c: any) =>

@@ -14,12 +14,21 @@ import {
 const DEFAULT_TAXES = { tps: 5, tvq: 9.975, accommodationTax: 3.5 };
 const CONTACT_PHONE = "418 655-1212";
 const CONTACT = { contactPhone: CONTACT_PHONE };
+// All four email-toggle fields are required by SettingsUpdateSchema (see C1);
+// every "valid payload" fixture below must carry them.
+const EMAIL_TOGGLES_ALL_FALSE = {
+  emailConfirmationEnabled: false,
+  emailPasswordResetEnabled: false,
+  emailRoomAssignmentEnabled: false,
+  emailWelcomeEnabled: false,
+};
 // The remaining required settings a valid update must carry beyond the
 // price / email / phone / tax fields the individual assertions vary.
 const EXTRA_REQUIRED = {
   weeklyPrice: 560,
   assignableRoomCount: 12,
   reservationsEnabled: true,
+  ...EMAIL_TOGGLES_ALL_FALSE,
 };
 const SETTINGS_KEYS_SORTED = [
   "accommodationTax",
@@ -80,6 +89,7 @@ describe("Settings", () => {
         ...DEFAULT_TAXES,
         assignableRoomCount: 12,
         reservationsEnabled: true,
+        ...EMAIL_TOGGLES_ALL_FALSE,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -97,6 +107,7 @@ describe("Settings", () => {
         ...DEFAULT_TAXES,
         assignableRoomCount: 12,
         reservationsEnabled: true,
+        ...EMAIL_TOGGLES_ALL_FALSE,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -114,6 +125,7 @@ describe("Settings", () => {
         ...DEFAULT_TAXES,
         assignableRoomCount: 0,
         reservationsEnabled: true,
+        ...EMAIL_TOGGLES_ALL_FALSE,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -244,6 +256,7 @@ describe("Settings", () => {
         accommodationTax: "3.5",
         assignableRoomCount: "12",
         reservationsEnabled: "true",
+        ...EMAIL_TOGGLES_ALL_FALSE,
       };
       const result = SettingsUpdateSchema.safeParse(stringPayload);
       expect(result.success).toBe(true);
@@ -267,6 +280,7 @@ describe("Settings", () => {
         accommodationTax: "3.5",
         assignableRoomCount: "12",
         reservationsEnabled: "false",
+        ...EMAIL_TOGGLES_ALL_FALSE,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);

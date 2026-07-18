@@ -6,7 +6,7 @@ import { z } from "zod";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
 import { buildReservationConfirmationData } from "./emailPayloads";
-import { provisionOtaGuest } from "./provisioning";
+import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
   createSession,
@@ -773,16 +773,19 @@ app.post(
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
 
-      const origin = new URL(c.req.url).origin;
-      await enqueueEmail(sql, {
-        template: "password-reset",
-        to: user.email,
-        payload: {
-          firstName: user.first_name ?? user.name ?? "client",
-          resetUrl: `${origin}/reinitialisation?token=${rawToken}`,
-          expiryHours: 1,
-        },
-      });
+      try {
+        await enqueueEmail(sql, {
+          template: "password-reset",
+          to: user.email,
+          payload: {
+            firstName: user.first_name ?? user.name ?? "client",
+            resetUrl: `${SITE_ORIGIN}/reinitialisation?token=${rawToken}`,
+            expiryHours: 1,
+          },
+        });
+      } catch (err) {
+        console.error("password-reset email enqueue failed", err);
+      }
     }
 
     return c.json({ ok: true });
@@ -850,6 +853,7 @@ app.get("/api/profile", async (c) => {
 
 app.post(
   "/api/profile/email",
+  authRateLimiter,
   zValidator("json", ProfileEmailSchema, authHook),
   async (c) => {
     const user = await getAuthUser(c);
@@ -892,7 +896,7 @@ app.post(
 
     // Update the user's email
     await sql`
-      UPDATE users SET email = ${newEmail}, updated_at = now()
+      UPDATE users SET email = ${newEmail}
       WHERE id = ${user.id}
     `;
 
@@ -901,17 +905,17 @@ app.post(
       c.executionCtx.waitUntil(
         (async () => {
           try {
-            const hubspotRes = await c.env.HUBSPOT.fetch("http://internal/ops/contact.updateById", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contactId: user.hubspot_contact_id,
-                properties: { email: newEmail },
-              }),
-            });
-            if (!hubspotRes.ok) {
-              console.error("HubSpot contact update failed:", hubspotRes.status);
-            }
+            await c.env.HUBSPOT.fetch(
+              new Request("http://hubspot/ops/enqueue", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  kind: "contact.updateById",
+                  payload: { contactId: user.hubspot_contact_id, properties: { email: newEmail } },
+                  dedupeKey: `user-${user.id}-email-${newEmail.toLowerCase()}`,
+                }),
+              })
+            );
           } catch (err) {
             console.error("HubSpot contact update error:", err);
           }
@@ -1870,6 +1874,10 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('tvq', ${data.tvq.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('accommodation_tax', ${data.accommodationTax.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('reservations_enabled', ${data.reservationsEnabled ? 'true' : 'false'}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_confirmation_enabled', ${data.emailConfirmationEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_password_reset_enabled', ${data.emailPasswordResetEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     // `assignable_room_count` is derived, never taken from the request body:

@@ -1,22 +1,32 @@
 import { neon } from "@neondatabase/serverless";
 import { renderEmail } from "./emails/render";
-import type { TemplateKey } from "./emails/templates";
 import { contactContext } from "./emails/routes";
 
 export const EMAIL_FROM = "Auberge du Vieux Pont <no-reply@aubergeduvieuxpont.ca>";
 
-export const EMAIL_TOGGLE_KEYS: Record<string, string> = {
+// The outbox only ever carries these four transactional templates; the other
+// TemplateKey values (welcome, reservation-cancellation, invoice-receipt,
+// review-request) are preview-only and never enqueued.
+export type EmailTemplate =
+  | "reservation-confirmation"
+  | "password-reset"
+  | "room-assigned"
+  | "ota-welcome";
+
+export const EMAIL_TOGGLE_KEYS: Record<EmailTemplate, string> = {
   "reservation-confirmation": "email_confirmation_enabled",
   "password-reset": "email_password_reset_enabled",
   "room-assigned": "email_room_assignment_enabled",
   "ota-welcome": "email_welcome_enabled",
 };
 
-export type EmailTemplate = TemplateKey;
-
 export function computeEmailBackoff(attempts: number): number {
   return Math.min(3600, 30 * Math.pow(2, attempts - 1));
 }
+
+// After this many attempts a row stops retrying and is marked 'failed' for
+// good — otherwise a permanently-broken recipient/template retries forever.
+export const MAX_ATTEMPTS = 8;
 
 export function isTransientResendFailure(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
@@ -57,13 +67,20 @@ export async function drainEmailOutbox(
   try {
     const sql = neon(env.DB_CONN);
 
+    // Atomic claim: increment `attempts` and lock the row in the same
+    // statement so two overlapping drains can never both process it (the
+    // previous SELECT-then-process shape left a window between reading and
+    // updating). `attempts` on each returned row already reflects this try.
     const rows = (await sql`
-      SELECT id, to_email, template, locale, payload, attempts
-      FROM email_outbox
-      WHERE status = 'pending' AND next_attempt_at <= now()
-      ORDER BY next_attempt_at
-      LIMIT 10
-      FOR UPDATE SKIP LOCKED
+      UPDATE email_outbox
+      SET attempts = attempts + 1, updated_at = now()
+      WHERE id IN (
+        SELECT id FROM email_outbox
+        WHERE status = 'pending' AND next_attempt_at <= now()
+        ORDER BY id LIMIT 10
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, to_email, template, locale, payload, attempts
     `) as {
       id: number;
       to_email: string;
@@ -94,6 +111,7 @@ export async function drainEmailOutbox(
             body: JSON.stringify({
               from: EMAIL_FROM,
               to: [row.to_email],
+              reply_to: contact.contactEmail,
               subject: rendered.subject,
               html: rendered.html,
               text: rendered.text,
@@ -102,18 +120,27 @@ export async function drainEmailOutbox(
         } catch (networkErr) {
           const msg = networkErr instanceof Error ? networkErr.message : "Network error";
           try {
-            const newAttempts = row.attempts + 1;
-            const backoffSecs = computeEmailBackoff(newAttempts);
-            await sql`
-              UPDATE email_outbox
-              SET attempts = ${newAttempts},
-                  next_attempt_at = now() + (${backoffSecs.toString()} || ' seconds')::interval,
-                  last_error = ${msg},
-                  updated_at = now()
-              WHERE id = ${row.id}
-            `;
+            if (row.attempts >= MAX_ATTEMPTS) {
+              await sql`
+                UPDATE email_outbox
+                SET status = 'failed',
+                    last_error = ${msg},
+                    updated_at = now()
+                WHERE id = ${row.id}
+              `;
+              failed++;
+            } else {
+              const backoffSecs = computeEmailBackoff(row.attempts);
+              await sql`
+                UPDATE email_outbox
+                SET next_attempt_at = now() + (${backoffSecs.toString()} || ' seconds')::interval,
+                    last_error = ${msg},
+                    updated_at = now()
+                WHERE id = ${row.id}
+              `;
+              retried++;
+            }
           } catch {}
-          retried++;
           continue;
         }
 
@@ -132,18 +159,28 @@ export async function drainEmailOutbox(
           `;
           delivered++;
         } else if (isTransientResendFailure(res.status)) {
-          const newAttempts = row.attempts + 1;
-          const backoffSecs = computeEmailBackoff(newAttempts);
-          await sql`
-            UPDATE email_outbox
-            SET attempts = ${newAttempts},
-                next_attempt_at = now() + (${backoffSecs.toString()} || ' seconds')::interval,
-                last_error = ${"HTTP " + res.status},
-                updated_at = now()
-            WHERE id = ${row.id}
-          `;
-          retried++;
+          if (row.attempts >= MAX_ATTEMPTS) {
+            await sql`
+              UPDATE email_outbox
+              SET status = 'failed',
+                  last_error = ${"HTTP " + res.status + " (max attempts reached)"},
+                  updated_at = now()
+              WHERE id = ${row.id}
+            `;
+            failed++;
+          } else {
+            const backoffSecs = computeEmailBackoff(row.attempts);
+            await sql`
+              UPDATE email_outbox
+              SET next_attempt_at = now() + (${backoffSecs.toString()} || ' seconds')::interval,
+                  last_error = ${"HTTP " + res.status},
+                  updated_at = now()
+              WHERE id = ${row.id}
+            `;
+            retried++;
+          }
         } else {
+          // Permanent failure (4xx other than 429): no point retrying regardless of attempts.
           let body = "";
           try {
             body = await res.text();

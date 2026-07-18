@@ -26,6 +26,10 @@ apps/
   OTA booking confirmations, creates reservations (with dedupe via `source`/`external_ref`
   on the `reservations` table), and logs all processed emails to the `email_ingest_log`
   table for admin visibility.
+- Outbound transactional email (confirmation, password-reset, room-assigned, OTA
+  welcome) is queued in the `email_outbox` table and drained by the API worker's
+  cron trigger; each template is gated by one of four admin-configurable
+  `settings` toggles (`email_*_enabled`), all off by default.
 
 ## Database config (DB_CONN)
 

@@ -2,7 +2,7 @@ import { hashPassword } from "./auth/password";
 import { generateToken, sha256hex } from "./auth/session";
 import { enqueueEmail } from "./emailOutbox";
 
-const SITE_ORIGIN = "https://www.aubergeduvieuxpont.ca";
+export const SITE_ORIGIN = "https://www.aubergeduvieuxpont.ca";
 
 type NeonSql = (strings: TemplateStringsArray, ...vals: unknown[]) => Promise<unknown>;
 

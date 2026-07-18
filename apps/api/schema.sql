@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS email_ingest_log (
 
 CREATE INDEX IF NOT EXISTS email_ingest_log_created_at ON email_ingest_log (created_at DESC);
 
--- 0027_email_outbox
+-- 0030_email_outbox
 -- Outbound transactional email queue, drained by the API worker's cron.
 -- Mirrors the hubspot_outbox lifecycle (pending -> delivered | failed).
 CREATE TABLE IF NOT EXISTS email_outbox (
@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS email_outbox (
 CREATE INDEX IF NOT EXISTS email_outbox_status_next_attempt
   ON email_outbox (status, next_attempt_at);
 
--- 0028_email_toggle_settings
+-- 0031_email_toggle_settings
 -- Per-email-type kill switches, all OFF by default so the operator can
 -- enable them one at a time from admin -> Parametres.
 INSERT INTO settings (key, value) VALUES
@@ -150,7 +150,7 @@ INSERT INTO settings (key, value) VALUES
   ('email_welcome_enabled', 'false')
 ON CONFLICT (key) DO NOTHING;
 
--- 0029_reservations_user_id
+-- 0032_reservations_user_id
 -- Durable reservation -> portal-account link (email matching breaks the
 -- moment a guest replaces their OTA relay address with their real email).
 ALTER TABLE reservations ADD COLUMN IF NOT EXISTS user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;

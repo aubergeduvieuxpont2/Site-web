@@ -29,7 +29,9 @@ npm run db:migrate
 
 This creates:
 - `email_outbox` table (the queue of pending emails)
-- `email_toggle_settings` (four seed rows for feature flags, all off by default)
+- four `settings` rows (`email_confirmation_enabled`, `email_password_reset_enabled`,
+  `email_room_assignment_enabled`, `email_welcome_enabled`) — per-template kill
+  switches, all off by default
 - `reservations.user_id` column (links OTA reservations to portal user accounts)
 
 ### 4. Enable email toggles in Admin settings
@@ -38,7 +40,9 @@ Navigate to `/admin` and enable the email features you want:
 - **Confirmation emails**: Sent immediately after a reservation is created
 - **Password reset emails**: Sent when a user requests a password reset
 - **Room assignment emails**: Sent when an admin assigns a room to a reservation
-- **Welcome emails (OTA)**: Sent when provisioning a guest account for an Expedia guest
+- **Welcome emails (OTA)**: Sent when provisioning a guest account for an Expedia guest.
+  Note the toggle only gates the *email*: the account, the reservation link, and the
+  password-reset token are always created on every OTA booking regardless of the toggle.
 
 ## Architecture
 
@@ -55,14 +59,20 @@ All outbound emails are **asynchronous**. When an event triggers an email (e.g.,
 
 ### Retry logic
 
-Emails use exponential backoff with a cap:
-- 1st attempt: 30 seconds
-- 2nd attempt: 60 seconds
-- 3rd attempt: 120 seconds
+Each drain claims and increments `attempts` atomically (`UPDATE ... RETURNING`,
+`FOR UPDATE SKIP LOCKED`), so two overlapping cron runs can never double-send.
+On a transient failure, the wait before the *next* attempt uses exponential
+backoff with a cap:
+- After attempt 1 fails → retry in 30 seconds (before attempt 2)
+- After attempt 2 fails → retry in 60 seconds (before attempt 3)
+- After attempt 3 fails → retry in 120 seconds (before attempt 4)
 - ...
 - Capped at 3600 seconds (1 hour)
 
-Transient failures (429 Too Many Requests, 5xx) trigger a retry; permanent failures (4xx except 429) mark the row `failed`.
+Transient failures (429 Too Many Requests, 5xx) trigger a retry **unless the
+row has already reached `MAX_ATTEMPTS` (8)**, in which case it is marked
+`failed` instead of scheduling another retry. Permanent failures (4xx except
+429) always mark the row `failed` immediately, regardless of attempt count.
 
 ## Monitoring
 
@@ -112,7 +122,7 @@ Four transactional email templates are included:
 | `reservation-confirmation` | New reservation | fr, en |
 | `password-reset` | Password reset request | fr, en |
 | `room-assigned` | Admin assigns room | fr, en |
-| `ota-welcome` | OTA guest provision | en |
+| `ota-welcome` | OTA guest provision | fr, en (fr sent by default) |
 
 Each template renders with injected footer contact info (`contactPhone`, `contactEmail`) from the API's settings endpoint.
 
@@ -120,12 +130,15 @@ Each template renders with injected footer contact info (`contactPhone`, `contac
 
 When an Expedia booking email arrives:
 1. The email-ingest Worker parses it and POSTs to `/internal/ota-bookings`
-2. If `email_welcome_enabled` is `true`, the API provisions a guest account:
+2. The API always provisions a guest account, regardless of the email toggle:
    - Creates a user (or reuses existing if email matches)
    - Links the reservation to the user via `user_id`
    - Mints a 30-day password-reset token
-   - Enqueues a welcome email with set-password link
-3. The guest receives an email inviting them to set their password and access their portal
+   - Enqueues a welcome email — but `enqueueEmail` only actually inserts the
+     outbox row if `email_welcome_enabled` is `true`; otherwise the account
+     and token still exist, just with no email sent
+3. When the toggle is on, the guest receives a bilingual (fr by default) email
+   inviting them to set their password and access their portal
 
 ## Profile Email Change
 
