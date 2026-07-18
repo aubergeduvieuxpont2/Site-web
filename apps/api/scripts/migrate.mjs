@@ -36,10 +36,48 @@ function resolveConnectionString() {
   );
 }
 
+// Split a migration file into statements on top-level semicolons only.
+// Aware of line comments, single-quoted strings, and dollar-quoted blocks
+// ($$ … $$ or $tag$ … $tag$), so plpgsql DO blocks survive intact.
 function splitStatements(sql) {
-  return sql
-    .replace(/--[^\n]*/g, "") // strip line comments
-    .split(";")
+  const statements = [];
+  let current = "";
+  let i = 0;
+  while (i < sql.length) {
+    const rest = sql.slice(i);
+    if (rest.startsWith("--")) {
+      const nl = sql.indexOf("\n", i);
+      i = nl === -1 ? sql.length : nl + 1;
+      current += "\n";
+      continue;
+    }
+    if (sql[i] === "'") {
+      const end = sql.indexOf("'", i + 1);
+      const stop = end === -1 ? sql.length : end + 1;
+      current += sql.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    const dollar = rest.match(/^\$[A-Za-z_]*\$/);
+    if (dollar) {
+      const tag = dollar[0];
+      const end = sql.indexOf(tag, i + tag.length);
+      const stop = end === -1 ? sql.length : end + tag.length;
+      current += sql.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    if (sql[i] === ";") {
+      statements.push(current);
+      current = "";
+      i += 1;
+      continue;
+    }
+    current += sql[i];
+    i += 1;
+  }
+  statements.push(current);
+  return statements
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
 }

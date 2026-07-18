@@ -7,6 +7,8 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
+import { generateCode } from "./reservationCode";
+import { enqueueReviewRequests } from "./reviewRequests";
 import { hashPassword, verifyPassword, needsRehash } from "./auth/password";
 import { isPasswordBreached } from "./auth/hibp";
 import {
@@ -38,6 +40,8 @@ import {
 } from "./settings";
 import { availabilityForRange } from "./availability";
 import { createEmailsRouter } from "./emails";
+import { createDashboardRouter } from "./dashboard";
+import { createReviewsRouter } from "./reviews";
 import {
   buildReservationHubspotOps,
   enqueueHubspotOps,
@@ -85,6 +89,7 @@ type MessageRow = {
 
 type ReservationRow = {
   id: number;
+  code: string | null;
   name: string;
   first_name: string | null;
   last_name: string | null;
@@ -224,6 +229,13 @@ const BlackoutUpsertSchema = z.object({
   note: z.string().trim().nullable().optional(),
 });
 
+const BlackoutRangeCreateSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate must be YYYY-MM-DD"),
+  roomsBlocked: z.coerce.number().int().min(0),
+  note: z.string().trim().nullable().optional(),
+});
+
 export const ProfileEmailSchema = z.object({
   newEmail: z.string().trim().email("email invalide"),
   currentPassword: z.string().min(1, "mot de passe requis"),
@@ -320,6 +332,31 @@ let dummyHashPromise: Promise<string> | null = null;
 function getDummyHash(): Promise<string> {
   return (dummyHashPromise ??= hashPassword("verify-timing-equalizer-dummy-secret"));
 }
+
+// Insert a code, retrying up to 5 times on the rare uniqueness collision.
+// Code generation lives in ./reservationCode (single source of truth, unit-tested).
+async function insertReservationCode(
+  sql: NeonQueryFunction<any, any>,
+  reservationId: number
+): Promise<string | null> {
+  for (let i = 0; i < 5; i++) {
+    const code = generateCode();
+    try {
+      const rows = (await sql`
+        UPDATE reservations SET code = ${code} WHERE id = ${reservationId} AND code IS NULL
+        RETURNING code
+      `) as { code: string }[];
+      if (rows[0]) return rows[0].code;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("unique") && !msg.includes("UNIQUE")) throw err;
+    }
+  }
+  return null;
+}
+
+// Review-request enqueue lives in ./reviewRequests (single source of truth,
+// unit-tested; passes checkIn/checkOut so the email template renders dates).
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -461,12 +498,21 @@ app.post(
     const rows = (await sql`
       INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, status)
       VALUES (${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}, ${data.checkOut}, ${data.guests}, ${data.roomCount}, ${data.message}, 'pending')
-      RETURNING id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, created_at
+      RETURNING id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, created_at
     `) as ReservationRow[];
 
     const created = rows[0];
     if (!created) {
       return c.json({ error: "Failed to create reservation" }, 500);
+    }
+
+    // Assign a human-facing code if the column exists and the row lacks one.
+    if (created.code == null) {
+      try {
+        await insertReservationCode(sql, created.id);
+      } catch (err) {
+        console.error("reservation code assignment failed", err);
+      }
     }
 
     c.executionCtx.waitUntil(
@@ -603,8 +649,8 @@ app.post("/internal/ota-bookings", async (c) => {
     INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref)
     VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef})
     ON CONFLICT (source, external_ref) WHERE external_ref IS NOT NULL DO NOTHING
-    RETURNING id
-  `) as { id: number }[];
+    RETURNING id, code
+  `) as { id: number; code: string | null }[];
 
   const created = rows[0];
   if (!created) {
@@ -613,6 +659,15 @@ app.post("/internal/ota-bookings", async (c) => {
       VALUES (${d.source}, 'duplicate', ${d.subject})
     `;
     return c.json({ ok: true, duplicate: true }, 200);
+  }
+
+  // Assign human-facing code if not already set (column may not exist yet on older deploys).
+  if (created.code == null) {
+    try {
+      await insertReservationCode(sql, created.id);
+    } catch (err) {
+      console.error("ota reservation code assignment failed", err);
+    }
   }
 
   await sql`
@@ -2073,6 +2128,72 @@ app.get("/api/admin/blackouts", async (c) => {
   return c.json({ blackouts: rows });
 });
 
+// Range endpoints must be registered BEFORE /:date so Hono's router matches
+// the static segment "range" instead of treating it as a date param.
+app.post(
+  "/api/admin/blackouts/range",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+    await next();
+  },
+  zValidator("json", BlackoutRangeCreateSchema),
+  async (c) => {
+    const data = c.req.valid("json");
+    if (data.startDate > data.endDate) {
+      return c.json({ error: "startDate doit être ≤ endDate" }, 400);
+    }
+    // Span check: endDate - startDate <= 366 days.
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+    const spanDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    if (spanDays > 366) {
+      return c.json({ error: "La plage ne peut dépasser 366 jours" }, 400);
+    }
+
+    const sql = neon(c.env.DB_CONN);
+    await sql`
+      INSERT INTO blackout_dates (date, rooms_blocked, note)
+      SELECT
+        generate_series(${data.startDate}::date, ${data.endDate}::date, '1 day'::interval)::date,
+        ${data.roomsBlocked},
+        ${data.note ?? null}
+      ON CONFLICT (date) DO UPDATE SET rooms_blocked = EXCLUDED.rooms_blocked, note = EXCLUDED.note, created_at = now()
+    `;
+
+    return c.json({ count: spanDays });
+  }
+);
+
+app.delete("/api/admin/blackouts/range", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const start = c.req.query("start");
+  const end = c.req.query("end");
+
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    return c.json({ error: "Paramètre start invalide (YYYY-MM-DD attendu)" }, 400);
+  }
+  if (!end || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return c.json({ error: "Paramètre end invalide (YYYY-MM-DD attendu)" }, 400);
+  }
+  if (start > end) {
+    return c.json({ error: "start doit être ≤ end" }, 400);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const deleted = (await sql`
+    DELETE FROM blackout_dates
+    WHERE date >= ${start}::date AND date <= ${end}::date
+    RETURNING date
+  `) as { date: string }[];
+
+  return c.json({ deleted: deleted.length });
+});
+
 app.put(
   "/api/admin/blackouts/:date",
   async (c, next) => {
@@ -2220,6 +2341,7 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('email_password_reset_enabled', ${data.emailPasswordResetEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_review_request_enabled', ${data.emailReviewRequestEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     // `assignable_room_count` is derived, never taken from the request body:
@@ -2233,7 +2355,15 @@ app.post(
   }
 );
 
-// Email routes (admin-gated)
+// Dashboard, reviews, and email routes (admin-gated + public-rate-limited).
+// These routers are extracted into testable modules; wired here so the running
+// app uses the same code that is covered by the unit tests.
+// Cast: getAuthUser only reads c.env.DB_CONN; the narrower Bindings in the
+// module deps are structurally compatible at runtime.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.route("/", createDashboardRouter({ authenticate: getAuthUser as any }));
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+app.route("/", createReviewsRouter({ authenticate: getAuthUser as any }));
 app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
 
 // JSON 404 for unmatched routes.
@@ -2255,6 +2385,11 @@ export { app };
 export default {
   fetch: app.fetch,
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
-    ctx.waitUntil(drainEmailOutbox(env));
+    // Enqueue review-request emails first so the drain pass picks them up in
+    // the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
+    ctx.waitUntil((async () => {
+      await enqueueReviewRequests(neon(env.DB_CONN));
+      await drainEmailOutbox(env);
+    })());
   },
 } satisfies ExportedHandler<Bindings>;

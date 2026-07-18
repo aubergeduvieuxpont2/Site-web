@@ -76,6 +76,17 @@ describe("Footer (SSR)", () => {
       expect(html).toContain('data-testid="footer-nav"');
     });
 
+    it("has avis link with correct href", () => {
+      const { html } = renderFooter();
+      expect(html).toContain('href="/avis"');
+      expect(html).toContain('data-testid="footer-link-avis"');
+    });
+
+    it("avis link has correct text", () => {
+      const { html } = renderFooter();
+      expect(html).toContain("Avis des clients");
+    });
+
     it("has politiques link with correct href", () => {
       const { html } = renderFooter();
       expect(html).toContain('href="/politiques"');
@@ -144,6 +155,7 @@ describe("Footer (SSR)", () => {
         "footer-address-city",
         "footer-phone",
         "footer-nav",
+        "footer-link-avis",
         "footer-link-politiques",
         "footer-link-confidentialite",
         "footer-copy",

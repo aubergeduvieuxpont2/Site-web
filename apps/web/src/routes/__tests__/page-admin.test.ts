@@ -15,6 +15,7 @@ const requeueOutbox = vi.fn();
 const adminGetSettings = vi.fn();
 const adminUpdateSettings = vi.fn();
 const changePassword = vi.fn();
+const adminGetDashboard = vi.fn();
 
 vi.mock("$lib/api", () => ({
   getMe: (...a: unknown[]) => getMe(...a),
@@ -24,6 +25,7 @@ vi.mock("$lib/api", () => ({
   adminGetSettings: (...a: unknown[]) => adminGetSettings(...a),
   adminUpdateSettings: (...a: unknown[]) => adminUpdateSettings(...a),
   changePassword: (...a: unknown[]) => changePassword(...a),
+  adminGetDashboard: (...a: unknown[]) => adminGetDashboard(...a),
   isError: (r: unknown): r is ApiError =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
 }));
@@ -97,8 +99,16 @@ beforeEach(() => {
   adminGetSettings.mockReset();
   adminUpdateSettings.mockReset();
   changePassword.mockReset();
+  adminGetDashboard.mockReset();
   // Sensible defaults; individual tests override.
   getMe.mockResolvedValue({ user: ADMIN });
+  adminGetDashboard.mockResolvedValue({
+    guestsThisWeek: 4,
+    guestsLastWeek: 2,
+    next7Days: [],
+    occupancy: { currentMonth: 0.5, previousMonth: 0.4, sameMonthLastYear: null },
+    returningCustomers: 3,
+  });
   adminReservations.mockResolvedValue({ reservations: [reservation()] });
   adminOutbox.mockResolvedValue({ rows: [outbox()] });
   requeueOutbox.mockResolvedValue({ row: outbox({ status: "pending", attempts: 0, last_error: null }) });
@@ -265,29 +275,45 @@ describe("page-admin requeue (optimistic update)", () => {
   });
 });
 
+describe("page-admin default tab", () => {
+  it("opens on the Aperçu tab/panel by default (not Réservations)", async () => {
+    const { findByTestId, getByTestId } = render(Page);
+    const apercuTab = await findByTestId("tab-apercu");
+    // Aperçu is the selected tab on first render.
+    expect(apercuTab.getAttribute("aria-selected")).toBe("true");
+    // Its panel is the visible one; every other panel is hidden.
+    expect(getByTestId("panel-apercu").hasAttribute("hidden")).toBe(false);
+    expect(getByTestId("panel-reservations").hasAttribute("hidden")).toBe(true);
+    // And the Aperçu tab content actually mounts (lazy {#if activeTab}).
+    expect(await findByTestId("admin-apercu-tab")).toBeTruthy();
+  });
+});
+
 describe("page-admin ARIA tab semantics", () => {
   it("marks the active tab with aria-selected and roving tabindex", async () => {
     const { findByTestId, getByTestId } = render(Page);
-    const resTab = await findByTestId("tab-reservations");
-    expect(resTab.getAttribute("aria-selected")).toBe("true");
-    expect(resTab.getAttribute("tabindex")).toBe("0");
-    expect(getByTestId("tab-outbox").getAttribute("tabindex")).toBe("-1");
+    const apercuTab = await findByTestId("tab-apercu");
+    expect(apercuTab.getAttribute("aria-selected")).toBe("true");
+    expect(apercuTab.getAttribute("tabindex")).toBe("0");
+    expect(getByTestId("tab-reservations").getAttribute("tabindex")).toBe("-1");
 
     await fireEvent.click(getByTestId("tab-outbox"));
     await waitFor(() => {
       expect(getByTestId("tab-outbox").getAttribute("aria-selected")).toBe("true");
-      expect(getByTestId("tab-reservations").getAttribute("aria-selected")).toBe("false");
+      expect(getByTestId("tab-apercu").getAttribute("aria-selected")).toBe("false");
     });
   });
 
   it("moves between tabs with ArrowRight/ArrowLeft", async () => {
     const { findByTestId, getByTestId } = render(Page);
-    const resTab = await findByTestId("tab-reservations");
-    await fireEvent.keyDown(resTab, { key: "ArrowRight" });
-    await waitFor(() => expect(getByTestId("tab-outbox").getAttribute("aria-selected")).toBe("true"));
-    await fireEvent.keyDown(getByTestId("tab-outbox"), { key: "ArrowLeft" });
+    const apercuTab = await findByTestId("tab-apercu");
+    await fireEvent.keyDown(apercuTab, { key: "ArrowRight" });
     await waitFor(() =>
       expect(getByTestId("tab-reservations").getAttribute("aria-selected")).toBe("true"),
+    );
+    await fireEvent.keyDown(getByTestId("tab-reservations"), { key: "ArrowLeft" });
+    await waitFor(() =>
+      expect(getByTestId("tab-apercu").getAttribute("aria-selected")).toBe("true"),
     );
   });
 });

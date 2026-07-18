@@ -96,13 +96,29 @@ describe("admin page — Disponibilités tab & panel", () => {
 });
 
 describe("admin page — reservations status column", () => {
-  it("adds the Statut column header", () => {
+  it("keeps the Statut column header", () => {
     expect(src).toContain("<th scope=\"col\">Statut</th>");
   });
 
-  it("bumps the empty-state colspan from 9 to 10", () => {
-    expect(src).toContain('colspan="10"');
-    expect(src).not.toContain('colspan="9"');
+  it("uses the compact 6-column set (Nom · Arrivée · Départ · Chambres · Statut · Actions)", () => {
+    for (const col of ["Nom", "Arrivée", "Départ", "Chambres", "Statut", "Actions"]) {
+      expect(src).toContain(`<th scope="col">${col}</th>`);
+    }
+    // Detail-only fields must no longer have column headers.
+    expect(src).not.toContain('<th scope="col">Courriel</th>');
+    expect(src).not.toContain('<th scope="col">Téléphone</th>');
+    expect(src).not.toContain('<th scope="col">Pers.</th>');
+    expect(src).not.toContain('<th scope="col">Message</th>');
+  });
+
+  it("sets the empty-state colspan to 6 to match the compact columns", () => {
+    expect(src).toContain('colspan="6"');
+    expect(src).not.toContain('colspan="10"');
+  });
+
+  it("opens the detail modal from each row via onOpenDetail", () => {
+    expect(src).toContain("onOpenDetail={openDetail}");
+    expect(src).toContain("<ReservationDetailModal");
   });
 
   it("threads onSetStatus={handleSetStatus} into each row", () => {

@@ -6,6 +6,7 @@
   import Contour from '$lib/components/Contour.svelte';
   import Button from '$lib/components/Button.svelte';
   import Seo from '$lib/components/Seo.svelte';
+  import ReviewsStrip from '$lib/components/ReviewsStrip.svelte';
   import { ROOMS, AMENITIES, STATS, FAQ } from '$lib/content';
   import { lodgingBusinessSchema, faqSchema } from '$lib/seo';
   import { settings } from '$lib/settings.svelte';
@@ -207,6 +208,11 @@
   <div class="page-accueil__divider">
     <Contour number="04" width="full" />
   </div>
+
+  <!-- ── REVIEWS STRIP ──────────────────────────────────────
+       Hidden entirely when there are no approved reviews.
+       Loads client-side only (does not affect prerender/SSR). -->
+  <ReviewsStrip />
 
   <!-- ── CLOSING CTA ──────────────────────────────────────── -->
   <section

@@ -29,6 +29,8 @@ export interface User {
 
 export interface ReservationRow {
   id: number;
+  /** Human-facing code in format AVP-XXXXXX (added in migration 0037). */
+  code?: string | null;
   name: string;
   first_name: string | null;
   last_name: string | null;
@@ -45,6 +47,9 @@ export interface ReservationRow {
   // null/undefined status as "pending".
   status?: "pending" | "confirmed" | "cancelled" | null;
   created_at: string;
+  source?: string | null;
+  external_ref?: string | null;
+  user_id?: number | null;
 }
 
 export interface OutboxRow {
@@ -110,6 +115,8 @@ export interface AdminSettings extends Omit<PublicSettings, "publicRoomCount"> {
   emailPasswordResetEnabled: boolean;
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
+  /** Gate for the post-departure review-request email. Default false. */
+  emailReviewRequestEnabled?: boolean;
 }
 
 /**
@@ -941,5 +948,185 @@ export async function adminEmailPreview(
 ): Promise<EmailPreview | ApiError> {
   const params = new URLSearchParams({ template, locale });
   return fetchJson<EmailPreview>(`/admin/emails/preview?${params.toString()}`);
+}
+
+// ---------------------------------------------------------------------------
+// Blackout ranges (admin) — WS-B
+// ---------------------------------------------------------------------------
+
+/**
+ * Admin-gated: create or update blackout rows for every day in [startDate,
+ * endDate] (inclusive). Span must be ≤ 366 days; server expands to per-day
+ * upserts. Returns the number of days affected.
+ */
+export async function adminUpsertBlackoutRange(body: {
+  startDate: string;
+  endDate: string;
+  roomsBlocked: number;
+  note?: string | null;
+}): Promise<{ count: number } | ApiError> {
+  return fetchJson<{ count: number }>("/admin/blackouts/range", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Admin-gated: delete all blackout rows in [start, end] (inclusive). Returns
+ * the number of rows deleted.
+ */
+export async function adminDeleteBlackoutRange(
+  start: string,
+  end: string,
+): Promise<{ deleted: number } | ApiError> {
+  const params = new URLSearchParams({ start, end });
+  return fetchJson<{ deleted: number }>(
+    `/admin/blackouts/range?${params.toString()}`,
+    { method: "DELETE" },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard (admin) — WS-C
+// ---------------------------------------------------------------------------
+
+/** One night in the 7-day availability strip. */
+export interface DashboardAvailabilityNight {
+  date: string;
+  available: number;
+}
+
+/** Occupancy ratio for one period (null when denominator is 0). */
+export interface OccupancyPeriod {
+  currentMonth: number | null;
+  previousMonth: number | null;
+  sameMonthLastYear: number | null;
+}
+
+/** Full payload returned by GET /api/admin/dashboard. */
+export interface DashboardResponse {
+  guestsThisWeek: number;
+  guestsLastWeek: number;
+  next7Days: DashboardAvailabilityNight[];
+  occupancy: OccupancyPeriod;
+  returningCustomers: number;
+}
+
+/** Admin-gated: fetch all dashboard stats in a single request. */
+export async function adminGetDashboard(): Promise<DashboardResponse | ApiError> {
+  return fetchJson<DashboardResponse>("/admin/dashboard");
+}
+
+// ---------------------------------------------------------------------------
+// Reviews (public + admin) — WS-D
+// ---------------------------------------------------------------------------
+
+/** A single approved review as returned by the public endpoint. */
+export interface PublicReview {
+  id: number;
+  displayName: string;
+  rating: number;
+  body: string;
+  staysCount: number;
+  nightsTotal: number;
+  createdAt: string;
+}
+
+/** Admin review record including moderation status. */
+export interface AdminReview {
+  id: number;
+  reservation_id: number;
+  rating: number;
+  body: string;
+  status: "pending" | "approved" | "rejected";
+  display_name: string;
+  stays_count: number;
+  nights_total: number;
+  created_at: string;
+  moderated_at: string | null;
+  reservation_code: string | null;
+}
+
+/** Public eligibility check result. */
+export interface ReviewEligibility {
+  eligible: boolean;
+  firstName?: string;
+  reason?: string;
+}
+
+/**
+ * Public: check whether a reservation code is eligible for a review.
+ * Rate-limited. Generic errors only — no reservation data is leaked.
+ */
+export async function getReviewEligibility(
+  code: string,
+): Promise<ReviewEligibility | ApiError> {
+  const params = new URLSearchParams({ code });
+  return fetchJson<ReviewEligibility>(`/reviews/eligibility?${params.toString()}`);
+}
+
+/**
+ * Public: submit a review for a stay identified by its reservation code.
+ * Rate-limited. A 409 means a review already exists for this stay.
+ */
+export async function submitReview(body: {
+  code: string;
+  rating: number;
+  body: string;
+}): Promise<{ ok: true } | ApiError> {
+  return fetchJson<{ ok: true }>("/reviews", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+/**
+ * Public: fetch approved reviews, newest first. `limit` defaults to 10,
+ * capped at 100 server-side.
+ */
+export async function getPublicReviews(limit?: number): Promise<
+  { reviews: PublicReview[]; averageRating: number | null; total: number } | ApiError
+> {
+  const params = new URLSearchParams();
+  if (limit !== undefined && Number.isFinite(limit) && limit > 0) {
+    params.set("limit", String(Math.trunc(limit)));
+  }
+  const qs = params.toString();
+  return fetchJson<{ reviews: PublicReview[]; averageRating: number | null; total: number }>(
+    `/reviews${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/**
+ * Admin-gated: list reviews filtered by status (`pending` | `approved` |
+ * `rejected` | `all`). Also returns `pendingCount` for the badge.
+ */
+export async function adminListReviews(
+  status?: "pending" | "approved" | "rejected" | "all",
+): Promise<{ reviews: AdminReview[]; pendingCount: number } | ApiError> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  const qs = params.toString();
+  return fetchJson<{ reviews: AdminReview[]; pendingCount: number }>(
+    `/admin/reviews${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/**
+ * Admin-gated: approve or reject a review. Re-moderation (approved ↔
+ * rejected) is allowed. Returns the updated review record.
+ */
+export async function adminModerateReview(
+  id: number,
+  status: "approved" | "rejected",
+): Promise<{ review: AdminReview } | ApiError> {
+  const safeId = Math.trunc(id);
+  if (!Number.isInteger(safeId) || safeId <= 0) {
+    return { error: "Identifiant invalide" };
+  }
+  return fetchJson<{ review: AdminReview }>(
+    `/admin/reviews/${encodeURIComponent(String(safeId))}`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+  );
 }
 

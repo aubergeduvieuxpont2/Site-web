@@ -14,13 +14,14 @@ import {
 const DEFAULT_TAXES = { tps: 5, tvq: 9.975, accommodationTax: 3.5 };
 const CONTACT_PHONE = "418 655-1212";
 const CONTACT = { contactPhone: CONTACT_PHONE };
-// All four email-toggle fields are required by SettingsUpdateSchema (see C1);
+// All five email-toggle fields are required by SettingsUpdateSchema (see C1);
 // every "valid payload" fixture below must carry them.
 const EMAIL_TOGGLES_ALL_FALSE = {
   emailConfirmationEnabled: false,
   emailPasswordResetEnabled: false,
   emailRoomAssignmentEnabled: false,
   emailWelcomeEnabled: false,
+  emailReviewRequestEnabled: false,
 };
 // The remaining required settings a valid update must carry beyond the
 // price / email / phone / tax fields the individual assertions vary.
@@ -512,6 +513,7 @@ describe("Settings", () => {
       emailPasswordResetEnabled: false,
       emailRoomAssignmentEnabled: false,
       emailWelcomeEnabled: false,
+      emailReviewRequestEnabled: false,
     };
 
     it("returns admin settings with all keys", () => {
@@ -549,12 +551,13 @@ describe("Settings", () => {
       });
     });
 
-    it("defaults all four email toggles to false when rows are empty", () => {
+    it("defaults all five email toggles to false when rows are empty", () => {
       const result = rowsToAdminSettings([]);
       expect(result.emailConfirmationEnabled).toBe(false);
       expect(result.emailPasswordResetEnabled).toBe(false);
       expect(result.emailRoomAssignmentEnabled).toBe(false);
       expect(result.emailWelcomeEnabled).toBe(false);
+      expect(result.emailReviewRequestEnabled).toBe(false);
     });
 
     it("parses email toggle 'true' rows correctly", () => {
@@ -576,6 +579,7 @@ describe("Settings", () => {
       expect(pub).not.toHaveProperty("emailPasswordResetEnabled");
       expect(pub).not.toHaveProperty("emailRoomAssignmentEnabled");
       expect(pub).not.toHaveProperty("emailWelcomeEnabled");
+      expect(pub).not.toHaveProperty("emailReviewRequestEnabled");
     });
 
     it("SettingsUpdateSchema accepts boolean email toggle fields", () => {
@@ -593,6 +597,7 @@ describe("Settings", () => {
         emailPasswordResetEnabled: false,
         emailRoomAssignmentEnabled: "true",
         emailWelcomeEnabled: "false",
+        emailReviewRequestEnabled: true,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);
@@ -601,6 +606,7 @@ describe("Settings", () => {
         expect(result.data.emailPasswordResetEnabled).toBe(false);
         expect(result.data.emailRoomAssignmentEnabled).toBe(true);
         expect(result.data.emailWelcomeEnabled).toBe(false);
+        expect(result.data.emailReviewRequestEnabled).toBe(true);
       }
     });
   });
