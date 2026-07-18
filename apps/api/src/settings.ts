@@ -55,7 +55,10 @@ export const SettingsUpdateSchema = z.object({
   tps: z.coerce.number().min(0),
   tvq: z.coerce.number().min(0),
   accommodationTax: z.coerce.number().min(0),
-  assignableRoomCount: z.coerce.number().int().positive(),
+  // Server-derived from the number of public rooms; accepted (and ignored) here
+  // so the read-only field the admin UI still submits doesn't fail validation,
+  // and allowed to be 0 when no rooms are public.
+  assignableRoomCount: z.coerce.number().int().nonnegative(),
   reservationsEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
 });
 
