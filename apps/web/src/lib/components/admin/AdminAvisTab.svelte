@@ -1,20 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-  interface AdminReview {
-    id: number;
-    reservation_id: number;
-    reservation_code: string | null;
-    rating: number;
-    body: string;
-    status: "pending" | "approved" | "rejected";
-    display_name: string;
-    stays_count: number;
-    nights_total: number;
-    created_at: string;
-    moderated_at: string | null;
-  }
+  import { adminListReviews, adminModerateReview, isError, type AdminReview } from "$lib/api";
 
   // ── Props ──────────────────────────────────────────────────────────────────
   // Parent binds pendingCount to display the badge in the tab label.
@@ -62,44 +48,28 @@
   async function loadReviews() {
     loading = true;
     error = null;
-    try {
-      const res = await fetch(`/api/admin/reviews?status=${encodeURIComponent(filter)}`, {
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error = data.error ?? `Erreur ${res.status}`;
-        return;
-      }
-      reviews = data.reviews ?? [];
-      pendingCount = data.pendingCount ?? 0;
-    } catch {
-      error = "Réseau indisponible";
-    } finally {
-      loading = false;
+    const result = await adminListReviews(filter);
+    if (isError(result)) {
+      error = result.error;
+    } else {
+      reviews = result.reviews;
+      pendingCount = result.pendingCount;
     }
+    loading = false;
   }
 
   async function moderate(id: number, status: "approved" | "rejected") {
     if (moderatingIds.has(id)) return;
     moderatingIds = new Set([...moderatingIds, id]);
     try {
-      const res = await fetch(`/api/admin/reviews/${encodeURIComponent(String(id))}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        error = data.error ?? `Erreur ${res.status}`;
-        return;
+      const result = await adminModerateReview(id, status);
+      if (isError(result)) {
+        error = result.error;
+      } else {
+        // Update the row in-place, then reload for badge accuracy
+        reviews = reviews.map((r) => (r.id === id ? result.review : r));
+        await loadReviews();
       }
-      // Update the row in-place, then reload for badge accuracy
-      reviews = reviews.map((r) => (r.id === id ? data.review : r));
-      await loadReviews();
-    } catch {
-      error = "Réseau indisponible";
     } finally {
       const ids = new Set(moderatingIds);
       ids.delete(id);

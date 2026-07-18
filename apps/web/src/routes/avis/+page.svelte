@@ -2,17 +2,7 @@
   import { onMount } from "svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Seo from "$lib/components/Seo.svelte";
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-  interface PublicReview {
-    id: number;
-    displayName: string;
-    rating: number;
-    body: string;
-    staysCount: number;
-    nightsTotal: number;
-    createdAt: string;
-  }
+  import { getPublicReviews, isError, type PublicReview } from "$lib/api";
 
   // ── State ──────────────────────────────────────────────────────────────────
   let reviews = $state<PublicReview[]>([]);
@@ -55,22 +45,15 @@
 
   // ── Load all approved reviews ──────────────────────────────────────────────
   onMount(async () => {
-    try {
-      const res = await fetch("/api/reviews", { credentials: "include" });
-      if (!res.ok) {
-        const data = await res.json();
-        error = data.error ?? `Erreur ${res.status}`;
-        return;
-      }
-      const data = await res.json();
-      reviews = data.reviews ?? [];
-      averageRating = data.averageRating ?? null;
-      total = data.total ?? 0;
-    } catch {
-      error = "Réseau indisponible";
-    } finally {
-      loading = false;
+    const result = await getPublicReviews();
+    if (isError(result)) {
+      error = result.error;
+    } else {
+      reviews = result.reviews;
+      averageRating = result.averageRating;
+      total = result.total;
     }
+    loading = false;
   });
 </script>
 

@@ -4,6 +4,7 @@
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
   import Seo from "$lib/components/Seo.svelte";
+  import { getReviewEligibility, submitReview as apiSubmitReview, isError } from "$lib/api";
 
   // ── Types ──────────────────────────────────────────────────────────────────
   type ViewState = "loading" | "eligible" | "ineligible" | "submitted" | "error";
@@ -49,57 +50,38 @@
       return;
     }
 
-    try {
-      const params = new URLSearchParams({ code });
-      const res = await fetch(`/api/reviews/eligibility?${params.toString()}`, {
-        credentials: "include",
-      });
-      // Any non-2xx → generic ineligible (never leak reservation data)
-      if (!res.ok) {
-        viewState = "ineligible";
-        return;
-      }
-      const data = await res.json();
-      if (!data.eligible) {
-        viewState = "ineligible";
-        return;
-      }
-      firstName = data.firstName ?? null;
-      viewState = "eligible";
-    } catch {
+    const result = await getReviewEligibility(code);
+    if (isError(result)) {
+      // Network or server error — show generic invalid-link screen (no data leak)
       viewState = "error";
+      return;
     }
+    if (!result.eligible) {
+      viewState = "ineligible";
+      return;
+    }
+    firstName = result.firstName ?? null;
+    viewState = "eligible";
   });
 
   // ── Submit review ─────────────────────────────────────────────────────────
-  async function submitReview(e: SubmitEvent) {
+  async function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     formError = null;
     submitting = true;
 
     try {
-      const res = await fetch("/api/reviews", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, rating: selectedRating, body: body.trim() }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        // All failures (conflict, validation, invalid code) → generic message.
+      const result = await apiSubmitReview({ code, rating: selectedRating, body: body.trim() });
+      if (isError(result)) {
+        // All failures (conflict, validation, invalid code) → generic or network message.
         // Never leak whether the code was valid.
-        formError = "Une erreur est survenue. Veuillez réessayer.";
-        return;
-      }
-      if (data.ok) {
-        viewState = "submitted";
+        formError = result.error === "Réseau indisponible"
+          ? "Réseau indisponible. Veuillez réessayer."
+          : "Une erreur est survenue. Veuillez réessayer.";
       } else {
-        formError = "Une erreur est survenue. Veuillez réessayer.";
+        viewState = "submitted";
       }
-    } catch {
-      formError = "Réseau indisponible. Veuillez réessayer.";
     } finally {
       submitting = false;
     }
@@ -142,7 +124,7 @@
 
         <form
           class="page-nouveau-avis__form"
-          onsubmit={submitReview}
+          onsubmit={handleSubmit}
           novalidate
           data-testid="nouveau-avis-form"
         >

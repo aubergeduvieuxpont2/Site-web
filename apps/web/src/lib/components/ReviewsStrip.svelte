@@ -1,16 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-  interface PublicReview {
-    id: number;
-    displayName: string;
-    rating: number;
-    body: string;
-    staysCount: number;
-    nightsTotal: number;
-    createdAt: string;
-  }
+  import { getPublicReviews, isError, type PublicReview } from "$lib/api";
 
   // ── State ──────────────────────────────────────────────────────────────────
   let reviews = $state<PublicReview[]>([]);
@@ -36,17 +26,12 @@
 
   // ── Mount: fetch up to 3 approved reviews ─────────────────────────────────
   onMount(async () => {
-    try {
-      const res = await fetch("/api/reviews?limit=3", { credentials: "include" });
-      if (res.ok) {
-        const data = await res.json();
-        reviews = data.reviews ?? [];
-      }
-    } catch {
-      // silent — strip hides when unavailable
-    } finally {
-      loaded = true;
+    const result = await getPublicReviews(3);
+    if (!isError(result)) {
+      reviews = result.reviews;
     }
+    // silent on error — strip hides when unavailable
+    loaded = true;
   });
 </script>
 
