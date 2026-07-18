@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon } from "@neondatabase/serverless";
 import { drainEmailOutbox } from "./emailOutbox";
+import { provisionOtaGuest } from "./provisioning";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
   createSession,
@@ -519,6 +520,20 @@ app.post("/internal/ota-bookings", async (c) => {
       }),
     )
   );
+
+  if (d.guestEmail) {
+    c.executionCtx.waitUntil(
+      provisionOtaGuest(sql, {
+        reservationId: created.id,
+        guestEmail: d.guestEmail,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        externalRef: d.externalRef,
+        checkIn: d.checkIn,
+        checkOut: d.checkOut,
+      })
+    );
+  }
 
   return c.json({ reservationId: created.id }, 201);
 });

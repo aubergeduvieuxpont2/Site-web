@@ -1,72 +1,70 @@
-import { sha256hex, generateToken } from "./auth/session";
+import { hashPassword } from "./auth/password";
+import { generateToken, sha256hex } from "./auth/session";
 import { enqueueEmail } from "./emailOutbox";
 
+const SITE_ORIGIN = "https://www.aubergeduvieuxpont.ca";
+
+type NeonSql = (strings: TemplateStringsArray, ...vals: unknown[]) => Promise<unknown>;
+
+/**
+ * Find-or-create a portal account for an OTA guest, link the reservation,
+ * and (toggle permitting) send the set-password welcome email. Best-effort:
+ * the booking must never fail because provisioning did, so every error is
+ * swallowed after logging.
+ */
 export async function provisionOtaGuest(
-  sql: (...args: any[]) => Promise<any[]>,
+  sql: NeonSql,
   input: {
+    reservationId: number;
     guestEmail: string;
     firstName: string;
-    confirmationCode: string;
+    lastName: string | null;
+    externalRef: string;
     checkIn: string;
     checkOut: string;
-  }
-): Promise<{ userId: number | null; tokenHash: string | null }> {
+  },
+): Promise<void> {
   try {
-    const { guestEmail, firstName, confirmationCode, checkIn, checkOut } = input;
+    const existing = (await sql`
+      SELECT id FROM users WHERE lower(email) = lower(${input.guestEmail})
+    `) as { id: number }[];
 
-    // Find or create user for the guest
-    const existing = await sql`SELECT id FROM users WHERE lower(email) = lower(${guestEmail})`;
-    let userId: number;
-
-    if (existing.length > 0) {
-      userId = existing[0].id;
-    } else {
-      const created = await sql`
-        INSERT INTO users (email, name, role)
-        VALUES (${guestEmail}, ${firstName}, 'guest')
+    let userId = existing[0]?.id;
+    if (!userId) {
+      const name = [input.firstName, input.lastName].filter(Boolean).join(" ");
+      // Unusable random password: the guest sets their real one via the link.
+      const passwordHash = await hashPassword(generateToken());
+      const created = (await sql`
+        INSERT INTO users (email, password_hash, name, role, first_name, last_name)
+        VALUES (${input.guestEmail}, ${passwordHash}, ${name}, 'guest', ${input.firstName}, ${input.lastName})
+        ON CONFLICT DO NOTHING
         RETURNING id
-      `;
-      userId = created[0].id;
+      `) as { id: number }[];
+      userId = created[0]?.id;
+      if (!userId) return; // raced with another insert; next email re-links
     }
 
-    // Update the reservation to link it to the user
+    await sql`UPDATE reservations SET user_id = ${userId} WHERE id = ${input.reservationId}`;
+
+    const rawToken = generateToken();
+    const tokenHash = await sha256hex(rawToken);
     await sql`
-      UPDATE reservations
-      SET user_id = ${userId}
-      WHERE lower(email) = lower(${guestEmail})
-        AND confirm_code = ${confirmationCode}
+      INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
+      VALUES (${tokenHash}, ${userId}, now() + interval '30 days')
     `;
 
-    // Mint a 30-day password reset token
-    const rawToken = generateToken(32);
-    const tokenHash = sha256hex(rawToken);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    await sql`
-      INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
-      VALUES (${userId}, ${tokenHash}, ${expiresAt})
-    `;
-
-    // Enqueue the welcome email
-    const setPasswordUrl = `https://www.aubergeduvieuxpont.ca/reinitialisation?token=${rawToken}&welcome=1`;
-
-    await enqueueEmail(sql, {
+    await enqueueEmail(sql as never, {
       template: "ota-welcome",
-      to: guestEmail,
-      locale: "en",
+      to: input.guestEmail,
       payload: {
-        firstName,
-        confirmationCode,
-        checkIn,
-        checkOut,
-        setPasswordUrl,
+        firstName: input.firstName,
+        confirmationCode: input.externalRef,
+        checkIn: input.checkIn,
+        checkOut: input.checkOut,
+        setPasswordUrl: `${SITE_ORIGIN}/reinitialisation?token=${rawToken}&welcome=1`,
       },
     });
-
-    return { userId, tokenHash };
   } catch (err) {
-    // Never throw; provisioning failure must not surface to the booking path
-    console.error("OTA guest provisioning error:", err);
-    return { userId: null, tokenHash: null };
+    console.error("ota provisioning failed (reservation kept)", err);
   }
 }
