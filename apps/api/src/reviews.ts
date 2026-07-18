@@ -209,7 +209,8 @@ export function createReviewsRouter(deps: {
 
   // GET /api/reviews — public list of approved reviews.
   // Returns averageRating rounded to 1 decimal, or null when no reviews exist.
-  router.get("/api/reviews", async (c) => {
+  // Rate-limited (parity with /api/reviews/eligibility and POST /api/reviews).
+  router.get("/api/reviews", publicRateLimit, async (c) => {
     const rawLimit = c.req.query("limit");
     const limit = Math.min(Math.max(parseInt(rawLimit || "3") || 3, 1), 100);
     const sql = neon(c.env.DB_CONN);

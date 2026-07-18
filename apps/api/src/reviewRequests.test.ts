@@ -194,6 +194,29 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     expect(call.payload.checkOut).toBe("2026-07-15");
   });
 
+  it("enqueues a payload with firstName, reviewUrl, checkIn AND checkOut (INV-review-email-dates)", async () => {
+    // The shipping path (index.ts scheduled handler → this module) must send all
+    // four keys. The old inline copy passed only { firstName, reviewUrl }, so the
+    // review-request.{fr,en}.hbs {{formatDate checkIn}} rendered blank / threw.
+    // This assertion fails against that old payload shape.
+    const sql = makeSql([
+      [{ value: "true" }],
+      [RESERVATION],
+      [],
+    ]);
+    await enqueueReviewRequests(sql as any);
+    const { payload } = mockEnqueueEmail.mock.calls[0][1];
+    expect(payload).toMatchObject({
+      firstName: "Marie",
+      reviewUrl: "https://test.auberge.example.com/avis/nouveau?code=AVP-ABCDEF",
+      checkIn: "2026-07-10",
+      checkOut: "2026-07-15",
+    });
+    expect(Object.keys(payload).sort()).toEqual(
+      ["checkIn", "checkOut", "firstName", "reviewUrl"].sort()
+    );
+  });
+
   it("inserts a review_request row before calling enqueueEmail (dedupe first)", async () => {
     const callOrder: string[] = [];
 

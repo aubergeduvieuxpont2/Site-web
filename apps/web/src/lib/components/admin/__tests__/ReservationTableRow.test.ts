@@ -14,7 +14,6 @@ import * as path from "path";
 import ReservationTableRow, {
   formatDateOnly,
   displayNameOf,
-  truncateMessage,
   statusLabel,
 } from "../ReservationTableRow.svelte";
 import type { ReservationRow } from "$lib/api";
@@ -34,11 +33,14 @@ describe("ReservationTableRow — source invariants (WS-A)", () => {
     expect(rowSrc).not.toContain("{@html");
   });
 
-  it("exports formatDateOnly, displayNameOf, truncateMessage, statusLabel", () => {
+  it("exports formatDateOnly, displayNameOf, statusLabel", () => {
     expect(rowSrc).toContain("export function formatDateOnly");
     expect(rowSrc).toContain("export function displayNameOf");
-    expect(rowSrc).toContain("export function truncateMessage");
     expect(rowSrc).toContain("export function statusLabel");
+  });
+
+  it("no longer ships the removed truncateMessage helper (Message column dropped)", () => {
+    expect(rowSrc).not.toContain("truncateMessage");
   });
 });
 
@@ -78,24 +80,6 @@ describe("displayNameOf", () => {
     expect(
       displayNameOf({ first_name: null, last_name: null, name: null }),
     ).toBe("—");
-  });
-});
-
-describe("truncateMessage", () => {
-  it("returns — for empty message", () => {
-    expect(truncateMessage(null)).toBe("—");
-    expect(truncateMessage("")).toBe("—");
-  });
-
-  it("truncates messages longer than 60 chars with an ellipsis", () => {
-    const long = "a".repeat(80);
-    const out = truncateMessage(long);
-    expect(out.endsWith("…")).toBe(true);
-    expect(out.length).toBe(61); // 60 chars + ellipsis
-  });
-
-  it("leaves short messages intact", () => {
-    expect(truncateMessage("Bonjour")).toBe("Bonjour");
   });
 });
 

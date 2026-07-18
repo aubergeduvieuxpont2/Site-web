@@ -429,6 +429,18 @@ describe("GET /api/reviews (INV-route-mounted)", () => {
     expect(review.display_name).toBeUndefined();
     expect(review.displayName).toBe("Jean D.");
   });
+
+  it("returns 429 when rate limit is exceeded (MINOR-A parity)", async () => {
+    // count=31 > limit=30 → exceeded. Mirrors the eligibility/POST rate-limit guard.
+    neonHolder.sql = (strings: TemplateStringsArray) => {
+      const q = strings.join(" ");
+      if (q.includes("rate_limits")) return Promise.resolve([{ count: 31 }]);
+      return Promise.resolve([]);
+    };
+
+    const res = await app.request("http://localhost/api/reviews", {}, ENV);
+    expect(res.status).toBe(429);
+  });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════

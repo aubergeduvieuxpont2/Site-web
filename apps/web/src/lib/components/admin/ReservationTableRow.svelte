@@ -26,14 +26,6 @@
     return row.name ?? "—";
   }
 
-  const MESSAGE_LIMIT = 60;
-  export function truncateMessage(message: string | null | undefined): string {
-    if (!message) return "—";
-    return message.length > MESSAGE_LIMIT
-      ? message.slice(0, MESSAGE_LIMIT) + "…"
-      : message;
-  }
-
   // Human-readable French label for a reservation status. Returns one of three
   // fixed string literals — never interpolates caller data — so it is safe to
   // render directly. Null/undefined and any unknown value fall back to pending.

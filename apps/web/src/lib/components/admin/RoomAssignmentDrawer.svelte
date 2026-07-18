@@ -131,6 +131,7 @@
   open={isOpen}
   onClose={close}
   backdropTestid="rad-backdrop"
+  dialogTestid="rad-dialog"
   labelId={`rad-title-${reservationId}`}
 >
   <!-- CSS-variable host + aria-hidden for transition selectors -->

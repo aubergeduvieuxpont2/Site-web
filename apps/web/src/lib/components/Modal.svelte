@@ -24,6 +24,12 @@
     children?: Snippet;
     /** Forwarded as data-testid on the backdrop element (default "modal-backdrop"). */
     backdropTestid?: string;
+    /**
+     * Forwarded as data-testid on the dialog panel (default "modal-dialog").
+     * Nested/stacked modals must pass distinct values so a query for
+     * data-testid="modal-dialog" never matches two panels at once.
+     */
+    dialogTestid?: string;
   }
 
   let {
@@ -33,6 +39,7 @@
     panelClass = '',
     children,
     backdropTestid = 'modal-backdrop',
+    dialogTestid = 'modal-dialog',
   }: Props = $props();
 
   let panelEl: HTMLElement | undefined;
@@ -133,7 +140,7 @@
     aria-modal="true"
     aria-labelledby={labelId}
     tabindex="-1"
-    data-testid="modal-dialog"
+    data-testid={dialogTestid}
   >
     {#if children}{@render children()}{/if}
   </div>

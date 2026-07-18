@@ -42,7 +42,7 @@
     | "disponibilites"
     | "avis"
     | "emails-ota"
-  >("reservations");
+  >("apercu");
 
   // ─── Reservations ───
   let searchQuery = $state("");

@@ -7,6 +7,8 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
+import { generateCode } from "./reservationCode";
+import { enqueueReviewRequests } from "./reviewRequests";
 import { hashPassword, verifyPassword, needsRehash } from "./auth/password";
 import { isPasswordBreached } from "./auth/hibp";
 import {
@@ -331,21 +333,14 @@ function getDummyHash(): Promise<string> {
   return (dummyHashPromise ??= hashPassword("verify-timing-equalizer-dummy-secret"));
 }
 
-// Crockford Base32 alphabet (no 0/O/1/I) per INV-code-format.
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-function generateReservationCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(6));
-  return "AVP-" + Array.from(bytes).map((b) => CODE_ALPHABET[b % 32]).join("");
-}
-
 // Insert a code, retrying up to 5 times on the rare uniqueness collision.
+// Code generation lives in ./reservationCode (single source of truth, unit-tested).
 async function insertReservationCode(
   sql: NeonQueryFunction<any, any>,
   reservationId: number
 ): Promise<string | null> {
   for (let i = 0; i < 5; i++) {
-    const code = generateReservationCode();
+    const code = generateCode();
     try {
       const rows = (await sql`
         UPDATE reservations SET code = ${code} WHERE id = ${reservationId} AND code IS NULL
@@ -360,46 +355,8 @@ async function insertReservationCode(
   return null;
 }
 
-// Enqueue review-request emails for confirmed stays that departed in the last 3
-// days and have not yet received a request or submitted a review.
-async function enqueueReviewRequests(env: Bindings): Promise<void> {
-  const sql = neon(env.DB_CONN);
-  const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
-  const adminSettings = rowsToAdminSettings(settingsRows);
-  if (!adminSettings.emailReviewRequestEnabled) return;
-
-  const pending = (await sql`
-    SELECT r.id, r.code, r.email, r.first_name, r.name
-    FROM reservations r
-    WHERE r.status = 'confirmed'
-      AND r.email IS NOT NULL AND r.email != ''
-      AND r.code IS NOT NULL
-      AND r.depart::date > (CURRENT_DATE - INTERVAL '3 days')
-      AND r.depart::date <= CURRENT_DATE
-      AND NOT EXISTS (SELECT 1 FROM review_requests rr WHERE rr.reservation_id = r.id)
-      AND NOT EXISTS (SELECT 1 FROM reviews rv WHERE rv.reservation_id = r.id)
-  `) as { id: number; code: string; email: string; first_name: string | null; name: string | null }[];
-
-  for (const res of pending) {
-    try {
-      await sql`
-        INSERT INTO review_requests (reservation_id, channel, sent_at)
-        VALUES (${res.id}, 'email', now())
-        ON CONFLICT (reservation_id) DO NOTHING
-      `;
-      await enqueueEmail(sql, {
-        template: "review-request",
-        to: res.email,
-        payload: {
-          firstName: res.first_name ?? res.name ?? "client",
-          reviewUrl: `${SITE_ORIGIN}/avis/nouveau?code=${res.code}`,
-        },
-      });
-    } catch (err) {
-      console.error("review-request enqueue failed for reservation", res.id, err);
-    }
-  }
-}
+// Review-request enqueue lives in ./reviewRequests (single source of truth,
+// unit-tested; passes checkIn/checkOut so the email template renders dates).
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -2431,7 +2388,7 @@ export default {
     // Enqueue review-request emails first so the drain pass picks them up in
     // the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
     ctx.waitUntil((async () => {
-      await enqueueReviewRequests(env);
+      await enqueueReviewRequests(neon(env.DB_CONN));
       await drainEmailOutbox(env);
     })());
   },

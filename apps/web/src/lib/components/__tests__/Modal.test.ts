@@ -147,6 +147,27 @@ describe("Modal.svelte — behavior", () => {
     });
     expect(getByTestId("rad-backdrop")).not.toBeNull();
   });
+
+  it("defaults the dialog testid to modal-dialog", () => {
+    const { getByTestId } = render(Modal, {
+      props: { open: true, onClose: vi.fn(), children: bodySnippet() },
+    });
+    expect(getByTestId("modal-dialog").getAttribute("role")).toBe("dialog");
+  });
+
+  it("forwards a custom dialog testid so stacked modals stay distinct", () => {
+    const { getByTestId, queryByTestId } = render(Modal, {
+      props: {
+        open: true,
+        onClose: vi.fn(),
+        dialogTestid: "rad-dialog",
+        children: bodySnippet(),
+      },
+    });
+    expect(getByTestId("rad-dialog").getAttribute("role")).toBe("dialog");
+    // The default id must NOT also be present — that was the duplicate-testid bug.
+    expect(queryByTestId("modal-dialog")).toBeNull();
+  });
 });
 
 // ── Nested modals (modal stack) ──────────────────────────────────────────────
