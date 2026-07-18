@@ -7,6 +7,7 @@ import {
   register,
   forgotPassword,
   resetPassword,
+  verifyEmail,
   logout,
   changePassword,
   changeProfileEmail,
@@ -190,6 +191,37 @@ describe("auth helpers", () => {
     expect(res).toEqual({ error: "Lien invalide ou expiré" });
   });
 
+  it("verifyEmail POSTs the token to /api/auth/verify-email", async () => {
+    const { calls } = stubFetch({ ok: true, purpose: "register" });
+    const res = await verifyEmail("tok-abc");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/auth/verify-email");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({ token: "tok-abc" });
+    expect(res).toEqual({ ok: true, purpose: "register" });
+  });
+
+  it("verifyEmail returns the change purpose + email on success", async () => {
+    stubFetch({ ok: true, purpose: "change", email: "new@b.c" });
+    const res = await verifyEmail("tok-change");
+    expect(res).toEqual({ ok: true, purpose: "change", email: "new@b.c" });
+  });
+
+  it("verifyEmail surfaces an invalid/expired token error", async () => {
+    stubFetch({ error: "Lien invalide ou expiré" }, 400);
+    const res = await verifyEmail("bad-token");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Lien invalide ou expiré" });
+  });
+
+  it("verifyEmail surfaces a 409 email-now-taken conflict", async () => {
+    stubFetch({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+    const res = await verifyEmail("tok-conflict");
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Cette adresse courriel est déjà utilisée." });
+  });
+
   it("logout POSTs to /api/auth/logout", async () => {
     const { calls } = stubFetch({ ok: true });
     const res = await logout();
@@ -247,7 +279,7 @@ describe("profile", () => {
   });
 
   it("changeProfileEmail POSTs newEmail + currentPassword to /api/profile/email", async () => {
-    const payload = { user: { id: 1, email: "new@b.c", name: "A", role: "guest" } };
+    const payload = { ok: true, pending: true };
     const { calls } = stubFetch(payload);
     const res = await changeProfileEmail("new@b.c", "current-pass");
     const { url, init } = lastCall(calls);

@@ -308,6 +308,28 @@ export async function resetPassword(
   });
 }
 
+/**
+ * Confirm an email-verification token from a `/verification?token=…` link.
+ *
+ * The `token` comes from the verification URL and travels only in the request
+ * body. Like `resetPassword`, the client performs no validation of its own — the
+ * server is the sole authority on whether a token is valid/expired/used, and on
+ * whether a pending change collides with a now-taken address (surfaced as
+ * `{ error }` in French). On success the API reports which flow the token
+ * belonged to (`purpose`) and, when known, the confirmed `email`.
+ */
+export async function verifyEmail(
+  token: string,
+): Promise<{ ok: true; purpose: "register" | "change"; email?: string } | ApiError> {
+  return fetchJson<{ ok: true; purpose: "register" | "change"; email?: string }>(
+    "/auth/verify-email",
+    {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    },
+  );
+}
+
 export async function logout(): Promise<{ ok: true } | ApiError> {
   return fetchJson<{ ok: true }>("/auth/logout", { method: "POST" });
 }
@@ -332,15 +354,18 @@ export async function changePassword(
 }
 
 /**
- * Change the authenticated guest's email address. Requires the current password
- * for re-authentication. On success returns the updated user for instant
- * display refresh; conflicts (email already taken) surface as `{ error }`.
+ * Request a change to the authenticated guest's email address. Requires the
+ * current password for re-authentication. The change is NOT applied immediately:
+ * on success the API returns `{ ok: true, pending: true }` and sends a
+ * confirmation link to the new address (plus an alert to the old one); the
+ * address only switches once that link is followed. Conflicts (email already
+ * taken) surface as `{ error }`.
  */
 export async function changeProfileEmail(
   newEmail: string,
   currentPassword: string,
-): Promise<{ user: User } | ApiError> {
-  return fetchJson<{ user: User }>("/profile/email", {
+): Promise<{ ok: true; pending: true } | ApiError> {
+  return fetchJson<{ ok: true; pending: true }>("/profile/email", {
     method: "POST",
     body: JSON.stringify({ newEmail, currentPassword }),
   });

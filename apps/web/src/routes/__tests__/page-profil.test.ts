@@ -74,7 +74,7 @@ beforeEach(() => {
   getProfile.mockResolvedValue(profile());
   logout.mockResolvedValue({ ok: true });
   changePassword.mockResolvedValue({ ok: true });
-  changeProfileEmail.mockResolvedValue({ user: { ...GUEST, email: "new@example.com" } });
+  changeProfileEmail.mockResolvedValue({ ok: true, pending: true });
 });
 
 afterEach(() => {
@@ -334,7 +334,7 @@ describe("page-profil change email", () => {
     );
   });
 
-  it("submits valid input, shows success, updates displayed email, and clears fields", async () => {
+  it("submits valid input, shows the pending-confirmation notice, and clears fields", async () => {
     const utils = render(Page);
     await fillAndSubmit(utils.findByTestId, "new@example.com", "current-pass");
     await waitFor(() =>
@@ -342,13 +342,14 @@ describe("page-profil change email", () => {
     );
     const ok = await utils.findByTestId("profil-email-success");
     expect(ok.getAttribute("role")).toBe("status");
-    expect(ok.textContent).toContain("Adresse courriel modifiée avec succès");
-    // Displayed email + current-address hint reflect the new address.
+    expect(ok.textContent).toContain("lien de confirmation");
+    // The change is pending — the displayed email + current-address hint must
+    // NOT switch to the new address until the link is followed.
     expect((await utils.findByTestId("profil-user-email")).textContent).toContain(
-      "new@example.com",
+      "guest@example.com",
     );
     expect((await utils.findByTestId("profil-email-current")).textContent).toContain(
-      "new@example.com",
+      "guest@example.com",
     );
     const em = (await utils.findByTestId("profil-email-new-input")) as HTMLInputElement;
     const pw = (await utils.findByTestId("profil-email-password-input")) as HTMLInputElement;
