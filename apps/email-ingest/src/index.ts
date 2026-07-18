@@ -94,7 +94,11 @@ export async function handleEmail(message: ForwardableEmailMessage, env: Env): P
     } else {
       // Cap parser input: parsers do bounded-but-unbounded-input regex work
       // (findDate/table scans etc.) over attacker-influenced email content.
-      const text = (parsed.text?.trim() ? parsed.text : htmlToText(parsed.html ?? "")).slice(0, 200_000);
+      // Cap the HTML *before* htmlToText so a multi-MB body is never processed
+      // in full (memory/CPU amplification); the output is capped again after.
+      const text = (
+        parsed.text?.trim() ? parsed.text : htmlToText((parsed.html ?? "").slice(0, 200_000))
+      ).slice(0, 200_000);
       const sentAt = parsed.date ? new Date(parsed.date) : new Date();
       const booking =
         cls.provider === "airbnb" ? parseAirbnb(text, subject, sentAt) : parseExpedia(text, subject);

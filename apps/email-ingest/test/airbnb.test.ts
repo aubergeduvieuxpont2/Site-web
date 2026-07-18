@@ -138,4 +138,19 @@ describe("parseAirbnb", () => {
   it("returns null when dates are missing", () => {
     expect(parseAirbnb("Code de confirmation\nHM45MDTHZ4", SUBJECT, SENT_AT)).toBeNull();
   });
+
+  it("returns quickly on an adversarial whitespace/newline run after a label (no ReDoS)", () => {
+    // A huge run of mixed spaces and newlines after "Arrivée" with no date
+    // token following: the old `\s*\n+\s*` (space/newline overlap) backtracked.
+    const evil =
+      "Code de confirmation\nHMZZZZ9999\n" +
+      "Arrivée" +
+      " \n".repeat(20000) +
+      "no date token here";
+    const start = Date.now();
+    const b = parseAirbnb(evil, SUBJECT, SENT_AT);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(1000);
+    expect(b).toBeNull();
+  });
 });

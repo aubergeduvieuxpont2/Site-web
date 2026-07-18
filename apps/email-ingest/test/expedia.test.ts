@@ -75,4 +75,26 @@ describe("parseExpedia", () => {
   it("returns null without the check-in/check-out row", () => {
     expect(parseExpedia("Reservation ID: 123456\nGuest: A B", SUBJECT)).toBeNull();
   });
+
+  it("returns quickly on an adversarial phone run with no trailing marker (no ReDoS)", () => {
+    // A long run of digits/spaces/parens on the pre-"Guest Email" line where the
+    // marker never follows: the old unbounded `[\d ()+-]{6,}\s*\n\s*Guest Email`
+    // would backtrack catastrophically. Build a valid reservation so the parser
+    // reaches the phone scan, then append the malicious run.
+    const evil =
+      "Reservation ID: 2511634261\n" +
+      "Guest: Marie Gagnon\n" +
+      "Sep 5, 2026     Sep 6, 2026     2       0\n" +
+      "\n1 " +
+      "1 ()+-".repeat(20000) +
+      "\n(no marker here)\n";
+    const start = Date.now();
+    const b = parseExpedia(evil, SUBJECT);
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(1000);
+    // Reservation still parses; the unterminated run must NOT be mis-captured.
+    expect(b).not.toBeNull();
+    expect(b!.externalRef).toBe("2511634261");
+    expect(b!.phone).toBeNull();
+  });
 });

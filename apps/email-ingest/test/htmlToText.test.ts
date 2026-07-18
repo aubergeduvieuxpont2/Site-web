@@ -25,4 +25,13 @@ describe("htmlToText", () => {
     expect(text).toMatch(/Check-In\s*\n/);
     expect(text).toMatch(/Sep 5, 2026\s*\n/);
   });
+
+  it("leaves inherited Object members literal (no prototype fall-through)", () => {
+    // &constructor; / &toString; must NOT resolve to Object.prototype members
+    // (a function / string) and inject junk — they are not real named entities.
+    const out = htmlToText("<p>&constructor; &toString; &hasOwnProperty;</p>");
+    expect(out).toBe("&constructor; &toString; &hasOwnProperty;");
+    expect(out).not.toContain("function");
+    expect(out).not.toContain("[object");
+  });
 });
