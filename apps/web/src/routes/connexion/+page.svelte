@@ -27,6 +27,9 @@
   let regCompany = $state("");
   let regError = $state("");
   let regStatus = $state<"idle" | "sending">("idle");
+  // Set on a successful registration to flash the "verification email sent"
+  // notice before the redirect to /profil completes.
+  let regSuccess = $state(false);
 
   async function handleLogin(e: SubmitEvent) {
     e.preventDefault();
@@ -106,6 +109,10 @@
           : result.error; // includes "Un compte existe déjà" (409)
       regStatus = "idle";
     } else {
+      // Confirm the account was created and a verification email is on its way.
+      // The account is usable immediately; confirming the address reconnects any
+      // prior reservations. This flashes before the redirect completes.
+      regSuccess = true;
       // Load the canonical session (with computed effectiveNightlyPrice) into
       // the shared auth store before navigating so the Nav renders the
       // authenticated state (Profil/Admin, logout) immediately — no reload.
@@ -381,6 +388,20 @@
           <span class="connexion__error-text">{regError}</span>
         </div>
 
+        {#if regSuccess}
+          <div
+            class="connexion__form-notice"
+            role="status"
+            aria-live="polite"
+            data-testid="register-notice"
+          >
+            <span class="connexion__notice-text">
+              Un courriel de confirmation vous a été envoyé — cliquez le lien pour activer
+              votre compte et retrouver vos réservations.
+            </span>
+          </div>
+        {/if}
+
         <div class="connexion__actions">
           <Button type="submit" variant="action" disabled={regStatus === "sending"}>
             {regStatus === "sending" ? "Création…" : "Créer mon compte"}
@@ -595,6 +616,22 @@
     font-weight: 400;
     line-height: 1.5;
     color: var(--color-error);
+    display: block;
+  }
+
+  /* ── Form-level success notice (verification email sent) ── */
+  .connexion__form-notice {
+    padding: var(--space-md);
+    border: 1px solid color-mix(in srgb, var(--color-forest) 30%, transparent);
+    background-color: var(--color-forest-surface);
+  }
+
+  .connexion__notice-text {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.5;
+    color: var(--color-forest);
     display: block;
   }
 

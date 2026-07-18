@@ -88,10 +88,9 @@
       return;
     }
 
-    // Mutate user.email for instant display update.
-    if (user) {
-      user = { ...user, email: result.user.email };
-    }
+    // The change is pending confirmation — the address does NOT switch yet, so
+    // we deliberately leave the displayed `user.email` untouched. It updates only
+    // after the guest follows the link sent to the new address.
     emailSuccess = true;
     emailNew = "";
     emailPassword = "";
@@ -427,7 +426,9 @@
               role="status"
               data-testid="profil-email-success"
             >
-              Adresse courriel modifiée avec succès.
+              Un lien de confirmation a été envoyé à votre nouvelle adresse — cliquez-le pour
+              activer le changement. Un avis a aussi été transmis à votre adresse actuelle, qui
+              reste en vigueur d'ici là.
             </div>
           {/if}
 
