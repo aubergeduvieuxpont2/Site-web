@@ -207,6 +207,10 @@ const ResetPasswordSchema = z.object({
   newPassword: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
 });
 
+const VerifyEmailSchema = z.object({
+  token: z.string().min(1, "token requis"),
+});
+
 const RoleSchema = z.object({
   role: z.enum(["guest", "admin"]),
 });
@@ -691,8 +695,8 @@ app.post(
     try {
       const passwordHash = await hashPassword(data.password);
       const rows = (await sql`
-        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company)
-        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null})
+        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company, email_verified)
+        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null}, false)
         RETURNING id, email, name, role
       `) as User[];
 
@@ -701,10 +705,33 @@ app.post(
         return c.json({ error: "Failed to create user" }, 500);
       }
 
-      // Claim any guest reservations made under this email before the account existed.
-      await linkGuestReservations(sql, user.id, data.email);
-
+      // Do NOT auto-claim guest reservations here: the email is unproven until
+      // the user confirms it (M4-residual). Linking happens on verify-email /
+      // on login once email_verified is true.
       const token = await createSession(sql, user.id);
+
+      // Send an email-verification link (24h). Best-effort — a failure here must
+      // not block the 201; the account exists and can re-verify later.
+      try {
+        const rawToken = generateToken();
+        const tokenHash = await sha256hex(rawToken);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await sql`
+          INSERT INTO email_verification_tokens (token_hash, user_id, purpose, expires_at)
+          VALUES (${tokenHash}, ${user.id}, 'register', ${expiresAt})
+        `;
+        await enqueueEmail(sql, {
+          template: "email-verification",
+          to: data.email,
+          payload: {
+            firstName: data.firstName ?? derivedName ?? "client",
+            verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
+            expiryHours: 24,
+          },
+        });
+      } catch (err) {
+        console.error("email-verification enqueue failed", err);
+      }
 
       // Enqueue HubSpot contact upsert (fire-and-forget; failure never blocks registration)
       c.executionCtx.waitUntil(
@@ -761,10 +788,10 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id, email, password_hash, name, role
+      SELECT id, email, password_hash, name, role, email_verified
       FROM users
       WHERE lower(email) = lower(${data.email})
-    `) as (User & { password_hash: string })[];
+    `) as (User & { password_hash: string; email_verified: boolean })[];
 
     const user = rows[0];
 
@@ -820,11 +847,15 @@ app.post(
     }
 
     // Link any unclaimed guest reservations under this account's email so the
-    // profile (which reads strictly by user_id) shows them without an email match.
-    await linkGuestReservations(sql, user.id, user.email);
+    // profile (which reads strictly by user_id) shows them without an email
+    // match — but ONLY once the email is proven owned (M4-residual). An
+    // unverified account still logs in; it just doesn't auto-claim yet.
+    if (user.email_verified === true) {
+      await linkGuestReservations(sql, user.id, user.email);
+    }
 
     const token = await createSession(sql, user.id);
-    const { password_hash, ...safeUser } = user;
+    const { password_hash, email_verified, ...safeUser } = user;
     return c.json({ user: safeUser }, 200, {
       "Set-Cookie": getSessionCookieHeader(token),
     });
@@ -1001,6 +1032,114 @@ app.post(
   }
 );
 
+// Verify email (single-use token). Closes M4-residual + M10: proves ownership of
+// an email before an account may auto-claim guest reservations, and confirms an
+// email change at the new address before it takes effect. Generic errors only —
+// no account enumeration.
+app.post(
+  "/api/auth/verify-email",
+  authRateLimiter,
+  zValidator("json", VerifyEmailSchema, authHook),
+  async (c) => {
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const tokenHash = await sha256hex(data.token);
+
+    const rows = (await sql`
+      SELECT user_id, purpose, new_email
+      FROM email_verification_tokens
+      WHERE token_hash = ${tokenHash}
+        AND used_at IS NULL
+        AND expires_at > now()
+    `) as { user_id: number; purpose: string; new_email: string | null }[];
+
+    const row = rows[0];
+    if (!row) {
+      return c.json({ error: "Lien invalide ou expiré." }, 400);
+    }
+
+    if (row.purpose === "register") {
+      // Fetch the account's own (already-owned) email to link reservations by.
+      const userRows = (await sql`
+        SELECT email FROM users WHERE id = ${row.user_id}
+      `) as { email: string }[];
+      const email = userRows[0]?.email;
+      if (!email) {
+        return c.json({ error: "Lien invalide ou expiré." }, 400);
+      }
+
+      await sql`UPDATE users SET email_verified = true WHERE id = ${row.user_id}`;
+      await linkGuestReservations(sql, row.user_id, email);
+      await sql`UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = ${tokenHash}`;
+
+      return c.json({ ok: true, purpose: "register" }, 200);
+    }
+
+    if (row.purpose === "change") {
+      const newEmail = row.new_email;
+      if (!newEmail) {
+        return c.json({ error: "Lien invalide ou expiré." }, 400);
+      }
+
+      // Re-check uniqueness: another account may have claimed this address since
+      // the change was requested. Leave pending_email intact so the user can
+      // retry after resolving the conflict.
+      const taken = (await sql`
+        SELECT id FROM users WHERE lower(email) = lower(${newEmail}) AND id != ${row.user_id}
+      `) as { id: number }[];
+      if (taken.length > 0) {
+        return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+      }
+
+      const userRows = (await sql`
+        SELECT hubspot_contact_id FROM users WHERE id = ${row.user_id}
+      `) as { hubspot_contact_id: string | null }[];
+      const hubspotContactId = userRows[0]?.hubspot_contact_id ?? null;
+
+      await sql`
+        UPDATE users
+        SET email = ${newEmail}, pending_email = NULL, email_verified = true
+        WHERE id = ${row.user_id}
+      `;
+      await linkGuestReservations(sql, row.user_id, newEmail);
+      await sql`UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = ${tokenHash}`;
+
+      // Fire-and-forget HubSpot email update (mirrors the previous inline sync,
+      // carrying the Batch-1 shared secret so /ops/enqueue does not 401).
+      if (hubspotContactId) {
+        c.executionCtx.waitUntil(
+          (async () => {
+            try {
+              await c.env.HUBSPOT.fetch(
+                new Request("http://hubspot/ops/enqueue", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+                  },
+                  body: JSON.stringify({
+                    kind: "contact.updateById",
+                    payload: { contactId: hubspotContactId, properties: { email: newEmail } },
+                    dedupeKey: `user-${row.user_id}-email-${newEmail.toLowerCase()}`,
+                  }),
+                })
+              );
+            } catch (err) {
+              console.error("HubSpot contact update error:", err);
+            }
+          })()
+        );
+      }
+
+      return c.json({ ok: true, purpose: "change", email: newEmail }, 200);
+    }
+
+    // Unknown purpose — treat as invalid, no enumeration.
+    return c.json({ error: "Lien invalide ou expiré." }, 400);
+  }
+);
+
 // Profile route (no HubSpot enrichment)
 app.get("/api/profile", async (c) => {
   const user = await getAuthUser(c);
@@ -1042,8 +1181,8 @@ app.post(
 
     // Verify password
     const userRow = (await sql`
-      SELECT password_hash FROM users WHERE id = ${user.id}
-    `) as { password_hash: string }[];
+      SELECT password_hash, first_name FROM users WHERE id = ${user.id}
+    `) as { password_hash: string; first_name: string | null }[];
 
     if (userRow.length === 0) {
       return c.json({ error: "User not found" }, 404);
@@ -1063,55 +1202,48 @@ app.post(
       return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
     }
 
-    // Claim reservations under the CURRENT (pre-change, password-verified)
-    // address before reassigning the email. Combined with the user_id-only
-    // profile read, this prevents takeover of another person's reservations via
-    // email reassignment and survives OTA relay expiry.
-    await linkGuestReservations(sql, user.id, user.email);
+    // Do NOT change the email yet (M10): stage it as pending_email and require
+    // the new address to be confirmed before it takes effect. The actual
+    // UPDATE users SET email, reservation re-link and HubSpot sync all happen
+    // in POST /api/auth/verify-email once the new address is proven owned.
+    const firstName = userRow[0].first_name ?? user.name ?? "client";
 
-    // Update the user's email
     await sql`
-      UPDATE users SET email = ${newEmail}
-      WHERE id = ${user.id}
+      UPDATE users SET pending_email = ${newEmail} WHERE id = ${user.id}
     `;
 
-    // Fire-and-forget HubSpot update if hubspot_contact_id is set
-    if (user.hubspot_contact_id) {
-      c.executionCtx.waitUntil(
-        (async () => {
-          try {
-            await c.env.HUBSPOT.fetch(
-              new Request("http://hubspot/ops/enqueue", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  // Batch-1 shared secret: the gateway fails /ops/enqueue closed
-                  // with 401 without it, which previously silenced this sync.
-                  "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
-                },
-                body: JSON.stringify({
-                  kind: "contact.updateById",
-                  payload: { contactId: user.hubspot_contact_id, properties: { email: newEmail } },
-                  dedupeKey: `user-${user.id}-email-${newEmail.toLowerCase()}`,
-                }),
-              })
-            );
-          } catch (err) {
-            console.error("HubSpot contact update error:", err);
-          }
-        })()
-      );
+    // Best-effort: a mail-enqueue failure must not 500 the request. The pending
+    // change is recorded and can be re-triggered.
+    try {
+      const rawToken = generateToken();
+      const tokenHash = await sha256hex(rawToken);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      await sql`
+        INSERT INTO email_verification_tokens (token_hash, user_id, purpose, new_email, expires_at)
+        VALUES (${tokenHash}, ${user.id}, 'change', ${newEmail}, ${expiresAt})
+      `;
+      // Confirmation link to the NEW address…
+      await enqueueEmail(sql, {
+        template: "email-verification",
+        to: newEmail,
+        payload: {
+          firstName,
+          verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
+          expiryHours: 24,
+        },
+      });
+      // …and an alert to the OLD address so a hijacked session can't silently
+      // move the account's email.
+      await enqueueEmail(sql, {
+        template: "email-change-alert",
+        to: user.email,
+        payload: { firstName, newEmail },
+      });
+    } catch (err) {
+      console.error("email-change verification enqueue failed", err);
     }
 
-    const updatedUserResponse = {
-      id: user.id,
-      email: newEmail,
-      name: user.name,
-      role: user.role,
-      hubspotContactId: user.hubspot_contact_id || null,
-    };
-
-    return c.json({ user: updatedUserResponse }, 200);
+    return c.json({ ok: true, pending: true }, 200);
   }
 );
 

@@ -9,6 +9,8 @@ import invoiceReceiptSample from "../../emails/samples/invoice-receipt.json";
 import reviewRequestSample from "../../emails/samples/review-request.json";
 import roomAssignedSample from "../../emails/samples/room-assigned.json";
 import otaWelcomeSample from "../../emails/samples/ota-welcome.json";
+import emailVerificationSample from "../../emails/samples/email-verification.json";
+import emailChangeAlertSample from "../../emails/samples/email-change-alert.json";
 
 export type Locale = "fr" | "en";
 export type TemplateKey =
@@ -19,7 +21,9 @@ export type TemplateKey =
   | "invoice-receipt"
   | "review-request"
   | "room-assigned"
-  | "ota-welcome";
+  | "ota-welcome"
+  | "email-verification"
+  | "email-change-alert";
 
 export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   welcome: welcomeSample,
@@ -30,4 +34,6 @@ export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   "review-request": reviewRequestSample,
   "room-assigned": roomAssignedSample,
   "ota-welcome": otaWelcomeSample,
+  "email-verification": emailVerificationSample,
+  "email-change-alert": emailChangeAlertSample,
 };

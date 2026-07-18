@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Swap the Neon stub per test via a holder (vi.mock is hoisted). Every query is
-// routed by its SQL text so the /api/profile/email happy path never touches a
-// real database.
+// routed by its SQL text so the verify-email happy path never touches a real
+// database.
 const { neonHolder } = vi.hoisted(() => ({
   neonHolder: { sql: (() => Promise.resolve([])) as any },
 }));
@@ -12,30 +12,31 @@ vi.mock("@neondatabase/serverless", () => ({
 }));
 
 import { app } from "../src/index";
-import { hashPassword } from "../src/auth/password";
 
 // L12: the email-change -> HubSpot sync must ride the durable outbox by enqueuing
 // a `contact.updateById` op at POST /ops/enqueue (NOT a direct, non-existent
 // /ops/contact.updateById fetch that 404s), and must carry the Batch-1 shared
 // secret in X-Internal-Auth or the gateway fails it closed with 401.
-describe("POST /api/profile/email -> HubSpot sync (L12)", () => {
+//
+// M10: the sync now fires when the email change is CONFIRMED at the new address
+// (POST /api/auth/verify-email, purpose="change"), not on the initial request —
+// the old address is never silently reassigned. This test guards that guarantee
+// at its new home.
+describe("POST /api/auth/verify-email (change) -> HubSpot sync (L12)", () => {
   it("enqueues a contact.updateById op via /ops/enqueue with the shared secret", async () => {
-    const stored = await hashPassword("hunter2");
-    const sessionUser = {
-      id: 7,
-      email: "old@example.com",
-      name: "Old Name",
-      role: "guest",
-      hubspot_contact_id: "hs-123",
-    };
-
     neonHolder.sql = (strings: TemplateStringsArray, ..._v: unknown[]) => {
       const q = strings.join(" ");
       if (q.includes("rate_limits")) return Promise.resolve([]); // limiter fails open
-      if (q.includes("FROM sessions")) return Promise.resolve([sessionUser]); // auth
-      if (q.includes("password_hash")) return Promise.resolve([{ password_hash: stored }]);
-      if (q.includes("lower(email)")) return Promise.resolve([]); // no email conflict
-      return Promise.resolve([]); // linkGuestReservations UPDATE + UPDATE users
+      if (q.includes("FROM email_verification_tokens")) {
+        return Promise.resolve([
+          { user_id: 7, purpose: "change", new_email: "new@example.com" },
+        ]);
+      }
+      if (q.includes("lower(email)")) return Promise.resolve([]); // new email not taken
+      if (q.includes("hubspot_contact_id")) {
+        return Promise.resolve([{ hubspot_contact_id: "hs-123" }]);
+      }
+      return Promise.resolve([]); // UPDATE users, link, mark token used
     };
 
     const calls: Request[] = [];
@@ -58,20 +59,25 @@ describe("POST /api/profile/email -> HubSpot sync (L12)", () => {
     } as any;
 
     const res = await app.request(
-      "http://localhost/api/profile/email",
+      "http://localhost/api/auth/verify-email",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Cookie: "session=abc123",
+          "cf-connecting-ip": "1.2.3.4",
         },
-        body: JSON.stringify({ newEmail: "new@example.com", currentPassword: "hunter2" }),
+        body: JSON.stringify({ token: "raw-token" }),
       },
       env,
       ctx,
     );
 
     expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      ok: true,
+      purpose: "change",
+      email: "new@example.com",
+    });
 
     // Let the fire-and-forget HubSpot sync (scheduled via waitUntil) settle.
     await Promise.all(tasks);
