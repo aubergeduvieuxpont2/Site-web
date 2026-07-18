@@ -1944,6 +1944,9 @@ app.notFound((c) => {
   return c.json({ error: "Not Found" }, 404);
 });
 
+// Named export of the Hono app for tests that drive routes via `app.request`.
+export { app };
+
 export default {
   fetch: app.fetch,
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
