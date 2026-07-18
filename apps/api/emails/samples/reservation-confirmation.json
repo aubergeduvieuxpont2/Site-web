@@ -12,5 +12,8 @@
   "tps": 18.42,
   "tvq": 38.59,
   "total": 425.47,
-  "manageUrl": "https://www.aubergeduvieuxpont.ca/reservations/RES-2026-0042"
+  "manageUrl": "https://www.aubergeduvieuxpont.ca/reservations/RES-2026-0042",
+  "accommodationTaxRate": 3.5,
+  "tpsRate": 5,
+  "tvqRate": 9.975
 }

@@ -1,3 +1,5 @@
+import { roundCents, computeTaxBreakdown } from './tax';
+
 /**
  * Formats a YYYY-MM-DD date string as a French-Canadian locale date.
  * Parses as a local calendar date (avoids UTC midnight → previous-day shift).
@@ -68,10 +70,6 @@ export type StayEstimate = {
   total: number;          // sum of all rounded lines
 };
 
-function round2(x: number): number {
-  return Math.round(x * 100) / 100;
-}
-
 /**
  * Computes a compounding tax cascade for a stay estimate.
  *
@@ -106,11 +104,20 @@ export function estimateStay(
     nights >= 7
       ? Math.floor(nights / 7) * weeklyRate + (nights % 7) * nightlyRate
       : nights * nightlyRate;
-  const base = round2(perRoom * rooms);
-  const hebergementTax = round2(base * rates.accommodationTax / 100);
-  const tps = round2((base + hebergementTax) * rates.tps / 100);
-  const tvq = round2((base + hebergementTax + tps) * rates.tvq / 100);
-  const total = round2(base + hebergementTax + tps + tvq);
+  const base = roundCents(perRoom * rooms);
 
-  return { base, hebergementTax, tps, tvq, total };
+  const breakdown = computeTaxBreakdown({
+    base,
+    accommodationTax: rates.accommodationTax,
+    tps: rates.tps,
+    tvq: rates.tvq,
+  });
+
+  return {
+    base: breakdown.base,
+    hebergementTax: breakdown.accommodationTax,
+    tps: breakdown.tps,
+    tvq: breakdown.tvq,
+    total: breakdown.total,
+  };
 }

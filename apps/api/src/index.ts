@@ -531,7 +531,11 @@ app.post(
             accommodationTax: confirmSettings.accommodationTax,
             type: "full",
           });
-          const data = buildReservationConfirmationData(created, invoice);
+          const data = buildReservationConfirmationData(created, invoice, {
+            accommodationTax: confirmSettings.accommodationTax,
+            tps: confirmSettings.tps,
+            tvq: confirmSettings.tvq,
+          });
           if (data) {
             await enqueueEmail(sql, {
               template: "reservation-confirmation",

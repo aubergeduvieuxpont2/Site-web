@@ -15,6 +15,9 @@ export interface ReservationConfirmationPayload {
   tvq: number;
   total: number;
   manageUrl: string;
+  accommodationTaxRate: number;
+  tpsRate: number;
+  tvqRate: number;
 }
 
 export function buildReservationConfirmationData(
@@ -26,7 +29,8 @@ export function buildReservationConfirmationData(
     people: number;
     room: string | null;
   },
-  invoice: InvoiceBreakdown
+  invoice: InvoiceBreakdown,
+  rates: { accommodationTax: number; tps: number; tvq: number }
 ): ReservationConfirmationPayload | null {
   if (!reservation.arrive || !reservation.depart) {
     return null;
@@ -50,5 +54,8 @@ export function buildReservationConfirmationData(
     tvq: invoice.tvq,
     total: invoice.total,
     manageUrl: `https://www.aubergeduvieuxpont.ca/profil?reservation=${reservation.id}`,
+    accommodationTaxRate: rates.accommodationTax,
+    tpsRate: rates.tps,
+    tvqRate: rates.tvq,
   };
 }

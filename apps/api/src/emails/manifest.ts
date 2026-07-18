@@ -39,6 +39,9 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
       "tvq",
       "total",
       "manageUrl",
+      "accommodationTaxRate",
+      "tpsRate",
+      "tvqRate",
     ],
   },
   "reservation-cancellation": {
@@ -51,7 +54,7 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
     name: { fr: "Reçu de facture", en: "Invoice Receipt" },
     subject: { fr: "Facture #{{invoiceNumber}}", en: "Invoice #{{invoiceNumber}}" },
     sampleFile: "invoice-receipt.json",
-    requiredFields: ["invoiceNumber", "name", "checkIn", "checkOut", "lineItems", "subtotal", "accommodationTax", "tps", "tvq", "total", "paymentDate"],
+    requiredFields: ["invoiceNumber", "name", "checkIn", "checkOut", "lineItems", "subtotal", "accommodationTax", "tps", "tvq", "total", "paymentDate", "accommodationTaxRate", "tpsRate", "tvqRate"],
   },
   "review-request": {
     name: { fr: "Demande d'avis", en: "Review Request" },

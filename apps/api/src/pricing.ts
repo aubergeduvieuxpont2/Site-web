@@ -1,3 +1,5 @@
+import { roundCents, computeTaxBreakdown } from './tax';
+
 export interface InvoiceBreakdown {
   nights: number;
   roomCount: number;
@@ -74,7 +76,6 @@ export function computeBase(
   nightlyRate: number,
   weeklyRate: number
 ): number {
-  const round2 = (x: number) => Math.round(x * 100) / 100;
   if (!Number.isFinite(nightlyRate) || !Number.isFinite(weeklyRate)) {
     return 0;
   }
@@ -84,7 +85,7 @@ export function computeBase(
   const perRoom = nights >= 7
     ? Math.floor(nights / 7) * weeklyRate + (nights % 7) * nightlyRate
     : nights * nightlyRate;
-  return round2(perRoom * roomCount);
+  return roundCents(perRoom * roomCount);
 }
 
 export interface ComputeInvoiceParams {
@@ -100,32 +101,30 @@ export interface ComputeInvoiceParams {
 }
 
 export function computeInvoice(params: ComputeInvoiceParams): InvoiceBreakdown {
-  const round2 = (x: number) => Math.round(x * 100) / 100;
-
-  // Compounding cascade: each subsequent tax line is computed on the running
-  // subtotal of all prior lines, so it matches the frontend `estimateStay` quote.
   const base = params.weeklyRate !== undefined
     ? computeBase(params.nights, params.roomCount, params.effectiveNightly, params.weeklyRate)
-    : round2(params.effectiveNightly * params.nights * params.roomCount);
-  const accommodationTax = round2(base * params.accommodationTax / 100);
-  const tps = round2((base + accommodationTax) * params.tps / 100);
-  // TVQ base includes TPS (compounding cascade).
-  const tvq = round2((base + accommodationTax + tps) * params.tvq / 100);
-  const total = round2(base + accommodationTax + tps + tvq);
+    : roundCents(params.effectiveNightly * params.nights * params.roomCount);
+
+  const breakdown = computeTaxBreakdown({
+    base,
+    accommodationTax: params.accommodationTax,
+    tps: params.tps,
+    tvq: params.tvq,
+  });
 
   const amount = params.type === "deposit"
-    ? round2(total * (params.depositPercent ?? 30) / 100)
-    : total;
+    ? roundCents(breakdown.total * (params.depositPercent ?? 30) / 100)
+    : breakdown.total;
 
   return {
     nights: params.nights,
     roomCount: params.roomCount,
     effectiveNightly: params.effectiveNightly,
-    base,
-    accommodationTax,
-    tps,
-    tvq,
-    total,
+    base: breakdown.base,
+    accommodationTax: breakdown.accommodationTax,
+    tps: breakdown.tps,
+    tvq: breakdown.tvq,
+    total: breakdown.total,
     amount,
   };
 }
