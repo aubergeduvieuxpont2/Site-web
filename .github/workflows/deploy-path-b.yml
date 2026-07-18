@@ -7,6 +7,11 @@ on:
     branches: [path-b]
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN: the deploy uses CLOUDFLARE_API_TOKEN
+# (step-scoped), not GITHUB_TOKEN, so read-only is sufficient here.
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-path-b
   cancel-in-progress: true
@@ -14,14 +19,17 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Gate on the same protected environment as production so CLOUDFLARE_API_TOKEN
+    # is only reachable through the environment's protection rules.
+    environment: production
     # CLOUDFLARE_API_TOKEN is scoped to the deploy step so it is never exposed
     # to install/build lifecycle scripts.
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
           cache: npm
