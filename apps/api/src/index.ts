@@ -579,6 +579,24 @@ app.post("/internal/ota-bookings", async (c) => {
 });
 
 // Auth routes
+// Durably link a user's guest reservations to their account by matching the
+// account email. Only claims UNCLAIMED rows (user_id IS NULL), so it can never
+// reassign a reservation already owned by another account. Called at the trusted
+// moments where the email is the account's own — registration, login, and (with
+// the pre-change address) an email change. Profile reads then key strictly off
+// user_id, which closes the email-reassignment IDOR: changing your email can no
+// longer surface another person's bookings.
+export async function linkGuestReservations(
+  sql: NeonQueryFunction<any, any>,
+  userId: number,
+  email: string
+): Promise<void> {
+  await sql`
+    UPDATE reservations SET user_id = ${userId}
+    WHERE user_id IS NULL AND lower(email) = lower(${email})
+  `;
+}
+
 app.post(
   "/api/auth/register",
   authRateLimiter,
@@ -605,6 +623,9 @@ app.post(
       if (!user) {
         return c.json({ error: "Failed to create user" }, 500);
       }
+
+      // Claim any guest reservations made under this email before the account existed.
+      await linkGuestReservations(sql, user.id, data.email);
 
       const token = await createSession(sql, user.id);
 
@@ -664,6 +685,10 @@ app.post(
     if (!user || !(await verifyPassword(data.password, user.password_hash))) {
       return c.json({ error: "Identifiants invalides" }, 401);
     }
+
+    // Link any unclaimed guest reservations under this account's email so the
+    // profile (which reads strictly by user_id) shows them without an email match.
+    await linkGuestReservations(sql, user.id, user.email);
 
     const token = await createSession(sql, user.id);
     const { password_hash, ...safeUser } = user;
@@ -836,7 +861,7 @@ app.get("/api/profile", async (c) => {
   const reservations = (await sql`
     SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
-    WHERE user_id = ${user.id} OR lower(email) = lower(${user.email})
+    WHERE user_id = ${user.id}
     ORDER BY created_at DESC
   `) as ReservationRow[];
 
@@ -887,12 +912,11 @@ app.post(
       return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
     }
 
-    // Claiming by the verified-by-password old address prevents reservation
-    // takeover through email reassignment and survives OTA relay expiry.
-    await sql`
-      UPDATE reservations SET user_id = ${user.id}
-      WHERE user_id IS NULL AND lower(email) = lower(${user.email})
-    `;
+    // Claim reservations under the CURRENT (pre-change, password-verified)
+    // address before reassigning the email. Combined with the user_id-only
+    // profile read, this prevents takeover of another person's reservations via
+    // email reassignment and survives OTA relay expiry.
+    await linkGuestReservations(sql, user.id, user.email);
 
     // Update the user's email
     await sql`
