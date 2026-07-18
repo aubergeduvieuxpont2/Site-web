@@ -1,0 +1,222 @@
+import { describe, it, expect, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { handleEmail } from "../src/index";
+
+const FIXTURES = join(__dirname, "fixtures");
+
+function rawEmail(from: string, subject: string, textBody: string): Uint8Array {
+  // Minimal RFC 5322 message; postal-mime handles UTF-8 8bit bodies.
+  const msg = [
+    `From: Airbnb <${from}>`,
+    `To: bookings@aubergeduvieuxpont.ca`,
+    `Subject: ${subject}`,
+    `Date: Fri, 17 Jul 2026 10:13:00 -0400`,
+    `MIME-Version: 1.0`,
+    `Content-Type: text/plain; charset=utf-8`,
+    `Content-Transfer-Encoding: 8bit`,
+    ``,
+    textBody,
+  ].join("\r\n");
+  return new TextEncoder().encode(msg);
+}
+
+function makeMessage(from: string, subject: string, textBody: string) {
+  const raw = rawEmail(from, subject, textBody);
+  return {
+    from,
+    to: "bookings@aubergeduvieuxpont.ca",
+    raw: new Response(raw).body!, // ReadableStream, like the runtime provides
+    rawSize: raw.byteLength,
+    headers: new Headers(),
+    forward: vi.fn(async () => {}),
+    setReject: vi.fn(),
+    reply: vi.fn(async () => {}),
+  } as any;
+}
+
+function makeEnv() {
+  const calls: { url: string; body: any }[] = [];
+  const env = {
+    FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+    DEV_SENDER: "ychasse01@gmail.com",
+    API: {
+      fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : (input as Request).url;
+        const bodyText =
+          typeof input !== "string" && input instanceof Request
+            ? await input.clone().text()
+            : String(init?.body ?? "");
+        calls.push({ url, body: JSON.parse(bodyText) });
+        return new Response(JSON.stringify({ ok: true }), { status: 202 });
+      }),
+    },
+  } as any;
+  return { env, calls };
+}
+
+const airbnbText = readFileSync(join(FIXTURES, "airbnb-confirmation.txt"), "utf8");
+
+describe("handleEmail", () => {
+  it("forwards first, then posts a parsed Airbnb booking to the API", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+
+    expect(message.forward).toHaveBeenCalledWith("aubergeduvieuxpont2@hotmail.com");
+    expect(message.forward.mock.invocationCallOrder[0]).toBeLessThan(
+      (env.API.fetch as any).mock.invocationCallOrder[0],
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("http://api/internal/ota-bookings");
+    expect(calls[0].body.status).toBe("parsed");
+    expect(calls[0].body.source).toBe("airbnb");
+    expect(calls[0].body.externalRef).toBe("HM45MDTHZ4");
+    expect(calls[0].body.firstName).toBe("Jean");
+  });
+
+  it("posts ignored for an Airbnb pending request", async () => {
+    const requestText = readFileSync(join(FIXTURES, "airbnb-request.txt"), "utf8");
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "En attente : demande de réservation concernant l'annonce Auberge du vieux pont pour 30–31 juil. 2026",
+      requestText,
+    );
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.forward).toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body.status).toBe("ignored");
+    expect(calls[0].body.provider).toBe("airbnb");
+  });
+
+  it("posts parse_failed when a booking email cannot be parsed", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      "corps inattendu sans aucun des champs habituels",
+    );
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body.status).toBe("parse_failed");
+    expect(calls[0].body.provider).toBe("airbnb");
+  });
+
+  it("rejects unknown senders — no forward, no API call", async () => {
+    const message = makeMessage("news@example.com", "Promo", "hello");
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.setReject).toHaveBeenCalled();
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("processes a dev-sender forward end-to-end without forwarding it", async () => {
+    const message = makeMessage(
+      "ychasse01@gmail.com",
+      "FW: Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(message.setReject).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body.status).toBe("parsed");
+    expect(calls[0].body.source).toBe("airbnb");
+    expect(calls[0].body.externalRef).toBe("HM45MDTHZ4");
+  });
+
+  it("rejects dev-sender emails with unrelated subjects", async () => {
+    const message = makeMessage("ychasse01@gmail.com", "Lunch tomorrow?", "hello");
+    const { env, calls } = makeEnv();
+    await handleEmail(message, env);
+    expect(message.setReject).toHaveBeenCalled();
+    expect(message.forward).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still forwards OTA mail when MIME parsing fails, using the envelope sender", async () => {
+    const raw = new ReadableStream({
+      start(controller) {
+        controller.error(new Error("broken stream"));
+      },
+    });
+    const message = {
+      from: "automated@airbnb.com",
+      to: "bookings@aubergeduvieuxpont.ca",
+      raw,
+      rawSize: 0,
+      headers: new Headers(),
+      forward: vi.fn(async () => {}),
+      setReject: vi.fn(),
+      reply: vi.fn(async () => {}),
+    } as any;
+    const { env, calls } = makeEnv();
+    await expect(handleEmail(message, env)).resolves.toBeUndefined();
+    expect(message.forward).toHaveBeenCalledWith("aubergeduvieuxpont2@hotmail.com");
+    expect(message.setReject).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+
+  it("falls back to a parse_failed report when the API rejects a parsed booking", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const calls: { url: string; body: any }[] = [];
+    const env = {
+      FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      API: {
+        fetch: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = typeof input === "string" ? input : (input as Request).url;
+          const bodyText =
+            typeof input !== "string" && input instanceof Request
+              ? await input.clone().text()
+              : String(init?.body ?? "");
+          calls.push({ url, body: JSON.parse(bodyText) });
+          if (calls.length === 1) {
+            return new Response("bad request", { status: 400 });
+          }
+          return new Response(JSON.stringify({ ok: true }), { status: 202 });
+        }),
+      },
+    } as any;
+
+    await handleEmail(message, env);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].body.status).toBe("parsed");
+    expect(calls[1].body.status).toBe("parse_failed");
+    expect(calls[1].body.provider).toBe("airbnb");
+    expect(calls[1].body.error).toContain("400");
+  });
+
+  it("never throws after a successful forward, even if the API is down", async () => {
+    const message = makeMessage(
+      "automated@airbnb.com",
+      "Réservation confirmée : Jean Tremblay arrive le 30 juil.",
+      airbnbText,
+    );
+    const env = {
+      FORWARD_TO: "aubergeduvieuxpont2@hotmail.com",
+      API: { fetch: vi.fn(async () => { throw new Error("binding down"); }) },
+    } as any;
+    await expect(handleEmail(message, env)).resolves.toBeUndefined();
+    expect(message.forward).toHaveBeenCalled();
+  });
+
+  it("propagates a forward failure so Cloudflare retries delivery", async () => {
+    const message = makeMessage("automated@airbnb.com", "x", "y");
+    message.forward = vi.fn(async () => { throw new Error("not verified"); });
+    const { env, calls } = makeEnv();
+    await expect(handleEmail(message, env)).rejects.toThrow("not verified");
+    expect(calls).toHaveLength(0);
+  });
+});

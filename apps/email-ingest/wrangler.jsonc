@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site-web-email-ingest",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // Email-ingest Worker — receives bookings@aubergeduvieuxpont.ca via a
+  // Cloudflare Email Routing rule (configured in the dashboard, see README).
+  // No HTTP routes: the only entry point is the email() handler.
+  // No fetch handler exists, so a workers.dev URL would be dead noise anyway.
+  "workers_dev": false,
+
+  // FORWARD_TO: recognized OTA mail is forwarded here (must be a VERIFIED
+  // Email Routing destination on the zone or forward() rejects). Unknown
+  // senders are rejected at SMTP time; DEV_SENDER mail is processed
+  // (provider inferred from the subject) but NOT forwarded.
+  "vars": {
+    "FORWARD_TO": "aubergeduvieuxpont2@hotmail.com",
+    "DEV_SENDER": "ychasse01@gmail.com"
+  },
+
+  "services": [{ "binding": "API", "service": "site-web-api" }]
+}

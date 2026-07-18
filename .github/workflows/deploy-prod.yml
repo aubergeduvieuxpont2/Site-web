@@ -38,6 +38,10 @@ jobs:
         run: npx wrangler deploy
         working-directory: apps/hubspot
 
+      - name: Deploy email-ingest
+        run: npx wrangler deploy
+        working-directory: apps/email-ingest
+
       - name: Deploy API (www/api/*, dev+a+b /api/*)
         run: npx wrangler deploy
         working-directory: apps/api
