@@ -50,7 +50,7 @@ export async function provisionOtaGuest(
     const tokenHash = await sha256hex(rawToken);
     await sql`
       INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
-      VALUES (${tokenHash}, ${userId}, now() + interval '30 days')
+      VALUES (${tokenHash}, ${userId}, now() + interval '1 hour')
     `;
 
     await enqueueEmail(sql as never, {
@@ -65,6 +65,11 @@ export async function provisionOtaGuest(
       },
     });
   } catch (err) {
-    console.error("ota provisioning failed (reservation kept)", err);
+    // L11: never log the raw error — it can embed the guest email/name from the
+    // failing query. Log a stable code plus the non-PII reservation id only.
+    console.error("ota_provisioning_failed", {
+      reservationId: input.reservationId,
+      error: err instanceof Error ? err.name : "unknown",
+    });
   }
 }

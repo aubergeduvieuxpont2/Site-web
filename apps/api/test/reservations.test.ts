@@ -44,6 +44,17 @@ describe("ReservationRequestSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects a roomCount above the max (L5)", () => {
+    const result = ReservationRequestSchema.safeParse({ ...base, roomCount: 21 });
+    expect(result.success).toBe(false);
+  });
+
+  it("clamps an out-of-range guests count to 1 (L5)", () => {
+    const result = ReservationRequestSchema.safeParse({ ...base, guests: 999 });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.guests).toBe(1);
+  });
+
   it("rejects an omitted roomCount", () => {
     const { roomCount, ...withoutRoomCount } = base;
     const result = ReservationRequestSchema.safeParse(withoutRoomCount);

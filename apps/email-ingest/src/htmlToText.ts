@@ -2,7 +2,10 @@
  * Minimal HTML→text for OTA notification emails: enough structure (line
  * breaks at block boundaries) for the line-oriented parsers, no DOM needed.
  */
-const NAMED_ENTITIES: Record<string, string> = {
+// Prototype-free so inherited Object members (&constructor;, &toString;,
+// &hasOwnProperty;, …) can never resolve to a junk value; only real named
+// entities defined here exist on the table.
+const NAMED_ENTITIES: Record<string, string> = Object.assign(Object.create(null) as Record<string, string>, {
   amp: "&",
   lt: "<",
   gt: ">",
@@ -18,7 +21,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   icirc: "î",
   ecirc: "ê",
   acirc: "â",
-};
+});
 
 export function htmlToText(html: string): string {
   return html
@@ -35,7 +38,10 @@ export function htmlToText(html: string): string {
       const cp = parseInt(n, 16);
       return !Number.isFinite(cp) || cp < 0 || cp > 0x10ffff ? "" : String.fromCodePoint(cp);
     })
-    .replace(/&([a-z]+);/gi, (m, name: string) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
+    .replace(/&([a-z]+);/gi, (m, name: string) => {
+      const key = name.toLowerCase();
+      return Object.hasOwn(NAMED_ENTITIES, key) ? NAMED_ENTITIES[key] : m;
+    })
     .replace(/[ \t]+/g, " ")
     .replace(/ ?\n ?/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

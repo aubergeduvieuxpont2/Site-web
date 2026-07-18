@@ -7,6 +7,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least-privilege GITHUB_TOKEN: deploys use CLOUDFLARE_API_TOKEN (step-scoped),
+# not GITHUB_TOKEN, so read-only is sufficient here.
+permissions:
+  contents: read
+
 concurrency:
   group: deploy-prod
   cancel-in-progress: false
@@ -20,9 +25,9 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 22
           cache: npm
@@ -31,6 +36,10 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      # Run the test suite before any deploy so a red build blocks production.
+      - name: Test (all workspaces)
+        run: npm test --workspaces --if-present
 
       - name: Build web
         run: npm run build:web

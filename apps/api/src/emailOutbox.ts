@@ -181,14 +181,12 @@ export async function drainEmailOutbox(
           }
         } else {
           // Permanent failure (4xx other than 429): no point retrying regardless of attempts.
-          let body = "";
-          try {
-            body = await res.text();
-          } catch {}
+          // L11: record only the status code — the Resend response body can echo
+          // the recipient address/name (PII) and must never land in the log column.
           await sql`
             UPDATE email_outbox
             SET status = 'failed',
-                last_error = ${"HTTP " + res.status + ": " + body.slice(0, 500)},
+                last_error = ${"HTTP " + res.status},
                 updated_at = now()
             WHERE id = ${row.id}
           `;

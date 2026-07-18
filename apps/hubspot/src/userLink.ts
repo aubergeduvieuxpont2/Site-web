@@ -13,6 +13,10 @@ export async function linkContactToUser(
       WHERE lower(email) = lower(${email})
     `;
   } catch (error) {
-    console.error("Failed to link contact to user:", error);
+    // Log a stable, PII-free marker only. The raw error can embed the guest's
+    // email/name (query params, driver messages), which must not reach logs.
+    const code =
+      error instanceof Error && error.name ? error.name : "UnknownError";
+    console.error(`linkContactToUser failed (hubspotId=${hubspotId}): ${code}`);
   }
 }

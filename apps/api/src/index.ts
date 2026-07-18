@@ -7,7 +7,8 @@ import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
-import { hashPassword, verifyPassword } from "./auth/password";
+import { hashPassword, verifyPassword, needsRehash } from "./auth/password";
+import { isPasswordBreached } from "./auth/hibp";
 import {
   createSession,
   validateSession,
@@ -118,6 +119,10 @@ const MessageRequestSchema = z.object({
   body: z.string().min(1, "body must be non-empty"),
 });
 
+// L2: shown when a submitted password is found in the HIBP breach corpus.
+const BREACHED_PASSWORD_ERROR =
+  "Ce mot de passe figure dans une fuite de données connue. Veuillez en choisir un autre.";
+
 const trimToNull = z
   .string()
   .optional()
@@ -141,8 +146,15 @@ export const ReservationRequestSchema = z.object({
   checkIn: trimToNull,
   checkOut: trimToNull,
   message: trimToNull,
-  guests: z.coerce.number().int().min(1).catch(1),
-  roomCount: z.coerce.number().int().min(1, "roomCount must be at least 1"),
+  // L5: upper bounds so a single request can't ask for an absurd room/guest
+  // count. guests keeps `.catch(1)` (an out-of-range value clamps to 1 rather
+  // than 400); roomCount rejects out-of-range with a 400.
+  guests: z.coerce.number().int().min(1).max(50).catch(1),
+  roomCount: z.coerce
+    .number()
+    .int()
+    .min(1, "roomCount must be at least 1")
+    .max(20, "roomCount must be at most 20"),
 }).superRefine((data, ctx) => {
   // Dates stay optional: only enforce ordering when BOTH are present.
   if (data.checkIn == null || data.checkOut == null) return;
@@ -168,7 +180,7 @@ const reservationHook = (result: any, c: any) =>
 
 const RegisterSchema = z.object({
   email: z.string().trim().email("email invalide"),
-  password: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+  password: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
   name: trimToNull,
   firstName: trimToNull,
   lastName: trimToNull,
@@ -183,7 +195,7 @@ const LoginSchema = z.object({
 
 const PasswordChangeSchema = z.object({
   currentPassword: z.string().min(1, "mot de passe actuel requis"),
-  newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+  newPassword: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
 });
 
 const ForgotPasswordSchema = z.object({
@@ -192,7 +204,7 @@ const ForgotPasswordSchema = z.object({
 
 const ResetPasswordSchema = z.object({
   token: z.string().min(1, "token requis"),
-  newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
+  newPassword: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
 });
 
 const RoleSchema = z.object({
@@ -279,6 +291,20 @@ async function getAuthUser(c: Context<{ Bindings: Bindings }>): Promise<User | n
   return validateSession(sql, token);
 }
 
+// L4: parse a `:id` path param as a positive integer. Non-numeric / overflow /
+// non-positive values return null so the handler can answer 400 instead of
+// letting a NaN or cast error surface as an unhandled 500.
+function parseIdParam(raw: string | undefined): number | null {
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
+}
+
+// L5: today's date as YYYY-MM-DD (UTC) for the "no arrival in the past" check.
+function todayISODate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 // M9 (anti-enumeration): a valid-format PBKDF2 hash of a random string, computed
 // once at module load. On a login attempt for an UNKNOWN email we verify the
 // submitted password against this dummy hash so the request spends the same CPU
@@ -327,7 +353,17 @@ app.get("/api/health", (c) => {
   return c.json({ status: "ok", time: new Date().toISOString() });
 });
 
+// M8: reading stored contact-form messages is admin-only (they were previously
+// world-readable with no auth). POST below stays public (the contact form).
 app.get("/api/messages", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  if (user.role !== "admin") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
   const sql = neon(c.env.DB_CONN);
   const rows = (await sql`
     SELECT id, body, created_at
@@ -380,14 +416,26 @@ app.post(
   async (c) => {
     const data = c.req.valid("json");
 
+    // L5: dates are mandatory on this path. A date-less booking would otherwise
+    // skip the availability gate below and land as a `pending` row that silently
+    // oversells the property — so reject it with a 400.
+    if (!data.checkIn || !data.checkOut) {
+      return c.json({ error: "Les dates d'arrivée et de départ sont requises." }, 400);
+    }
+
+    // L5: no reservations that start in the past.
+    if (data.checkIn < todayISODate()) {
+      return c.json({ error: "La date d'arrivée ne peut pas être dans le passé." }, 400);
+    }
+
     // Derived value for the NOT NULL `name` column; the split first/last are
     // persisted alongside it.
     const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
 
     const sql = neon(c.env.DB_CONN);
 
-    // Check availability before inserting
-    if (data.checkIn && data.checkOut) {
+    // Check availability before inserting (dates are guaranteed present above).
+    {
       const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
       const adminSettings = rowsToAdminSettings(settingsRows);
 
@@ -474,7 +522,9 @@ app.get("/api/availability", rateLimitMiddleware, async (c) => {
   const checkOut = c.req.query("checkOut");
   const rooms = Number(c.req.query("rooms"));
 
-  if (!checkIn || !checkOut || rooms < 1) {
+  // L5: bound `rooms` (an unbounded value drives an expensive availability query
+  // and is never legitimate) and require valid, well-ordered dates.
+  if (!checkIn || !checkOut || !Number.isInteger(rooms) || rooms < 1 || rooms > 20) {
     return c.json({ error: "Invalid parameters" }, 400);
   }
 
@@ -627,6 +677,11 @@ app.post(
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
+    // L2: reject known-breached passwords (fails open if HIBP is unreachable).
+    if (await isPasswordBreached(data.password)) {
+      return c.json({ error: BREACHED_PASSWORD_ERROR }, 400);
+    }
+
     // Derive name from firstName + lastName if not explicitly provided
     const derivedName =
       [data.firstName, data.lastName].filter(Boolean).join(" ") ||
@@ -752,6 +807,18 @@ app.post(
       /* fail open */
     }
 
+    // L1: transparently upgrade a hash minted with fewer than the current target
+    // iterations now that we hold the plaintext. Best-effort — a failure here
+    // must never block a valid login.
+    if (needsRehash(user.password_hash)) {
+      try {
+        const upgraded = await hashPassword(data.password);
+        await sql`UPDATE users SET password_hash = ${upgraded} WHERE id = ${user.id}`;
+      } catch {
+        /* best-effort */
+      }
+    }
+
     // Link any unclaimed guest reservations under this account's email so the
     // profile (which reads strictly by user_id) shows them without an email match.
     await linkGuestReservations(sql, user.id, user.email);
@@ -833,6 +900,11 @@ app.post(
       return c.json({ error: "Mot de passe actuel incorrect" }, 400);
     }
 
+    // L2: reject known-breached passwords (fails open if HIBP is unreachable).
+    if (await isPasswordBreached(data.newPassword)) {
+      return c.json({ error: BREACHED_PASSWORD_ERROR }, 400);
+    }
+
     const newHash = await hashPassword(data.newPassword);
     await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${user.id}`;
 
@@ -911,6 +983,11 @@ app.post(
 
     if (!rows[0]) {
       return c.json({ error: "Lien invalide ou expiré" }, 400);
+    }
+
+    // L2: reject known-breached passwords (fails open if HIBP is unreachable).
+    if (await isPasswordBreached(data.newPassword)) {
+      return c.json({ error: BREACHED_PASSWORD_ERROR }, 400);
     }
 
     const userId = rows[0].user_id;
@@ -1139,7 +1216,8 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
   }
 
   const sql = neon(c.env.DB_CONN);
-  const id = c.req.param("id");
+  const id = parseIdParam(c.req.param("id"));
+  if (id === null) return c.json({ error: "Invalid id" }, 400);
 
   const rows = (await sql`
     SELECT * FROM hubspot_outbox WHERE id = ${id} AND status = 'failed'
@@ -1336,7 +1414,8 @@ app.post(
       return c.json({ error: "Unauthorized" }, 401);
     }
 
-    const targetId = Number(c.req.param("id"));
+    const targetId = parseIdParam(c.req.param("id"));
+    if (targetId === null) return c.json({ error: "Invalid id" }, 400);
     if (targetId === user.id) {
       return c.json({ error: "Vous ne pouvez pas modifier votre propre rôle" }, 400);
     }
@@ -1368,7 +1447,8 @@ app.post("/api/admin/users/:id/reset-link", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const targetId = Number(c.req.param("id"));
+  const targetId = parseIdParam(c.req.param("id"));
+  if (targetId === null) return c.json({ error: "Invalid id" }, 400);
   const sql = neon(c.env.DB_CONN);
 
   const rows = (await sql`
@@ -1388,6 +1468,17 @@ app.post("/api/admin/users/:id/reset-link", async (c) => {
     VALUES (${tokenHash}, ${targetId}, ${expiresAt})
   `;
 
+  // L6: audit trail — minting a live reset link is a sensitive admin action.
+  // Best-effort so a missing audit table can never break link minting.
+  try {
+    await sql`
+      INSERT INTO admin_audit (admin_user_id, action, target_user_id)
+      VALUES (${admin.id}, 'reset_link_minted', ${targetId})
+    `;
+  } catch (err) {
+    console.error("admin_audit_insert_failed", err instanceof Error ? err.name : "unknown");
+  }
+
   const origin = new URL(c.req.url).origin;
   const url = `${origin}/reinitialisation?token=${rawToken}`;
 
@@ -1404,7 +1495,8 @@ app.get("/api/admin/reservations/:id/assignments", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const reservationId = Number(c.req.param("id"));
+  const reservationId = parseIdParam(c.req.param("id"));
+  if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
   const sql = neon(c.env.DB_CONN);
 
   const assignments = (await sql`
@@ -1423,7 +1515,8 @@ app.get("/api/admin/reservations/:id/free-rooms", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const reservationId = Number(c.req.param("id"));
+  const reservationId = parseIdParam(c.req.param("id"));
+  if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
   const sql = neon(c.env.DB_CONN);
 
   const res = (await sql`
@@ -1453,7 +1546,8 @@ app.post(
   },
   zValidator("json", AssignRoomSchema),
   async (c) => {
-    const reservationId = Number(c.req.param("id"));
+    const reservationId = parseIdParam(c.req.param("id"));
+    if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
@@ -1535,7 +1629,8 @@ app.delete("/api/admin/reservations/:id/assignments/:roomSlug", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const reservationId = Number(c.req.param("id"));
+  const reservationId = parseIdParam(c.req.param("id"));
+  if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
   const roomSlug = c.req.param("roomSlug");
   const sql = neon(c.env.DB_CONN);
 
@@ -1573,7 +1668,8 @@ app.post(
     })
   ),
   async (c) => {
-    const reservationId = Number(c.req.param("id"));
+    const reservationId = parseIdParam(c.req.param("id"));
+    if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
@@ -1657,7 +1753,8 @@ app.get("/api/admin/users/:id", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const targetId = Number(c.req.param("id"));
+  const targetId = parseIdParam(c.req.param("id"));
+  if (targetId === null) return c.json({ error: "Invalid id" }, 400);
   const sql = neon(c.env.DB_CONN);
 
   const userRows = (await sql`
@@ -1739,7 +1836,8 @@ app.post(
     })
   ),
   async (c) => {
-    const targetId = Number(c.req.param("id"));
+    const targetId = parseIdParam(c.req.param("id"));
+    if (targetId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
 
     if (data.discountPercent != null && (data.fixedNightlyPrice != null || data.fixedWeeklyPrice != null)) {
@@ -1801,7 +1899,8 @@ app.patch(
   },
   zValidator("json", ReservationStatusSchema),
   async (c) => {
-    const reservationId = Number(c.req.param("id"));
+    const reservationId = parseIdParam(c.req.param("id"));
+    if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
     const sql = neon(c.env.DB_CONN);
 
@@ -2006,6 +2105,14 @@ app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
 // JSON 404 for unmatched routes.
 app.notFound((c) => {
   return c.json({ error: "Not Found" }, 404);
+});
+
+// L4: global error boundary. Any handler that throws (e.g. an unexpected DB
+// error) returns a generic JSON 500 — never a raw message or stack trace, which
+// could leak SQL, connection strings, or PII. The error name is logged for ops.
+app.onError((err, c) => {
+  console.error("unhandled_error", err instanceof Error ? err.name : "unknown");
+  return c.json({ error: "Internal server error" }, 500);
 });
 
 // Named export of the Hono app for tests that drive routes via `app.request`.

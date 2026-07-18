@@ -40,6 +40,10 @@
 
   // ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
   // Set to the real admin address in production; leave blank to skip seeding.
+  // SECURITY (follow-up): this is a personal email committed in plaintext.
+  // Prefer moving it to a Worker secret (`wrangler secret put ADMIN_EMAIL`) or a
+  // CI-injected var so it is not stored in the repo. Left in `vars` for now
+  // because removing it here would break deploys until the secret is set.
   "vars": {
     "ADMIN_EMAIL": "ychasse01@gmail.com"
   },

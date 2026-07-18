@@ -31,6 +31,13 @@ const env = { DB_CONN: "postgres://stub" } as any;
 
 beforeEach(() => {
   verifyPasswordSpy.mockClear();
+  // The password-change handler now runs an HIBP breach check (global fetch).
+  // Stub it so tests never hit the network; a non-200 makes the check fail open
+  // (treated as "not breached"), which is the behaviour under test here.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("", { status: 500 })),
+  );
 });
 
 describe("M9 — login user-enumeration hardening", () => {

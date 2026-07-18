@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { provisionOtaGuest } from "../src/provisioning";
+import { sha256hex } from "../src/auth/session";
 
 type Q = { q: string; vals: unknown[] };
 
@@ -24,7 +25,7 @@ const input = {
 };
 
 describe("provisionOtaGuest", () => {
-  it("creates the user, links the reservation, mints a 30-day token, enqueues welcome", async () => {
+  it("creates the user, links the reservation, mints a 1-hour token, enqueues welcome", async () => {
     const { sql, calls } = makeSql((q) => {
       if (q.includes("SELECT id") && q.includes("FROM users")) return []; // no existing user
       if (q.includes("INSERT INTO users")) return [{ id: 77 }];
@@ -40,7 +41,9 @@ describe("provisionOtaGuest", () => {
     expect(link!.vals).toContain(10);
     const token = calls.find((c) => c.q.includes("INSERT INTO password_reset_tokens"));
     expect(token).toBeDefined();
-    expect(token!.q).toContain("30 days");
+    // L3(d): reset-token lifetime matches the 1h used everywhere else (was 30 days).
+    expect(token!.q).toContain("1 hour");
+    expect(token!.q).not.toContain("30 days");
     const outbox = calls.find((c) => c.q.includes("INSERT INTO email_outbox"));
     expect(outbox).toBeDefined();
     const payload = JSON.parse(String(outbox!.vals.find((v) => typeof v === "string" && String(v).includes("setPasswordUrl"))));
@@ -76,5 +79,38 @@ describe("provisionOtaGuest", () => {
   it("never throws when the DB errors", async () => {
     const sql = (async () => { throw new Error("db down"); }) as any;
     await expect(provisionOtaGuest(sql, input)).resolves.toBeUndefined();
+  });
+
+  // L3(a): the stored token_hash must be the awaited SHA-256 of the emailed raw
+  // token — not a pending Promise (which would stringify to "[object Promise]"
+  // and never match at reset time). L3(b): the users INSERT must supply a
+  // non-null password_hash for the NOT NULL column.
+  it("stores the awaited sha256 of the emailed token and a non-null password_hash", async () => {
+    const { sql, calls } = makeSql((q) => {
+      if (q.includes("SELECT id") && q.includes("FROM users")) return [];
+      if (q.includes("INSERT INTO users")) return [{ id: 88 }];
+      if (q.includes("FROM settings")) return [{ value: "true" }];
+      return [];
+    });
+    await provisionOtaGuest(sql, input);
+
+    // Recover the raw token the guest was emailed.
+    const outbox = calls.find((c) => c.q.includes("INSERT INTO email_outbox"));
+    const payload = JSON.parse(
+      String(outbox!.vals.find((v) => typeof v === "string" && String(v).includes("setPasswordUrl")))
+    );
+    const rawToken = new URL(payload.setPasswordUrl).searchParams.get("token")!;
+
+    const tokenInsert = calls.find((c) => c.q.includes("INSERT INTO password_reset_tokens"));
+    const storedHash = tokenInsert!.vals[0];
+    expect(typeof storedHash).toBe("string");
+    expect(storedHash).toBe(await sha256hex(rawToken)); // proves the await landed
+
+    // users INSERT carries a real string password_hash (not null/undefined).
+    const userInsert = calls.find((c) => c.q.includes("INSERT INTO users"));
+    const hashArg = userInsert!.vals[1];
+    expect(typeof hashArg).toBe("string");
+    expect((hashArg as string).length).toBeGreaterThan(0);
+    expect((hashArg as string).startsWith("pbkdf2$")).toBe(true);
   });
 });

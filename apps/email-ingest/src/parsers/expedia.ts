@@ -45,7 +45,10 @@ export function parseExpedia(bodyText: string, _subject: string): ParsedBooking 
   const guestEmail = body.match(/Guest Email:\s*([^\s<>]+@[^\s<>]+)/i)?.[1] ?? null;
   // Guest phone appears as a bare digit line between the Guest and
   // Guest Email lines; best-effort.
-  const phone = body.match(/\n\s*(\d[\d ()+-]{6,})\s*\n\s*Guest Email/i)?.[1]?.trim() ?? null;
+  // Bounded, non-overlapping form: the capture class stops at \r/\n (neither is
+  // in it) so the terminating \r?\n cannot overlap the run — no catastrophic
+  // backtracking when "Guest Email" never follows a long digit/space run.
+  const phone = body.match(/\n *(\d[\d ()+-]{5,30})\r?\n[ \t]*Guest Email/i)?.[1]?.trim() ?? null;
   const listingName = body.match(/Room Type Name:\s*([^\n]+)/i)?.[1]?.trim() ?? null;
 
   return {
