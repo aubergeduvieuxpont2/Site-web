@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { validateKey } from '../utils';
+import { validateKey, resolveContentType } from '../utils';
 
 export const prerender = false;
 
@@ -31,8 +31,9 @@ export const GET: RequestHandler = async ({ params, platform }) => {
       status: 200,
       headers: {
         'Cache-Control': 'public, max-age=31536000, immutable',
-        'Content-Type':
-          obj.httpMetadata?.contentType || 'application/octet-stream',
+        'Content-Type': resolveContentType(obj.httpMetadata?.contentType),
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': 'inline',
       },
     });
   }
