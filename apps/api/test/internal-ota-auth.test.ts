@@ -8,7 +8,7 @@ vi.mock("@neondatabase/serverless", () => ({
   neon: () => async () => [],
 }));
 
-import app from "../src/index";
+import { app } from "../src/index";
 import { timingSafeEqual, checkSharedSecret } from "../src/auth/internalAuth";
 
 const SECRET = "internal-ota-secret";
