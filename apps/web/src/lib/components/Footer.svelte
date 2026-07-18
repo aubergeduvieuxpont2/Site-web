@@ -74,6 +74,13 @@
       data-testid="footer-nav"
     >
       <a
+        href="/avis"
+        class="footer__link"
+        data-testid="footer-link-avis"
+      >
+        Avis des clients
+      </a>
+      <a
         href="/politiques"
         class="footer__link"
         data-testid="footer-link-politiques"

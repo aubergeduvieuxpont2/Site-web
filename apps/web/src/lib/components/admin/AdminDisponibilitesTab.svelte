@@ -1,11 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import {
-    adminBlackouts,
-    adminUpsertBlackout,
-    adminDeleteBlackout,
-    isError,
-  } from '$lib/api';
+  import { adminBlackouts, isError } from '$lib/api';
   import type { BlackoutRow } from '$lib/api';
 
   interface Props {
@@ -14,23 +9,43 @@
 
   let { assignableRoomCount }: Props = $props();
 
+  // ── Grouped range type (display-only; storage stays per-day) ─────────────
+  interface BlackoutRange {
+    startDate: string;
+    endDate: string;
+    rooms_blocked: number;
+    note: string | null;
+  }
+
   // ── State ────────────────────────────────────────────────────────────────
   let blackouts = $state<BlackoutRow[]>([]);
   let loading = $state(true);
   let globalError = $state<string | null>(null);
 
-  // Two-step inline delete confirmation
-  let confirmingDate = $state<string | null>(null);
-  let deletingDate = $state<string | null>(null);
+  // Grouping is pure display: consecutive days with same rooms_blocked+note →
+  // one range row. Availability math in availability.ts is untouched.
+  let groupedRanges = $derived(groupBlackouts(blackouts));
 
-  // Add / upsert form
-  let formDate = $state('');
+  // Two-step inline delete confirmation, keyed by range boundaries
+  let confirmingRange = $state<{ start: string; end: string } | null>(null);
+  let deletingRange = $state<{ start: string; end: string } | null>(null);
+
+  // Range add/upsert form
+  let formStartDate = $state('');
+  let formEndDate = $state('');
   let formRoomsBlocked = $state<number>(assignableRoomCount);
   let formNote = $state('');
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
-  let submitFlash = $state(false);
+  let submitFlash = $state<string | false>(false);
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // Auto-clamp end date behind start date
+  $effect(() => {
+    if (formStartDate && formEndDate && formEndDate < formStartDate) {
+      formEndDate = formStartDate;
+    }
+  });
 
   // ── Date formatter (timezone-safe fr-CA, mirrors ReservationTableRow) ──────
   const dateFmt = new Intl.DateTimeFormat('fr-CA', { dateStyle: 'medium' });
@@ -41,6 +56,102 @@
     const local = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
     if (Number.isNaN(local.getTime())) return dateStr;
     return dateFmt.format(local);
+  }
+
+  function formatRange(r: BlackoutRange): string {
+    if (r.startDate === r.endDate) return formatDate(r.startDate);
+    return `${formatDate(r.startDate)} → ${formatDate(r.endDate)}`;
+  }
+
+  // ── Grouping logic ────────────────────────────────────────────────────────
+  function addOneDay(dateStr: string): string {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    if (!m) return dateStr;
+    const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0'),
+    ].join('-');
+  }
+
+  function groupBlackouts(rows: BlackoutRow[]): BlackoutRange[] {
+    if (rows.length === 0) return [];
+    const sorted = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+    const ranges: BlackoutRange[] = [];
+    let cur: BlackoutRange = {
+      startDate: sorted[0].date,
+      endDate: sorted[0].date,
+      rooms_blocked: sorted[0].rooms_blocked,
+      note: sorted[0].note,
+    };
+    for (let i = 1; i < sorted.length; i++) {
+      const row = sorted[i];
+      if (
+        addOneDay(cur.endDate) === row.date &&
+        row.rooms_blocked === cur.rooms_blocked &&
+        row.note === cur.note
+      ) {
+        cur.endDate = row.date;
+      } else {
+        ranges.push(cur);
+        cur = {
+          startDate: row.date,
+          endDate: row.date,
+          rooms_blocked: row.rooms_blocked,
+          note: row.note,
+        };
+      }
+    }
+    ranges.push(cur);
+    return ranges;
+  }
+
+  // ── Range API helpers (new endpoints; inline until api.ts is updated) ─────
+  async function postBlackoutRange(body: {
+    startDate: string;
+    endDate: string;
+    roomsBlocked: number;
+    note: string | null;
+  }): Promise<{ count: number } | { error: string }> {
+    let res: Response;
+    try {
+      res = await fetch('/api/admin/blackouts/range', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      return { error: 'Réseau indisponible' };
+    }
+    try {
+      return (await res.json()) as { count: number } | { error: string };
+    } catch {
+      return { error: `Erreur ${res.status}` };
+    }
+  }
+
+  async function deleteBlackoutRange(
+    start: string,
+    end: string,
+  ): Promise<{ deleted: number } | { error: string }> {
+    let res: Response;
+    try {
+      const params = new URLSearchParams({ start, end });
+      res = await fetch(`/api/admin/blackouts/range?${params.toString()}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch {
+      return { error: 'Réseau indisponible' };
+    }
+    try {
+      return (await res.json()) as { deleted: number } | { error: string };
+    } catch {
+      return { error: `Erreur ${res.status}` };
+    }
   }
 
   // ── Data loading ───────────────────────────────────────────────────────────
@@ -61,16 +172,23 @@
     return () => clearTimeout(flashTimer);
   });
 
-  // ── Upsert ───────────────────────────────────────────────────────────────
+  // ── Range submit ──────────────────────────────────────────────────────────
   async function handleSubmit(e: SubmitEvent): Promise<void> {
     e.preventDefault();
-    if (!formDate) return;
+    if (!formStartDate) return;
+    const endDate = formEndDate || formStartDate;
+    if (endDate < formStartDate) {
+      submitError = 'La date de fin doit être ≥ à la date de début.';
+      return;
+    }
     const rooms = Number(formRoomsBlocked);
     if (!Number.isFinite(rooms) || rooms < 0) return;
 
     submitting = true;
     submitError = null;
-    const res = await adminUpsertBlackout(formDate, {
+    const res = await postBlackoutRange({
+      startDate: formStartDate,
+      endDate,
       roomsBlocked: rooms,
       note: formNote.trim() || null,
     });
@@ -81,11 +199,12 @@
       return;
     }
 
-    // Reset form and flash success
-    formDate = '';
+    const count = (res as { count: number }).count;
+    formStartDate = '';
+    formEndDate = '';
     formRoomsBlocked = assignableRoomCount;
     formNote = '';
-    submitFlash = true;
+    submitFlash = count === 1 ? '1 date enregistrée.' : `${count} dates enregistrées.`;
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
       submitFlash = false;
@@ -93,18 +212,17 @@
     await load();
   }
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
-  async function handleDelete(date: string): Promise<void> {
-    confirmingDate = null; // dismiss prompt immediately
-    deletingDate = date;
-    const res = await adminDeleteBlackout(date);
-    deletingDate = null;
+  // ── Range delete ──────────────────────────────────────────────────────────
+  async function handleDeleteRange(start: string, end: string): Promise<void> {
+    confirmingRange = null;
+    deletingRange = { start, end };
+    const res = await deleteBlackoutRange(start, end);
+    deletingRange = null;
 
     if (isError(res)) {
       globalError = res.error;
     } else {
-      // Optimistic remove: avoids a second round-trip
-      blackouts = blackouts.filter((b) => b.date !== date);
+      await load();
     }
   }
 </script>
@@ -134,7 +252,7 @@
       aria-live="polite"
       data-testid="submit-success"
     >
-      Date enregistrée.
+      {submitFlash}
     </div>
   {/if}
 
@@ -148,11 +266,11 @@
       <span class="admin-disponibilites-tab__spin" aria-hidden="true"></span>
     </div>
   {:else}
-    <!-- ── Blackout list ──────────────────────────── -->
+    <!-- ── Range list ──────────────────────────────── -->
     <div
       class="admin-disponibilites-tab__table-scroll"
       role="region"
-      aria-label="Tableau des dates bloquées"
+      aria-label="Tableau des plages bloquées"
       tabindex="0"
     >
       <table
@@ -161,43 +279,49 @@
       >
         <thead>
           <tr>
-            <th scope="col">Date</th>
+            <th scope="col">Plage</th>
             <th scope="col">Chambres bloquées</th>
             <th scope="col">Note</th>
             <th scope="col"><span class="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
-          {#if blackouts.length === 0}
+          {#if groupedRanges.length === 0}
             <tr>
               <td colspan="4" class="admin-disponibilites-tab__empty">
                 Aucune date bloquée.
               </td>
             </tr>
           {:else}
-            {#each blackouts as b (b.date)}
+            {#each groupedRanges as range (range.startDate)}
+              {@const isConfirming =
+                confirmingRange?.start === range.startDate &&
+                confirmingRange?.end === range.endDate}
+              {@const isDeleting =
+                deletingRange?.start === range.startDate &&
+                deletingRange?.end === range.endDate}
               <tr class="admin-disponibilites-tab__row">
                 <td class="admin-disponibilites-tab__cell-date">
-                  {formatDate(b.date)}
+                  {formatRange(range)}
                 </td>
                 <td class="admin-disponibilites-tab__cell-rooms">
-                  {b.rooms_blocked}
+                  {range.rooms_blocked}
                 </td>
                 <td class="admin-disponibilites-tab__cell-note">
-                  {b.note ?? '—'}
+                  {range.note ?? '—'}
                 </td>
                 <td class="admin-disponibilites-tab__cell-actions">
-                  {#if confirmingDate === b.date}
+                  {#if isConfirming}
                     <span class="admin-disponibilites-tab__confirm-prompt">
                       Confirmer&nbsp;?
                     </span>
                     <button
                       class="admin-disponibilites-tab__btn--danger"
                       type="button"
-                      aria-label="Confirmer la suppression du {formatDate(b.date)}"
-                      data-testid="confirm-delete-{b.date}"
-                      disabled={deletingDate === b.date}
-                      onclick={() => handleDelete(b.date)}
+                      aria-label="Confirmer la suppression de {formatRange(range)}"
+                      data-testid="confirm-delete-{range.startDate}"
+                      disabled={isDeleting}
+                      onclick={() => handleDeleteRange(range.startDate, range.endDate)}
                     >
                       Oui
                     </button>
@@ -205,8 +329,8 @@
                       class="admin-disponibilites-tab__btn--ghost"
                       type="button"
                       aria-label="Annuler la suppression"
-                      data-testid="cancel-delete-{b.date}"
-                      onclick={() => (confirmingDate = null)}
+                      data-testid="cancel-delete-{range.startDate}"
+                      onclick={() => (confirmingRange = null)}
                     >
                       Non
                     </button>
@@ -214,10 +338,14 @@
                     <button
                       class="admin-disponibilites-tab__btn--danger-ghost"
                       type="button"
-                      aria-label="Supprimer la date bloquée du {formatDate(b.date)}"
-                      data-testid="delete-blackout-{b.date}"
-                      disabled={deletingDate === b.date}
-                      onclick={() => (confirmingDate = b.date)}
+                      aria-label="Supprimer la plage {formatRange(range)}"
+                      data-testid="delete-blackout-{range.startDate}"
+                      disabled={isDeleting}
+                      onclick={() =>
+                        (confirmingRange = {
+                          start: range.startDate,
+                          end: range.endDate,
+                        })}
                     >
                       Supprimer
                     </button>
@@ -232,31 +360,53 @@
 
     <hr class="admin-disponibilites-tab__divider" />
 
-    <!-- ── Add / upsert form ──────────────────────── -->
+    <!-- ── Range add form ──────────────────────────── -->
     <div class="admin-disponibilites-tab__form-zone">
       <div class="admin-disponibilites-tab__zone-label">
-        Ajouter / modifier une date
+        Ajouter / modifier une plage
       </div>
       <form
         class="admin-disponibilites-tab__form"
         data-testid="add-blackout-form"
         onsubmit={handleSubmit}
       >
-        <div class="admin-disponibilites-tab__field">
-          <label
-            for="blackout-date"
-            class="admin-disponibilites-tab__field-label"
-          >
-            Date
-          </label>
-          <input
-            id="blackout-date"
-            class="admin-disponibilites-tab__input"
-            type="date"
-            required
-            bind:value={formDate}
-            data-testid="blackout-date-input"
-          />
+        <div class="admin-disponibilites-tab__dates-row">
+          <div class="admin-disponibilites-tab__field">
+            <label
+              for="blackout-start"
+              class="admin-disponibilites-tab__field-label"
+            >
+              Date de début
+            </label>
+            <input
+              id="blackout-start"
+              class="admin-disponibilites-tab__input"
+              type="date"
+              required
+              bind:value={formStartDate}
+              data-testid="blackout-start-input"
+            />
+          </div>
+
+          <div class="admin-disponibilites-tab__field">
+            <label
+              for="blackout-end"
+              class="admin-disponibilites-tab__field-label"
+            >
+              Date de fin
+              <span class="admin-disponibilites-tab__optional">
+                (défaut&nbsp;: même jour)
+              </span>
+            </label>
+            <input
+              id="blackout-end"
+              class="admin-disponibilites-tab__input"
+              type="date"
+              min={formStartDate || undefined}
+              bind:value={formEndDate}
+              data-testid="blackout-end-input"
+            />
+          </div>
         </div>
 
         <div class="admin-disponibilites-tab__field">
@@ -307,7 +457,7 @@
         <button
           class="admin-disponibilites-tab__submit-btn"
           type="submit"
-          disabled={submitting || !formDate}
+          disabled={submitting || !formStartDate}
           data-testid="add-blackout-submit"
         >
           {#if submitting}
@@ -575,6 +725,19 @@
     max-width: 520px;
   }
 
+  /* ── Date-range row: two pickers side-by-side, wrap on narrow ── */
+  .admin-disponibilites-tab__dates-row {
+    display: flex;
+    flex-direction: row;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+  }
+
+  .admin-disponibilites-tab__dates-row .admin-disponibilites-tab__field {
+    flex: 1 1 180px;
+    min-width: 0;
+  }
+
   .admin-disponibilites-tab__field {
     display: flex;
     flex-direction: column;
@@ -620,12 +783,12 @@
     box-shadow: 0 0 0 1px var(--color-primary);
   }
 
-  .admin-disponibilites-tab__input[type="date"] {
-    width: 220px;
-    max-width: 100%;
+  .admin-disponibilites-tab__input[type='date'] {
+    width: 100%;
+    max-width: 220px;
   }
 
-  .admin-disponibilites-tab__input[type="number"] {
+  .admin-disponibilites-tab__input[type='number'] {
     width: 160px;
     max-width: 100%;
     font-family: var(--font-mono);
@@ -633,13 +796,13 @@
   }
 
   /* Hide native spinners on number input */
-  .admin-disponibilites-tab__input[type="number"]::-webkit-outer-spin-button,
-  .admin-disponibilites-tab__input[type="number"]::-webkit-inner-spin-button {
+  .admin-disponibilites-tab__input[type='number']::-webkit-outer-spin-button,
+  .admin-disponibilites-tab__input[type='number']::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
 
-  .admin-disponibilites-tab__input[type="number"] {
+  .admin-disponibilites-tab__input[type='number'] {
     -moz-appearance: textfield;
     appearance: textfield;
   }
@@ -756,13 +919,24 @@
 
   /* ── Responsive ─────────────────────────────────────────── */
   @media (max-width: 640px) {
-    .admin-disponibilites-tab__input[type="date"],
-    .admin-disponibilites-tab__input[type="number"] {
+    .admin-disponibilites-tab__input[type='date'] {
+      max-width: 100%;
+    }
+
+    .admin-disponibilites-tab__input[type='number'] {
       width: 100%;
     }
 
     .admin-disponibilites-tab__form {
       max-width: 100%;
+    }
+
+    .admin-disponibilites-tab__dates-row {
+      flex-direction: column;
+    }
+
+    .admin-disponibilites-tab__dates-row .admin-disponibilites-tab__field {
+      flex: none;
     }
   }
 </style>

@@ -14,6 +14,7 @@ export const SETTINGS_DEFAULTS = {
   email_password_reset_enabled: false,
   email_room_assignment_enabled: false,
   email_welcome_enabled: false,
+  email_review_request_enabled: false,
 } as const;
 
 export const PUBLIC_SETTING_KEYS = [
@@ -68,6 +69,7 @@ export const SettingsUpdateSchema = z.object({
   emailPasswordResetEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
   emailRoomAssignmentEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
   emailWelcomeEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailReviewRequestEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
 });
 
 export const settingsHook = (result: any, c: any) =>
@@ -95,6 +97,7 @@ export interface AdminSettings {
   emailPasswordResetEnabled: boolean;
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
+  emailReviewRequestEnabled: boolean;
 }
 
 export interface PublicSettings {
@@ -157,6 +160,9 @@ export function rowsToAdminSettings(
     ),
     emailWelcomeEnabled: parseBool(
       rowMap.get("email_welcome_enabled") ?? "false"
+    ),
+    emailReviewRequestEnabled: parseBool(
+      rowMap.get("email_review_request_enabled") ?? "false"
     ),
   };
 }

@@ -4,19 +4,20 @@ import { contactContext } from "./emails/routes";
 
 export const EMAIL_FROM = "Auberge du Vieux Pont <no-reply@aubergeduvieuxpont.ca>";
 
-// The outbox carries these four toggle-gated transactional templates plus two
+// The outbox carries these five toggle-gated transactional templates plus two
 // security-critical templates (email-verification, email-change-alert). The
 // remaining TemplateKey values (welcome, reservation-cancellation,
-// invoice-receipt, review-request) are preview-only and never enqueued.
+// invoice-receipt) are preview-only and never enqueued.
 export type EmailTemplate =
   | "reservation-confirmation"
   | "password-reset"
   | "room-assigned"
   | "ota-welcome"
+  | "review-request"
   | "email-verification"
   | "email-change-alert";
 
-// Only the four notification templates are gated by an opt-in settings toggle.
+// Only the five notification templates are gated by an opt-in settings toggle.
 // The two security templates below are intentionally absent — they are always
 // sent (see ALWAYS_SEND).
 export const EMAIL_TOGGLE_KEYS: Partial<Record<EmailTemplate, string>> = {
@@ -24,6 +25,7 @@ export const EMAIL_TOGGLE_KEYS: Partial<Record<EmailTemplate, string>> = {
   "password-reset": "email_password_reset_enabled",
   "room-assigned": "email_room_assignment_enabled",
   "ota-welcome": "email_welcome_enabled",
+  "review-request": "email_review_request_enabled",
 };
 
 // Security-required emails that MUST bypass the opt-in notification toggle:

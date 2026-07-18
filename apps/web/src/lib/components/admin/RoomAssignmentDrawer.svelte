@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount, onDestroy, tick } from 'svelte';
+  import { tick } from 'svelte';
+  import Modal from '$lib/components/Modal.svelte';
   import {
     adminReservationAssignments,
     adminFreeRooms,
@@ -28,12 +29,8 @@
   const roomNameCache = new Map<string, string>();
 
   let panelEl: HTMLDivElement | undefined;
-  // The element focused when the drawer opened (the trigger). Focus returns
-  // here on close, satisfying the dialog focus-management contract.
-  let previouslyFocused: HTMLElement | null = null;
 
   // ── Derived ─────────────────────────────────────────────────────────────
-  // Parse a "YYYY-MM-DD" string as a *local* calendar date (no UTC day-shift).
   function parseCalDate(s: string | null): Date | null {
     if (!s) return null;
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
@@ -56,11 +53,8 @@
     if (isOpen) return;
     isOpen = true;
     error = null;
-    previouslyFocused = document.activeElement as HTMLElement | null;
-    await tick();
-    panelEl?.focus();
 
-    if (ineligible) return; // ineligible notice shown; no network calls
+    if (ineligible) return;
 
     loading = true;
     const [assignRes, freeRes] = await Promise.all([
@@ -84,7 +78,7 @@
   function close(): void {
     if (!isOpen) return;
     isOpen = false;
-    previouslyFocused?.focus();
+    // Focus return is handled by Modal.svelte
   }
 
   // ── Mutations (optimistic, with rollback) ───────────────────────────────
@@ -118,49 +112,9 @@
     }
     busySlug = null;
   }
-
-  // ── Keyboard: Escape + focus trap ───────────────────────────────────────
-  function handleKeydown(e: KeyboardEvent): void {
-    if (!isOpen) return;
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      close();
-      return;
-    }
-    if (e.key !== 'Tab' || !panelEl) return;
-    const focusable = Array.from(
-      panelEl.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
-      ),
-    ).filter((el) => el.offsetParent !== null || el === panelEl);
-    if (focusable.length === 0) {
-      e.preventDefault();
-      panelEl.focus();
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === panelEl)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-
-  onMount(() => window.addEventListener('keydown', handleKeydown));
-  onDestroy(() => window.removeEventListener('keydown', handleKeydown));
-
-  // Move the drawer root out to <body> so it escapes table stacking contexts.
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return { destroy: () => node.remove() };
-  }
 </script>
 
-<!-- ── Trigger (rendered in the table action cell) ── -->
+<!-- ── Trigger (rendered in the table action cell or detail modal) ── -->
 <button
   type="button"
   class="room-assignment-drawer__trigger"
@@ -173,188 +127,182 @@
   Chambres
 </button>
 
-<!-- ── Drawer root (portaled to <body>) ── -->
-<div
-  use:portal
-  class="room-assignment-drawer"
-  aria-hidden={!isOpen}
-  data-testid="room-assignment-drawer"
->
-  <!-- Backdrop -->
+<!-- ── Drawer (portaled to body via Modal) ── -->
+<Modal open={isOpen} onClose={close} backdropTestid="rad-backdrop">
+  <!-- CSS-variable host + aria-hidden for transition selectors -->
   <div
-    class="room-assignment-drawer__backdrop"
-    aria-hidden="true"
-    data-testid="rad-backdrop"
-    onclick={close}
-  ></div>
-
-  <!-- Panel -->
-  <div
-    bind:this={panelEl}
-    class="room-assignment-drawer__panel"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby={`rad-title-${reservationId}`}
-    tabindex="-1"
-    data-testid="rad-panel"
+    class="room-assignment-drawer"
+    aria-hidden={!isOpen}
+    data-testid="room-assignment-drawer"
   >
-    <!-- ── Header ── -->
-    <div class="room-assignment-drawer__header">
-      <div class="room-assignment-drawer__header-left">
-        <h2 id={`rad-title-${reservationId}`} class="room-assignment-drawer__title">
-          Assignation des chambres
-        </h2>
-        <span
-          class="room-assignment-drawer__capacity-badge"
-          class:room-assignment-drawer__capacity-badge--full={atCapacity}
-          aria-label={`${assignments.length} chambre(s) sur ${roomCount ?? '?'} assignée(s)`}
-          data-testid="rad-capacity-badge"
-        >{capacityLabel}</span>
-      </div>
-      <button
-        type="button"
-        class="room-assignment-drawer__close"
-        aria-label="Fermer"
-        data-testid="rad-close"
-        onclick={close}
-      >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-        </svg>
-      </button>
-    </div>
-
-    <!-- ── Content ── -->
-    <div class="room-assignment-drawer__content">
-      <!-- Loading skeleton -->
-      <div
-        class="room-assignment-drawer__loading"
-        aria-live="polite"
-        aria-label="Chargement en cours…"
-        data-testid="rad-loading"
-        hidden={!loading || ineligible}
-      >
-        <div class="room-assignment-drawer__skeleton"></div>
-        <div class="room-assignment-drawer__skeleton rad-sk--short"></div>
-        <div class="room-assignment-drawer__skeleton"></div>
-        <div class="room-assignment-drawer__skeleton rad-sk--short"></div>
-      </div>
-
-      <!-- Ineligibility notice -->
-      <div
-        class="room-assignment-drawer__ineligible"
-        role="alert"
-        data-testid="rad-ineligible"
-        hidden={!ineligible}
-      >
-        <svg aria-hidden="true" class="room-assignment-drawer__notice-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
-          <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5" />
-          <path d="M10 6v4.5M10 13v.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-        </svg>
-        <p class="room-assignment-drawer__notice-text">
-          Les dates de cette réservation sont manquantes ou invalides.
-        </p>
-      </div>
-
-      <!-- Error banner -->
-      <div
-        class="room-assignment-drawer__error"
-        role="alert"
-        aria-live="assertive"
-        data-testid="rad-error"
-        hidden={!error}
-      >
-        <span class="room-assignment-drawer__error-text" data-testid="rad-error-text">{error}</span>
+    <!-- Panel -->
+    <div
+      bind:this={panelEl}
+      class="room-assignment-drawer__panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={`rad-title-${reservationId}`}
+      tabindex="-1"
+      data-testid="rad-panel"
+    >
+      <!-- ── Header ── -->
+      <div class="room-assignment-drawer__header">
+        <div class="room-assignment-drawer__header-left">
+          <h2 id={`rad-title-${reservationId}`} class="room-assignment-drawer__title">
+            Assignation des chambres
+          </h2>
+          <span
+            class="room-assignment-drawer__capacity-badge"
+            class:room-assignment-drawer__capacity-badge--full={atCapacity}
+            aria-label={`${assignments.length} chambre(s) sur ${roomCount ?? '?'} assignée(s)`}
+            data-testid="rad-capacity-badge"
+          >{capacityLabel}</span>
+        </div>
         <button
           type="button"
-          class="room-assignment-drawer__error-dismiss"
-          aria-label="Fermer l'erreur"
-          data-testid="rad-error-dismiss"
-          onclick={() => (error = null)}
-        >✕</button>
+          class="room-assignment-drawer__close"
+          aria-label="Fermer"
+          data-testid="rad-close"
+          onclick={close}
+        >
+          <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M2 2l12 12M14 2L2 14" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+          </svg>
+        </button>
       </div>
 
-      <!-- ── Assigned rooms ── -->
-      <section
-        class="room-assignment-drawer__section"
-        aria-labelledby={`rad-assigned-heading-${reservationId}`}
-        data-testid="rad-assigned-section"
-      >
-        <h3 id={`rad-assigned-heading-${reservationId}`} class="room-assignment-drawer__section-heading">
-          Chambres assignées
-        </h3>
-
-        <ul class="room-assignment-drawer__list" data-testid="rad-assigned-list" hidden={loading || ineligible}>
-          {#each assignments as room (room.slug)}
-            <li class="room-assignment-drawer__item" data-slug={room.slug} data-testid="rad-assigned-item">
-              <span class="room-assignment-drawer__room-name" data-testid="rad-assigned-room-name">{room.name}</span>
-              <button
-                type="button"
-                class="room-assignment-drawer__unassign-btn"
-                aria-label={`Retirer la chambre ${room.name}`}
-                aria-busy={busySlug === room.slug}
-                disabled={busySlug !== null}
-                data-testid="rad-unassign-btn"
-                onclick={() => unassignRoom(room.slug)}
-              >Retirer</button>
-            </li>
-          {/each}
-        </ul>
-
-        <p
-          class="room-assignment-drawer__empty"
+      <!-- ── Content ── -->
+      <div class="room-assignment-drawer__content">
+        <!-- Loading skeleton -->
+        <div
+          class="room-assignment-drawer__loading"
           aria-live="polite"
-          data-testid="rad-assigned-empty"
-          hidden={loading || ineligible || assignments.length > 0}
-        >Aucune chambre assignée.</p>
-      </section>
+          aria-label="Chargement en cours…"
+          data-testid="rad-loading"
+          hidden={!loading || ineligible}
+        >
+          <div class="room-assignment-drawer__skeleton"></div>
+          <div class="room-assignment-drawer__skeleton rad-sk--short"></div>
+          <div class="room-assignment-drawer__skeleton"></div>
+          <div class="room-assignment-drawer__skeleton rad-sk--short"></div>
+        </div>
 
-      <hr class="room-assignment-drawer__divider" aria-hidden="true" />
+        <!-- Ineligibility notice -->
+        <div
+          class="room-assignment-drawer__ineligible"
+          role="alert"
+          data-testid="rad-ineligible"
+          hidden={!ineligible}
+        >
+          <svg aria-hidden="true" class="room-assignment-drawer__notice-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="9" stroke="currentColor" stroke-width="1.5" />
+            <path d="M10 6v4.5M10 13v.5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+          </svg>
+          <p class="room-assignment-drawer__notice-text">
+            Les dates de cette réservation sont manquantes ou invalides.
+          </p>
+        </div>
 
-      <!-- ── Available rooms ── -->
-      <section
-        class="room-assignment-drawer__section"
-        aria-labelledby={`rad-free-heading-${reservationId}`}
-        data-testid="rad-free-section"
-      >
-        <h3 id={`rad-free-heading-${reservationId}`} class="room-assignment-drawer__section-heading">
-          Chambres disponibles
-        </h3>
+        <!-- Error banner -->
+        <div
+          class="room-assignment-drawer__error"
+          role="alert"
+          aria-live="assertive"
+          data-testid="rad-error"
+          hidden={!error}
+        >
+          <span class="room-assignment-drawer__error-text" data-testid="rad-error-text">{error}</span>
+          <button
+            type="button"
+            class="room-assignment-drawer__error-dismiss"
+            aria-label="Fermer l'erreur"
+            data-testid="rad-error-dismiss"
+            onclick={() => (error = null)}
+          >✕</button>
+        </div>
 
-        <p
-          class="room-assignment-drawer__at-capacity"
-          role="status"
-          data-testid="rad-at-capacity"
-          hidden={loading || ineligible || !atCapacity}
-        >Nombre maximum de chambres atteint pour cette réservation.</p>
+        <!-- ── Assigned rooms ── -->
+        <section
+          class="room-assignment-drawer__section"
+          aria-labelledby={`rad-assigned-heading-${reservationId}`}
+          data-testid="rad-assigned-section"
+        >
+          <h3 id={`rad-assigned-heading-${reservationId}`} class="room-assignment-drawer__section-heading">
+            Chambres assignées
+          </h3>
 
-        <ul class="room-assignment-drawer__list" data-testid="rad-free-list" hidden={loading || ineligible}>
-          {#each freeRooms as room (room.slug)}
-            <li class="room-assignment-drawer__item" data-slug={room.slug} data-testid="rad-free-item">
-              <span class="room-assignment-drawer__room-name" data-testid="rad-free-room-name">{room.name}</span>
-              <button
-                type="button"
-                class="room-assignment-drawer__assign-btn"
-                aria-label={`Assigner la chambre ${room.name}`}
-                aria-busy={busySlug === room.slug}
-                disabled={atCapacity || busySlug !== null}
-                data-testid="rad-assign-btn"
-                onclick={() => assignRoom(room.slug, room.name)}
-              >Assigner</button>
-            </li>
-          {/each}
-        </ul>
+          <ul class="room-assignment-drawer__list" data-testid="rad-assigned-list" hidden={loading || ineligible}>
+            {#each assignments as room (room.slug)}
+              <li class="room-assignment-drawer__item" data-slug={room.slug} data-testid="rad-assigned-item">
+                <span class="room-assignment-drawer__room-name" data-testid="rad-assigned-room-name">{room.name}</span>
+                <button
+                  type="button"
+                  class="room-assignment-drawer__unassign-btn"
+                  aria-label={`Retirer la chambre ${room.name}`}
+                  aria-busy={busySlug === room.slug}
+                  disabled={busySlug !== null}
+                  data-testid="rad-unassign-btn"
+                  onclick={() => unassignRoom(room.slug)}
+                >Retirer</button>
+              </li>
+            {/each}
+          </ul>
 
-        <p
-          class="room-assignment-drawer__empty"
-          aria-live="polite"
-          data-testid="rad-free-empty"
-          hidden={loading || ineligible || freeRooms.length > 0}
-        >Aucune chambre disponible pour ces dates.</p>
-      </section>
+          <p
+            class="room-assignment-drawer__empty"
+            aria-live="polite"
+            data-testid="rad-assigned-empty"
+            hidden={loading || ineligible || assignments.length > 0}
+          >Aucune chambre assignée.</p>
+        </section>
+
+        <hr class="room-assignment-drawer__divider" aria-hidden="true" />
+
+        <!-- ── Available rooms ── -->
+        <section
+          class="room-assignment-drawer__section"
+          aria-labelledby={`rad-free-heading-${reservationId}`}
+          data-testid="rad-free-section"
+        >
+          <h3 id={`rad-free-heading-${reservationId}`} class="room-assignment-drawer__section-heading">
+            Chambres disponibles
+          </h3>
+
+          <p
+            class="room-assignment-drawer__at-capacity"
+            role="status"
+            data-testid="rad-at-capacity"
+            hidden={loading || ineligible || !atCapacity}
+          >Nombre maximum de chambres atteint pour cette réservation.</p>
+
+          <ul class="room-assignment-drawer__list" data-testid="rad-free-list" hidden={loading || ineligible}>
+            {#each freeRooms as room (room.slug)}
+              <li class="room-assignment-drawer__item" data-slug={room.slug} data-testid="rad-free-item">
+                <span class="room-assignment-drawer__room-name" data-testid="rad-free-room-name">{room.name}</span>
+                <button
+                  type="button"
+                  class="room-assignment-drawer__assign-btn"
+                  aria-label={`Assigner la chambre ${room.name}`}
+                  aria-busy={busySlug === room.slug}
+                  disabled={atCapacity || busySlug !== null}
+                  data-testid="rad-assign-btn"
+                  onclick={() => assignRoom(room.slug, room.name)}
+                >Assigner</button>
+              </li>
+            {/each}
+          </ul>
+
+          <p
+            class="room-assignment-drawer__empty"
+            aria-live="polite"
+            data-testid="rad-free-empty"
+            hidden={loading || ineligible || freeRooms.length > 0}
+          >Aucune chambre disponible pour ces dates.</p>
+        </section>
+      </div>
     </div>
   </div>
-</div>
+</Modal>
 
 <style>
   /* ════════════════════════════════════════════════
@@ -380,25 +328,9 @@
     display: contents;
   }
 
-  .room-assignment-drawer[aria-hidden='true'] .room-assignment-drawer__backdrop,
   .room-assignment-drawer[aria-hidden='true'] .room-assignment-drawer__panel {
     pointer-events: none;
     visibility: hidden;
-  }
-
-  .room-assignment-drawer__backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    background: rgba(28, 26, 23, 0.48);
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
-    opacity: 0;
-    transition: opacity 220ms ease;
-  }
-
-  .room-assignment-drawer:not([aria-hidden='true']) .room-assignment-drawer__backdrop {
-    opacity: 1;
   }
 
   .room-assignment-drawer__panel {
@@ -549,12 +481,8 @@
   }
 
   @keyframes rad-shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 
   .room-assignment-drawer__ineligible {
@@ -789,8 +717,8 @@
     letter-spacing: 0.03em;
     padding: 4px 10px;
     background: transparent;
-    color: var(--rad-accent);
-    border: 1px solid var(--rad-accent);
+    color: #7b4628;
+    border: 1px solid #7b4628;
     border-radius: 2px;
     cursor: pointer;
     white-space: nowrap;
@@ -798,12 +726,12 @@
   }
 
   .room-assignment-drawer__trigger:hover {
-    background: var(--rad-accent);
+    background: #7b4628;
     color: #f4efe6;
   }
 
   .room-assignment-drawer__trigger:focus-visible {
-    outline: 2px solid var(--rad-accent);
+    outline: 2px solid #7b4628;
     outline-offset: 2px;
   }
 
@@ -829,8 +757,9 @@
 
   @media (prefers-reduced-motion: reduce) {
     .room-assignment-drawer__panel,
-    .room-assignment-drawer__backdrop {
+    .room-assignment-drawer__skeleton {
       transition: none;
+      animation: none;
     }
   }
 </style>

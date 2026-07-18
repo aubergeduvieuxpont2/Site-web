@@ -85,6 +85,7 @@ type MessageRow = {
 
 type ReservationRow = {
   id: number;
+  code: string | null;
   name: string;
   first_name: string | null;
   last_name: string | null;
@@ -98,6 +99,19 @@ type ReservationRow = {
   message: string | null;
   created_at: string;
   status?: "pending" | "confirmed" | "cancelled";
+};
+
+type ReviewRow = {
+  id: number;
+  reservation_id: number;
+  rating: number;
+  body: string;
+  status: "pending" | "approved" | "rejected";
+  display_name: string;
+  stays_count: number;
+  nights_total: number;
+  created_at: string;
+  moderated_at: string | null;
 };
 
 type BlackoutRow = {
@@ -224,6 +238,23 @@ const BlackoutUpsertSchema = z.object({
   note: z.string().trim().nullable().optional(),
 });
 
+const BlackoutRangeCreateSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "startDate must be YYYY-MM-DD"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "endDate must be YYYY-MM-DD"),
+  roomsBlocked: z.coerce.number().int().min(0),
+  note: z.string().trim().nullable().optional(),
+});
+
+const ReviewSubmitSchema = z.object({
+  code: z.string().trim().min(1, "code requis"),
+  rating: z.coerce.number().int().min(1).max(5),
+  body: z.string().min(10, "L'avis doit contenir au moins 10 caractères").max(2000, "L'avis ne peut dépasser 2000 caractères"),
+});
+
+const ReviewModerateSchema = z.object({
+  status: z.enum(["approved", "rejected"]),
+});
+
 export const ProfileEmailSchema = z.object({
   newEmail: z.string().trim().email("email invalide"),
   currentPassword: z.string().min(1, "mot de passe requis"),
@@ -319,6 +350,79 @@ function todayISODate(): string {
 let dummyHashPromise: Promise<string> | null = null;
 function getDummyHash(): Promise<string> {
   return (dummyHashPromise ??= hashPassword("verify-timing-equalizer-dummy-secret"));
+}
+
+// Crockford Base32 alphabet (no 0/O/1/I) per INV-code-format.
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generateReservationCode(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(6));
+  return "AVP-" + Array.from(bytes).map((b) => CODE_ALPHABET[b % 32]).join("");
+}
+
+// Insert a code, retrying up to 5 times on the rare uniqueness collision.
+async function insertReservationCode(
+  sql: NeonQueryFunction<any, any>,
+  reservationId: number
+): Promise<string | null> {
+  for (let i = 0; i < 5; i++) {
+    const code = generateReservationCode();
+    try {
+      const rows = (await sql`
+        UPDATE reservations SET code = ${code} WHERE id = ${reservationId} AND code IS NULL
+        RETURNING code
+      `) as { code: string }[];
+      if (rows[0]) return rows[0].code;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (!msg.includes("unique") && !msg.includes("UNIQUE")) throw err;
+    }
+  }
+  return null;
+}
+
+// Enqueue review-request emails for confirmed stays that departed in the last 3
+// days and have not yet received a request or submitted a review.
+async function enqueueReviewRequests(env: Bindings): Promise<void> {
+  const sql = neon(env.DB_CONN);
+  const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+  const adminSettings = rowsToAdminSettings(settingsRows);
+  if (!adminSettings.emailReviewRequestEnabled) return;
+
+  const pending = (await sql`
+    SELECT r.id, r.code, r.email, r.first_name, r.name
+    FROM reservations r
+    WHERE r.status = 'confirmed'
+      AND r.email IS NOT NULL AND r.email != ''
+      AND r.code IS NOT NULL
+      AND r.depart::date > (CURRENT_DATE - INTERVAL '3 days')
+      AND r.depart::date <= CURRENT_DATE
+      AND NOT EXISTS (SELECT 1 FROM review_requests rr WHERE rr.reservation_id = r.id)
+      AND NOT EXISTS (SELECT 1 FROM reviews rv WHERE rv.reservation_id = r.id)
+  `) as { id: number; code: string; email: string; first_name: string | null; name: string | null }[];
+
+  for (const res of pending) {
+    try {
+      await sql`
+        INSERT INTO review_requests (reservation_id, channel, sent_at)
+        VALUES (${res.id}, 'email', now())
+        ON CONFLICT (reservation_id) DO NOTHING
+      `;
+      await enqueueEmail(sql, {
+        // "review-request" is gated by email_review_request_enabled (WS-D).
+        // The type is cast because EmailTemplate in emailOutbox.ts doesn't yet
+        // list it — updating that file is outside this element's globs.
+        template: "review-request" as any,
+        to: res.email,
+        payload: {
+          firstName: res.first_name ?? res.name ?? "client",
+          reviewUrl: `${SITE_ORIGIN}/avis/nouveau?code=${res.code}`,
+        },
+      });
+    } catch (err) {
+      console.error("review-request enqueue failed for reservation", res.id, err);
+    }
+  }
 }
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -461,12 +565,21 @@ app.post(
     const rows = (await sql`
       INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, status)
       VALUES (${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}, ${data.checkOut}, ${data.guests}, ${data.roomCount}, ${data.message}, 'pending')
-      RETURNING id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, created_at
+      RETURNING id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, created_at
     `) as ReservationRow[];
 
     const created = rows[0];
     if (!created) {
       return c.json({ error: "Failed to create reservation" }, 500);
+    }
+
+    // Assign a human-facing code if the column exists and the row lacks one.
+    if (created.code == null) {
+      try {
+        await insertReservationCode(sql, created.id);
+      } catch (err) {
+        console.error("reservation code assignment failed", err);
+      }
     }
 
     c.executionCtx.waitUntil(
@@ -603,8 +716,8 @@ app.post("/internal/ota-bookings", async (c) => {
     INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref)
     VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef})
     ON CONFLICT (source, external_ref) WHERE external_ref IS NOT NULL DO NOTHING
-    RETURNING id
-  `) as { id: number }[];
+    RETURNING id, code
+  `) as { id: number; code: string | null }[];
 
   const created = rows[0];
   if (!created) {
@@ -613,6 +726,15 @@ app.post("/internal/ota-bookings", async (c) => {
       VALUES (${d.source}, 'duplicate', ${d.subject})
     `;
     return c.json({ ok: true, duplicate: true }, 200);
+  }
+
+  // Assign human-facing code if not already set (column may not exist yet on older deploys).
+  if (created.code == null) {
+    try {
+      await insertReservationCode(sql, created.id);
+    } catch (err) {
+      console.error("ota reservation code assignment failed", err);
+    }
   }
 
   await sql`
@@ -2220,6 +2342,7 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('email_password_reset_enabled', ${data.emailPasswordResetEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_review_request_enabled', ${data.emailReviewRequestEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     // `assignable_room_count` is derived, never taken from the request body:
@@ -2230,6 +2353,436 @@ app.post(
     const adminSettings = rowsToAdminSettings(rows);
 
     return c.json(adminSettings);
+  }
+);
+
+// Blackout range endpoints (admin-gated) — new WS-B additions.
+// The static /range segment is registered before :date so Hono matches it first.
+app.post(
+  "/api/admin/blackouts/range",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+    await next();
+  },
+  zValidator("json", BlackoutRangeCreateSchema),
+  async (c) => {
+    const data = c.req.valid("json");
+    if (data.startDate > data.endDate) {
+      return c.json({ error: "startDate doit être ≤ endDate" }, 400);
+    }
+    // Span check: endDate - startDate <= 366 days.
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+    const spanDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+    if (spanDays > 366) {
+      return c.json({ error: "La plage ne peut dépasser 366 jours" }, 400);
+    }
+
+    const sql = neon(c.env.DB_CONN);
+    await sql`
+      INSERT INTO blackout_dates (date, rooms_blocked, note)
+      SELECT
+        generate_series(${data.startDate}::date, ${data.endDate}::date, '1 day'::interval)::date,
+        ${data.roomsBlocked},
+        ${data.note ?? null}
+      ON CONFLICT (date) DO UPDATE SET rooms_blocked = EXCLUDED.rooms_blocked, note = EXCLUDED.note, created_at = now()
+    `;
+
+    return c.json({ count: spanDays });
+  }
+);
+
+app.delete("/api/admin/blackouts/range", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const start = c.req.query("start");
+  const end = c.req.query("end");
+
+  if (!start || !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    return c.json({ error: "Paramètre start invalide (YYYY-MM-DD attendu)" }, 400);
+  }
+  if (!end || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    return c.json({ error: "Paramètre end invalide (YYYY-MM-DD attendu)" }, 400);
+  }
+  if (start > end) {
+    return c.json({ error: "start doit être ≤ end" }, 400);
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const deleted = (await sql`
+    DELETE FROM blackout_dates
+    WHERE date >= ${start}::date AND date <= ${end}::date
+    RETURNING date
+  `) as { date: string }[];
+
+  return c.json({ deleted: deleted.length });
+});
+
+// Admin dashboard endpoint (WS-C).
+app.get("/api/admin/dashboard", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const sql = neon(c.env.DB_CONN);
+  const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+  const adminSettings = rowsToAdminSettings(settingsRows);
+
+  // Compute week bounds (Mon–Sun) from today's UTC date.
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  const dayOfWeek = now.getUTCDay(); // 0=Sun … 6=Sat
+  const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  const thisMonday = new Date(now);
+  thisMonday.setUTCDate(now.getUTCDate() - daysToMonday);
+  const thisSunday = new Date(thisMonday);
+  thisSunday.setUTCDate(thisMonday.getUTCDate() + 6);
+  const lastMonday = new Date(thisMonday);
+  lastMonday.setUTCDate(thisMonday.getUTCDate() - 7);
+  const lastSunday = new Date(thisMonday);
+  lastSunday.setUTCDate(thisMonday.getUTCDate() - 1);
+
+  const thisMondayStr = thisMonday.toISOString().slice(0, 10);
+  const thisSundayStr = thisSunday.toISOString().slice(0, 10);
+  const lastMondayStr = lastMonday.toISOString().slice(0, 10);
+  const lastSundayStr = lastSunday.toISOString().slice(0, 10);
+
+  // Guests this week and last week (sum people from confirmed stays overlapping the Mon–Sun window).
+  const weekRows = (await sql`
+    SELECT
+      SUM(CASE WHEN arrive::date <= ${thisSundayStr}::date AND depart::date > ${thisMondayStr}::date THEN people ELSE 0 END) AS this_week,
+      SUM(CASE WHEN arrive::date <= ${lastSundayStr}::date AND depart::date > ${lastMondayStr}::date THEN people ELSE 0 END) AS last_week
+    FROM reservations
+    WHERE status = 'confirmed'
+      AND (
+        (arrive::date <= ${thisSundayStr}::date AND depart::date > ${thisMondayStr}::date)
+        OR (arrive::date <= ${lastSundayStr}::date AND depart::date > ${lastMondayStr}::date)
+      )
+  `) as { this_week: string | null; last_week: string | null }[];
+
+  const guestsThisWeek = Number(weekRows[0]?.this_week ?? 0) || 0;
+  const guestsLastWeek = Number(weekRows[0]?.last_week ?? 0) || 0;
+
+  // Next 7 days availability.
+  const next7End = new Date(now);
+  next7End.setUTCDate(now.getUTCDate() + 7);
+  const next7EndStr = next7End.toISOString().slice(0, 10);
+  const next7 = await availabilityForRange(sql, todayStr, next7EndStr, 1, adminSettings.assignableRoomCount);
+
+  // Occupancy ratios — month-to-date and equivalent prior periods.
+  // current month: [first of month, today] (inclusive → depart > firstOfMonth AND arrive <= today)
+  const firstOfMonth = new Date(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const firstOfMonthStr = firstOfMonth.toISOString().slice(0, 10);
+  const dayOfMonth = now.getUTCDate(); // 1-based
+
+  // Same day-of-month bounds for previous month.
+  const prevMonthFirst = new Date(now.getUTCFullYear(), now.getUTCMonth() - 1, 1);
+  const prevMonthEnd = new Date(now.getUTCFullYear(), now.getUTCMonth() - 1, dayOfMonth);
+  const prevMonthFirstStr = prevMonthFirst.toISOString().slice(0, 10);
+  const prevMonthEndStr = prevMonthEnd.toISOString().slice(0, 10);
+
+  // Same day-of-month bounds for same month last year.
+  const lyMonthFirst = new Date(now.getUTCFullYear() - 1, now.getUTCMonth(), 1);
+  const lyMonthEnd = new Date(now.getUTCFullYear() - 1, now.getUTCMonth(), dayOfMonth);
+  const lyMonthFirstStr = lyMonthFirst.toISOString().slice(0, 10);
+  const lyMonthEndStr = lyMonthEnd.toISOString().slice(0, 10);
+
+  type OccRow = { room_nights: string | null };
+
+  const [occCurrentRaw, occPrevRaw, occLYRaw] = await Promise.all([
+    sql`
+      SELECT SUM(
+        COALESCE(room_count, 1) *
+        (LEAST(depart::date, ${todayStr}::date + 1) - GREATEST(arrive::date, ${firstOfMonthStr}::date))
+      ) AS room_nights
+      FROM reservations
+      WHERE status = 'confirmed'
+        AND arrive::date <= ${todayStr}::date
+        AND depart::date > ${firstOfMonthStr}::date
+    `,
+    sql`
+      SELECT SUM(
+        COALESCE(room_count, 1) *
+        (LEAST(depart::date, ${prevMonthEndStr}::date + 1) - GREATEST(arrive::date, ${prevMonthFirstStr}::date))
+      ) AS room_nights
+      FROM reservations
+      WHERE status = 'confirmed'
+        AND arrive::date <= ${prevMonthEndStr}::date
+        AND depart::date > ${prevMonthFirstStr}::date
+    `,
+    sql`
+      SELECT SUM(
+        COALESCE(room_count, 1) *
+        (LEAST(depart::date, ${lyMonthEndStr}::date + 1) - GREATEST(arrive::date, ${lyMonthFirstStr}::date))
+      ) AS room_nights
+      FROM reservations
+      WHERE status = 'confirmed'
+        AND arrive::date <= ${lyMonthEndStr}::date
+        AND depart::date > ${lyMonthFirstStr}::date
+    `,
+  ]);
+
+  const occCurrent = occCurrentRaw as OccRow[];
+  const occPrev = occPrevRaw as OccRow[];
+  const occLY = occLYRaw as OccRow[];
+
+  const totalRooms = adminSettings.assignableRoomCount;
+  function occupancyRatio(roomNights: string | null, days: number): number | null {
+    const denom = totalRooms * days;
+    if (denom === 0) return null;
+    const num = Number(roomNights ?? 0) || 0;
+    return Math.round((num / denom) * 1000) / 1000;
+  }
+
+  const occupancy = {
+    currentMonth: occupancyRatio(occCurrent[0]?.room_nights ?? null, dayOfMonth),
+    previousMonth: occupancyRatio(occPrev[0]?.room_nights ?? null, dayOfMonth),
+    sameMonthLastYear: occupancyRatio(occLY[0]?.room_nights ?? null, dayOfMonth),
+  };
+
+  // Returning customers: guests with ≥ 2 confirmed stays (keyed by user_id or lower(email)).
+  const rcRows = (await sql`
+    SELECT COUNT(*) AS count FROM (
+      SELECT COALESCE(user_id::text, lower(email)) AS guest_key
+      FROM reservations
+      WHERE status = 'confirmed'
+      GROUP BY COALESCE(user_id::text, lower(email))
+      HAVING COUNT(*) >= 2
+    ) sub
+  `) as { count: string }[];
+  const returningCustomers = Number(rcRows[0]?.count ?? 0) || 0;
+
+  return c.json({
+    guestsThisWeek,
+    guestsLastWeek,
+    next7Days: next7.nights,
+    occupancy,
+    returningCustomers,
+  });
+});
+
+// Public reviews endpoints (WS-D).
+app.get("/api/reviews/eligibility", rateLimitMiddleware, async (c) => {
+  const code = c.req.query("code")?.trim();
+  // Generic error — no data leak per ERR-GENERIC contract.
+  const genericErr = () => c.json({ error: "Code invalide ou séjour non éligible." }, 400);
+
+  if (!code || !/^AVP-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(code)) {
+    return genericErr();
+  }
+
+  const sql = neon(c.env.DB_CONN);
+  const rows = (await sql`
+    SELECT r.id, r.first_name, r.name, r.status, r.depart, r.email
+    FROM reservations r
+    WHERE r.code = ${code}
+    LIMIT 1
+  `) as { id: number; first_name: string | null; name: string | null; status: string; depart: string | null; email: string }[];
+
+  const res = rows[0];
+  if (!res) return genericErr();
+  if (res.status === "cancelled") return genericErr();
+
+  // Must have departed.
+  if (!res.depart || res.depart > todayISODate()) {
+    return c.json({ eligible: false, reason: "stay_not_departed" });
+  }
+
+  // Must not already have a review.
+  const existing = (await sql`
+    SELECT id FROM reviews WHERE reservation_id = ${res.id} LIMIT 1
+  `) as { id: number }[];
+  if (existing.length > 0) {
+    return c.json({ eligible: false, reason: "already_reviewed" });
+  }
+
+  const firstName = res.first_name ?? (res.name ?? "").split(" ")[0] ?? undefined;
+  return c.json({ eligible: true, firstName });
+});
+
+app.post(
+  "/api/reviews",
+  rateLimitMiddleware,
+  zValidator("json", ReviewSubmitSchema),
+  async (c) => {
+    const data = c.req.valid("json");
+    const genericErr = () => c.json({ error: "Code invalide ou séjour non éligible." }, 400);
+
+    if (!/^AVP-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/.test(data.code)) {
+      return genericErr();
+    }
+
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      SELECT r.id, r.first_name, r.last_name, r.name, r.email, r.status, r.depart, r.user_id
+      FROM reservations r
+      WHERE r.code = ${data.code}
+      LIMIT 1
+    `) as {
+      id: number;
+      first_name: string | null;
+      last_name: string | null;
+      name: string | null;
+      email: string;
+      status: string;
+      depart: string | null;
+      user_id: number | null;
+    }[];
+
+    const res = rows[0];
+    if (!res) return genericErr();
+    if (res.status === "cancelled") return genericErr();
+    if (!res.depart || res.depart > todayISODate()) return genericErr();
+
+    // Build masked display_name: "Marie T." or first word of name.
+    let displayName: string;
+    if (res.first_name && res.last_name) {
+      displayName = `${res.first_name} ${res.last_name[0].toUpperCase()}.`;
+    } else if (res.first_name) {
+      displayName = res.first_name;
+    } else {
+      displayName = (res.name ?? "Invité").split(" ")[0];
+    }
+
+    // Compute snapshot stays_count and nights_total keyed by user_id or email.
+    let staysCount = 1;
+    let nightsTotal = 0;
+    try {
+      const guestKey = res.user_id;
+      const snapRows = guestKey
+        ? (await sql`
+            SELECT COUNT(*)::int AS stays, COALESCE(SUM(depart::date - arrive::date), 0)::int AS nights
+            FROM reservations
+            WHERE status = 'confirmed' AND depart::date <= CURRENT_DATE AND user_id = ${guestKey}
+          `) as { stays: number; nights: number }[]
+        : (await sql`
+            SELECT COUNT(*)::int AS stays, COALESCE(SUM(depart::date - arrive::date), 0)::int AS nights
+            FROM reservations
+            WHERE status = 'confirmed' AND depart::date <= CURRENT_DATE AND lower(email) = lower(${res.email})
+          `) as { stays: number; nights: number }[];
+      staysCount = Number(snapRows[0]?.stays ?? 1) || 1;
+      nightsTotal = Number(snapRows[0]?.nights ?? 0) || 0;
+    } catch {
+      // Fail open: use defaults.
+    }
+
+    try {
+      await sql`
+        INSERT INTO reviews (reservation_id, rating, body, status, display_name, stays_count, nights_total)
+        VALUES (${res.id}, ${data.rating}, ${data.body}, 'pending', ${displayName}, ${staysCount}, ${nightsTotal})
+      `;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("unique") || msg.includes("UNIQUE")) {
+        return c.json({ error: "Un avis existe déjà pour ce séjour." }, 409);
+      }
+      throw err;
+    }
+
+    return c.json({ ok: true }, 201);
+  }
+);
+
+app.get("/api/reviews", async (c) => {
+  const limitParam = parseInt(c.req.query("limit") || "10", 10);
+  const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.min(limitParam, 100) : 10;
+  const sql = neon(c.env.DB_CONN);
+
+  const rows = (await sql`
+    SELECT id, display_name, rating, body, stays_count, nights_total, created_at
+    FROM reviews
+    WHERE status = 'approved'
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `) as { id: number; display_name: string; rating: number; body: string; stays_count: number; nights_total: number; created_at: string }[];
+
+  const totalRows = (await sql`SELECT COUNT(*)::int AS count FROM reviews WHERE status = 'approved'`) as { count: number }[];
+  const avgRows = (await sql`SELECT ROUND(AVG(rating)::numeric, 1)::float AS avg FROM reviews WHERE status = 'approved'`) as { avg: number | null }[];
+
+  return c.json({
+    reviews: rows.map((r) => ({
+      id: r.id,
+      displayName: r.display_name,
+      rating: Number(r.rating),
+      body: r.body,
+      staysCount: Number(r.stays_count),
+      nightsTotal: Number(r.nights_total),
+      createdAt: r.created_at,
+    })),
+    averageRating: avgRows[0]?.avg ?? null,
+    total: Number(totalRows[0]?.count ?? 0),
+  });
+});
+
+// Admin review endpoints (WS-D).
+app.get("/api/admin/reviews", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const statusFilter = c.req.query("status") || "pending";
+  const sql = neon(c.env.DB_CONN);
+
+  const validStatuses = ["pending", "approved", "rejected", "all"];
+  if (!validStatuses.includes(statusFilter)) {
+    return c.json({ error: "Statut invalide" }, 400);
+  }
+
+  const rows = statusFilter === "all"
+    ? (await sql`
+        SELECT rv.id, rv.reservation_id, rv.rating, rv.body, rv.status, rv.display_name,
+               rv.stays_count, rv.nights_total, rv.created_at, rv.moderated_at,
+               r.code AS reservation_code
+        FROM reviews rv
+        JOIN reservations r ON r.id = rv.reservation_id
+        ORDER BY rv.created_at DESC
+      `) as (ReviewRow & { reservation_code: string | null })[]
+    : (await sql`
+        SELECT rv.id, rv.reservation_id, rv.rating, rv.body, rv.status, rv.display_name,
+               rv.stays_count, rv.nights_total, rv.created_at, rv.moderated_at,
+               r.code AS reservation_code
+        FROM reviews rv
+        JOIN reservations r ON r.id = rv.reservation_id
+        WHERE rv.status = ${statusFilter}
+        ORDER BY rv.created_at DESC
+      `) as (ReviewRow & { reservation_code: string | null })[];
+
+  const pendingRow = (await sql`SELECT COUNT(*)::int AS count FROM reviews WHERE status = 'pending'`) as { count: number }[];
+
+  return c.json({ reviews: rows, pendingCount: Number(pendingRow[0]?.count ?? 0) });
+});
+
+app.patch(
+  "/api/admin/reviews/:id",
+  async (c, next) => {
+    const user = await getAuthUser(c);
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+    await next();
+  },
+  zValidator("json", ReviewModerateSchema),
+  async (c) => {
+    const reviewId = parseIdParam(c.req.param("id"));
+    if (reviewId === null) return c.json({ error: "Identifiant invalide" }, 400);
+
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      UPDATE reviews
+      SET status = ${data.status}, moderated_at = now()
+      WHERE id = ${reviewId}
+      RETURNING id, reservation_id, rating, body, status, display_name, stays_count, nights_total, created_at, moderated_at
+    `) as ReviewRow[];
+
+    if (rows.length === 0) return c.json({ error: "Avis introuvable" }, 404);
+
+    return c.json({ review: rows[0] });
   }
 );
 
@@ -2256,5 +2809,6 @@ export default {
   fetch: app.fetch,
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
     ctx.waitUntil(drainEmailOutbox(env));
+    ctx.waitUntil(enqueueReviewRequests(env));
   },
 } satisfies ExportedHandler<Bindings>;
