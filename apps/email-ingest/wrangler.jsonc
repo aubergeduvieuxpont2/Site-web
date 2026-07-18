@@ -18,6 +18,10 @@
   // senders are rejected at SMTP time. Reservation creation requires a
   // domain-aligned DKIM/SPF pass — a bare From match is never a trust signal,
   // so there is no DEV_SENDER bypass in production.
+  // SECURITY (follow-up): this is a personal email committed in plaintext.
+  // Prefer moving it to a Worker secret (`wrangler secret put FORWARD_TO`) or a
+  // CI-injected var so it is not stored in the repo. Left in `vars` for now
+  // because removing it here would break deploys until the secret is set.
   "vars": {
     "FORWARD_TO": "aubergeduvieuxpont2@hotmail.com"
   },
