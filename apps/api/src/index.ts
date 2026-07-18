@@ -309,15 +309,17 @@ function todayISODate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// M9 (anti-enumeration): a valid-format PBKDF2 hash of a random string, computed
-// once at module load. On a login attempt for an UNKNOWN email we verify the
-// submitted password against this dummy hash so the request spends the same CPU
-// as the found-user path — removing the timing side-channel that would otherwise
-// reveal which emails have accounts. The promise is created (not awaited) at
-// module init; the login handler awaits it.
-const DUMMY_HASH_PROMISE: Promise<string> = hashPassword(
-  `dummy-${crypto.randomUUID()}-${Date.now()}`,
-);
+// M9 (anti-enumeration): a valid-format PBKDF2 hash we verify against when the
+// email is UNKNOWN, so an unknown-email login spends the same PBKDF2 CPU as a
+// found-user login — removing the timing side-channel that reveals which emails
+// have accounts. Computed LAZILY on first login and memoized; it must NOT run at
+// module load because Cloudflare Workers forbid async I/O / crypto in global
+// scope (deploy validation error 10021). A fixed input is fine — the value only
+// needs to be a valid-format hash the submitted password will not match.
+let dummyHashPromise: Promise<string> | null = null;
+function getDummyHash(): Promise<string> {
+  return (dummyHashPromise ??= hashPassword("verify-timing-equalizer-dummy-secret"));
+}
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -798,7 +800,7 @@ app.post(
     // M9: unknown email — run a dummy verify against a constant valid-format hash
     // so the timing matches the found-user path (no user enumeration via timing).
     if (!user) {
-      await verifyPassword(data.password, await DUMMY_HASH_PROMISE);
+      await verifyPassword(data.password, await getDummyHash());
       return c.json({ error: "Identifiants invalides" }, 401);
     }
 
