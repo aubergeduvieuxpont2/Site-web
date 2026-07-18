@@ -4,7 +4,7 @@ import { hubspotFetch } from "../hubspotClient";
 
 export const ContactUpdateByIdSchema = z.object({
   contactId: z.string().min(1),
-  properties: z.record(z.string()),
+  properties: z.record(z.string(), z.string()),
 });
 
 export type ContactUpdateByIdPayload = z.infer<typeof ContactUpdateByIdSchema>;

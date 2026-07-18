@@ -1,10 +1,11 @@
 import { Hono, type Context } from "hono";
-import type { ExportedHandler, ScheduledEvent, ExecutionContext } from "@cloudflare/workers-types";
+import type { ExportedHandler, ScheduledController, ExecutionContext } from "@cloudflare/workers-types";
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon } from "@neondatabase/serverless";
-import { drainEmailOutbox } from "./emailOutbox";
+import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
+import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest } from "./provisioning";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
@@ -391,6 +392,36 @@ app.post(
     }
 
     c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          if (!created.arrive || !created.depart) return;
+          const confirmSettingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+          const confirmSettings = rowsToAdminSettings(confirmSettingsRows);
+          const invoice = computeInvoice({
+            nights: nightsBetween(created.arrive, created.depart),
+            roomCount: created.room_count ?? 1,
+            effectiveNightly: confirmSettings.nightlyPrice,
+            weeklyRate: confirmSettings.weeklyPrice,
+            tps: confirmSettings.tps,
+            tvq: confirmSettings.tvq,
+            accommodationTax: confirmSettings.accommodationTax,
+            type: "full",
+          });
+          const data = buildReservationConfirmationData(created, invoice);
+          if (data) {
+            await enqueueEmail(sql, {
+              template: "reservation-confirmation",
+              to: created.email,
+              payload: data as unknown as Record<string, unknown>,
+            });
+          }
+        } catch (err) {
+          console.error("confirmation email enqueue failed", err);
+        }
+      })()
+    );
+
+    c.executionCtx.waitUntil(
       enqueueHubspotOps(
         c.env.HUBSPOT,
         buildReservationHubspotOps({
@@ -719,18 +750,30 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id FROM users WHERE lower(email) = lower(${data.email})
-    `) as { id: number }[];
+      SELECT id, email, first_name, name FROM users WHERE lower(email) = lower(${data.email})
+    `) as { id: number; email: string; first_name: string | null; name: string | null }[];
 
-    if (rows[0]) {
+    const user = rows[0];
+    if (user) {
       const rawToken = generateToken();
       const tokenHash = await sha256hex(rawToken);
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
       await sql`
         INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
-        VALUES (${tokenHash}, ${rows[0].id}, ${expiresAt})
+        VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
+
+      const origin = new URL(c.req.url).origin;
+      await enqueueEmail(sql, {
+        template: "password-reset",
+        to: user.email,
+        payload: {
+          firstName: user.first_name ?? user.name ?? "client",
+          resetUrl: `${origin}/reinitialisation?token=${rawToken}`,
+          expiryHours: 1,
+        },
+      });
     }
 
     return c.json({ ok: true });
@@ -830,6 +873,13 @@ app.post(
     if (existing.length > 0) {
       return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
     }
+
+    // Claiming by the verified-by-password old address prevents reservation
+    // takeover through email reassignment and survives OTA relay expiry.
+    await sql`
+      UPDATE reservations SET user_id = ${user.id}
+      WHERE user_id IS NULL AND lower(email) = lower(${user.email})
+    `;
 
     // Update the user's email
     await sql`
@@ -1311,6 +1361,39 @@ app.post(
         RETURNING id, reservation_id, room_slug, created_at
       `) as { id: number; reservation_id: number; room_slug: string; created_at: string }[];
 
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            const resRows = (await sql`
+              SELECT name, email, to_char(arrive, 'YYYY-MM-DD') AS arrive, to_char(depart, 'YYYY-MM-DD') AS depart
+              FROM reservations WHERE id = ${reservationId}
+            `) as { name: string; email: string; arrive: string | null; depart: string | null }[];
+            const roomRows = (await sql`
+              SELECT name, passkey_enabled, passkey FROM rooms WHERE slug = ${data.roomSlug}
+            `) as { name: string; passkey_enabled: boolean; passkey: string | null }[];
+            const r = resRows[0];
+            const room = roomRows[0];
+            // Airbnb-sourced reservations have an empty email — nothing to send to.
+            if (!r || !room || !r.email) return;
+            await enqueueEmail(sql, {
+              template: "room-assigned",
+              to: r.email,
+              payload: {
+                name: r.name,
+                roomLabel: room.name,
+                checkIn: r.arrive ?? "",
+                checkOut: r.depart ?? "",
+                passkeyEnabled: room.passkey_enabled && !!room.passkey,
+                passkey: room.passkey ?? undefined,
+                confirmationCode: `#${reservationId}`,
+              },
+            });
+          } catch (err) {
+            console.error("room-assigned email enqueue failed", err);
+          }
+        })()
+      );
+
       return c.json({ assignment: assignment[0] }, 201);
     } catch {
       return c.json({ error: "Impossible de créer l'assignation." }, 409);
@@ -1786,7 +1869,7 @@ app.notFound((c) => {
 
 export default {
   fetch: app.fetch,
-  scheduled: async (event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) => {
+  scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
     ctx.waitUntil(drainEmailOutbox(env));
   },
 } satisfies ExportedHandler<Bindings>;
