@@ -20,6 +20,12 @@ import {
   type User,
 } from "./auth/session";
 import { authRateLimiter } from "./auth/middleware";
+import {
+  rateLimitAllow,
+  isAccountLocked,
+  recordLoginFailure,
+  clearLoginFailures,
+} from "./auth/rateLimit";
 import { checkSharedSecret, INTERNAL_AUTH_HEADER } from "./auth/internalAuth";
 import {
   SettingsUpdateSchema,
@@ -273,28 +279,32 @@ async function getAuthUser(c: Context<{ Bindings: Bindings }>): Promise<User | n
   return validateSession(sql, token);
 }
 
+// M9 (anti-enumeration): a valid-format PBKDF2 hash of a random string, computed
+// once at module load. On a login attempt for an UNKNOWN email we verify the
+// submitted password against this dummy hash so the request spends the same CPU
+// as the found-user path — removing the timing side-channel that would otherwise
+// reveal which emails have accounts. The promise is created (not awaited) at
+// module init; the login handler awaits it.
+const DUMMY_HASH_PROMISE: Promise<string> = hashPassword(
+  `dummy-${crypto.randomUUID()}-${Date.now()}`,
+);
+
 const app = new Hono<{ Bindings: Bindings }>();
 
-// Simple in-memory rate limiter: 30 requests per 15 minutes per IP
-const requestCounts = new Map<string, { count: number; resetTime: number }>();
-
+// Durable, cross-isolate general rate limiter: 30 requests / 15 min per IP.
+// Backed by the Neon `rate_limits` table (migration 0033) so all isolates share
+// one counter — the old in-memory Map let an attacker reset by hitting a fresh
+// isolate. Keyed ONLY on cf-connecting-ip (never the spoofable x-forwarded-for);
+// a missing IP still counts under a fixed "noip" bucket. Fails OPEN on DB error.
 const rateLimitMiddleware = async (c: Context, next: () => Promise<void>) => {
-  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "anonymous";
-  const now = Date.now();
-  const windowMs = 15 * 60 * 1000;
-  const limit = 30;
+  const ip = c.req.header("cf-connecting-ip") || "noip";
+  const sql = neon((c.env as { DB_CONN: string }).DB_CONN);
 
-  let record = requestCounts.get(ip);
-  if (!record || now > record.resetTime) {
-    record = { count: 0, resetTime: now + windowMs };
-    requestCounts.set(ip, record);
-  }
-
-  if (record.count >= limit) {
+  const allowed = await rateLimitAllow(sql, `general:${ip}`, 30, 15 * 60 * 1000, Date.now());
+  if (!allowed) {
     return c.json({ error: "Rate limit exceeded" }, 429);
   }
 
-  record.count++;
   await next();
 };
 
@@ -675,7 +685,12 @@ app.post(
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       if (message.includes("duplicate") || message.includes("UNIQUE")) {
-        return c.json({ error: "Un compte existe déjà" }, 409);
+        // M9 (anti-enumeration): keep the 409 status (the frontend/onboarding flow
+        // in PR #45 branches on it), but return a GENERIC body that does not
+        // confirm an account already exists. Mirroring the forgot-password
+        // no-enumeration pattern (silent 200) was rejected: it would let a
+        // duplicate registration appear to succeed and risk the guest-portal flow.
+        return c.json({ error: "Inscription impossible." }, 409);
       }
       return c.json({ error: "Internal server error" }, 500);
     }
@@ -697,8 +712,44 @@ app.post(
     `) as (User & { password_hash: string })[];
 
     const user = rows[0];
-    if (!user || !(await verifyPassword(data.password, user.password_hash))) {
+
+    // M9: unknown email — run a dummy verify against a constant valid-format hash
+    // so the timing matches the found-user path (no user enumeration via timing).
+    if (!user) {
+      await verifyPassword(data.password, await DUMMY_HASH_PROMISE);
       return c.json({ error: "Identifiants invalides" }, 401);
+    }
+
+    // M1: per-account lockout — too many recent failed logins → generic 429.
+    // Checked before verifying the password so a locked account can't be probed.
+    // All lockout DB calls are best-effort: if the login_failures table is
+    // unavailable (e.g. migration 0033 not yet applied on deploy), we fail OPEN
+    // so login never 500s — lockout simply doesn't engage until the DB is healthy.
+    let locked = false;
+    try {
+      locked = await isAccountLocked(sql, data.email, Date.now(), 10, 15 * 60 * 1000);
+    } catch {
+      /* fail open */
+    }
+    if (locked) {
+      return c.json({ error: "Identifiants invalides" }, 429);
+    }
+
+    if (!(await verifyPassword(data.password, user.password_hash))) {
+      // Record the failure toward the per-account lockout, then generic 401.
+      try {
+        await recordLoginFailure(sql, data.email, Date.now());
+      } catch {
+        /* fail open */
+      }
+      return c.json({ error: "Identifiants invalides" }, 401);
+    }
+
+    // Successful login clears the account's failed-login history.
+    try {
+      await clearLoginFailures(sql, data.email);
+    } catch {
+      /* fail open */
     }
 
     // Link any unclaimed guest reservations under this account's email so the
@@ -785,7 +836,15 @@ app.post(
     const newHash = await hashPassword(data.newPassword);
     await sql`UPDATE users SET password_hash = ${newHash} WHERE id = ${user.id}`;
 
-    return c.json({ ok: true });
+    // M3: a password change must revoke every existing session (drop any attacker
+    // who has an active cookie), then mint a fresh session for the acting user so
+    // they stay logged in, re-setting the session cookie on the response.
+    await invalidateUserSessions(sql, user.id);
+    const token = await createSession(sql, user.id);
+
+    return c.json({ ok: true }, 200, {
+      "Set-Cookie": getSessionCookieHeader(token),
+    });
   }
 );
 
