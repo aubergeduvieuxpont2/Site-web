@@ -9,6 +9,8 @@ const DEFAULTS: PublicSettings = {
   tps: 5,
   tvq: 9.975,
   accommodationTax: 3.5,
+  weeklyPrice: 560,
+  reservationsEnabled: true,
 };
 
 export const settings = $state({ ...DEFAULTS });
@@ -42,6 +44,12 @@ export function mergeSettings(
     }),
     ...(incoming.accommodationTax !== undefined && {
       accommodationTax: incoming.accommodationTax,
+    }),
+    ...(incoming.weeklyPrice !== undefined && {
+      weeklyPrice: incoming.weeklyPrice,
+    }),
+    ...(incoming.reservationsEnabled !== undefined && {
+      reservationsEnabled: incoming.reservationsEnabled,
     }),
   };
 }

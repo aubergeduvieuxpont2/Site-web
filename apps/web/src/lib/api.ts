@@ -24,6 +24,7 @@ export interface User {
   role: "guest" | "admin";
   hubspotContactId?: string | null;
   effectiveNightlyPrice?: number;
+  effectiveWeeklyPrice?: number;
 }
 
 export interface ReservationRow {
@@ -39,6 +40,10 @@ export interface ReservationRow {
   people: number;
   room_count: number | null;
   message: string | null;
+  // Reservation lifecycle status. Optional/nullable so legacy rows and existing
+  // fixtures created before the column existed stay valid; the UI treats a
+  // null/undefined status as "pending".
+  status?: "pending" | "confirmed" | "cancelled" | null;
   created_at: string;
 }
 
@@ -88,6 +93,11 @@ export interface PublicSettings {
   tps: number;
   tvq: number;
   accommodationTax: number;
+  // Weekly rate (default 560) and the global maintenance toggle. Optional on the
+  // wire type so existing settings literals stay valid while the settings/admin
+  // tasks fill them in; the client settings store always seeds concrete defaults.
+  weeklyPrice?: number;
+  reservationsEnabled?: boolean;
 }
 
 // `publicRoomCount` is a live, computed public field — never part of an admin
@@ -141,6 +151,19 @@ export interface RoomAssignment {
 export interface FreeRoom {
   slug: string;
   name: string;
+}
+
+/**
+ * A single blackout row as returned by the availability admin API. `date` is the
+ * stable `YYYY-MM-DD` key; `rooms_blocked` is how many rooms are withheld that
+ * night (equal to the assignable count for a full closure); `note` is an optional
+ * operator memo.
+ */
+export interface BlackoutRow {
+  date: string;
+  rooms_blocked: number;
+  note: string | null;
+  created_at: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -331,6 +354,26 @@ export async function adminReservations(
   );
 }
 
+// PATCH /admin/reservations/:id/status — set the lifecycle status of a single
+// reservation. `id` and `status` are validated defensively before the request
+// so a malformed value never reaches the fixed, encoded path.
+export async function adminSetReservationStatus(
+  id: number,
+  status: "pending" | "confirmed" | "cancelled",
+): Promise<{ reservation: ReservationRow } | ApiError> {
+  const safeId = Math.trunc(id);
+  if (!Number.isInteger(safeId) || safeId <= 0) {
+    return { error: "Identifiant invalide" };
+  }
+  if (status !== "pending" && status !== "confirmed" && status !== "cancelled") {
+    return { error: "Statut invalide" };
+  }
+  return fetchJson<{ reservation: ReservationRow }>(
+    `/admin/reservations/${encodeURIComponent(String(safeId))}/status`,
+    { method: "PATCH", body: JSON.stringify({ status }) },
+  );
+}
+
 export async function adminOutbox(
   status?: "pending" | "failed" | "done" | "all",
 ): Promise<{ rows: OutboxRow[] } | ApiError> {
@@ -447,12 +490,14 @@ export interface AdminUserDetail {
   hubspot_contact_id: string | null;
   discount_percent: number | null;
   fixed_nightly_price: number | null;
+  fixed_weekly_price: number | null;
 }
 
 /** Mutually-exclusive pricing body accepted by the pricing endpoint. */
 export interface UserPricingBody {
   discountPercent: number | null;
   fixedNightlyPrice: number | null;
+  fixedWeeklyPrice: number | null;
 }
 
 /**
@@ -521,6 +566,50 @@ export async function createReservation(data: {
 
 export async function getPublicSettings(): Promise<PublicSettings | ApiError> {
   return fetchJson<PublicSettings>("/settings");
+}
+
+// ---------------------------------------------------------------------------
+// Availability (public)
+// ---------------------------------------------------------------------------
+
+/** Per-night availability: how many rooms are free on that calendar night. */
+export interface AvailabilityNight {
+  date: string; // "YYYY-MM-DD"
+  available: number;
+}
+
+/**
+ * Result of `GET /api/availability`. `unavailableNights` lists the dates where
+ * fewer than the requested rooms are free; `allAvailable` is the convenience
+ * flag `unavailableNights.length === 0`.
+ */
+export interface AvailabilityResponse {
+  nights: AvailabilityNight[];
+  unavailableNights: string[];
+  allAvailable: boolean;
+}
+
+/**
+ * Public availability check for a half-open `[checkIn, checkOut)` date range.
+ *
+ * All three parameters travel as query params encoded via `URLSearchParams`, so
+ * user-supplied dates cannot break out of the query string or alter the fixed
+ * `/availability` path. `rooms` is coerced to a positive integer client-side; the
+ * server independently rejects invalid dates (`depart <= arrive`) or `rooms < 1`
+ * with a 400 that surfaces through the `{ error }` branch.
+ */
+export async function getAvailability(
+  checkIn: string,
+  checkOut: string,
+  rooms: number,
+): Promise<AvailabilityResponse | ApiError> {
+  const safeRooms = Math.trunc(Number(rooms));
+  const params = new URLSearchParams({
+    checkIn,
+    checkOut,
+    rooms: String(Number.isFinite(safeRooms) && safeRooms > 0 ? safeRooms : 1),
+  });
+  return fetchJson<AvailabilityResponse>(`/availability?${params.toString()}`);
 }
 
 export async function adminGetSettings(): Promise<AdminSettings | ApiError> {
@@ -691,6 +780,72 @@ export async function adminCreateInvoice(
   return fetchJson<{ ok: true; breakdown: InvoiceBreakdown }>(
     `/admin/reservations/${encodeURIComponent(String(safe))}/invoice`,
     { method: "POST", body: JSON.stringify({ type, depositPercent }) },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Availability blackouts (admin)
+// ---------------------------------------------------------------------------
+
+/**
+ * Guard a blackout date before it is interpolated into a request path. Only a
+ * strict `YYYY-MM-DD` string is accepted, so a caller can never inject extra
+ * path segments; the guard mirrors {@link safeReservationId}. Format only —
+ * calendar validity is enforced server-side.
+ */
+function safeBlackoutDate(date: string): string | null {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+}
+
+/**
+ * Admin-gated: every blackout row, ordered by date.
+ */
+export async function adminBlackouts(): Promise<
+  { blackouts: BlackoutRow[] } | ApiError
+> {
+  return fetchJson<{ blackouts: BlackoutRow[] }>("/admin/blackouts");
+}
+
+/**
+ * Admin-gated: create or update the blackout for a single date (upsert on the
+ * `date` primary key). `date` is validated to `YYYY-MM-DD` and encoded into the
+ * fixed path so it cannot inject extra path segments; `roomsBlocked` must be a
+ * finite integer ≥ 0 (the server enforces the same). A 422 (bad dates) surfaces
+ * through the `{ error }` branch.
+ */
+export async function adminUpsertBlackout(
+  date: string,
+  body: { roomsBlocked: number; note?: string | null },
+): Promise<{ blackout: BlackoutRow } | ApiError> {
+  const safeDate = safeBlackoutDate(date);
+  if (safeDate === null) return { error: "Date invalide" };
+  const rooms = Math.trunc(Number(body.roomsBlocked));
+  if (!Number.isInteger(rooms) || rooms < 0) {
+    return { error: "Nombre de chambres invalide" };
+  }
+  return fetchJson<{ blackout: BlackoutRow }>(
+    `/admin/blackouts/${encodeURIComponent(safeDate)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ roomsBlocked: rooms, note: body.note ?? null }),
+    },
+  );
+}
+
+/**
+ * Admin-gated: delete the blackout for a single date. `date` is validated and
+ * encoded into the fixed path for the same path-safety reason as
+ * {@link adminUpsertBlackout}. A 404 (no such blackout) surfaces through the
+ * `{ error }` branch.
+ */
+export async function adminDeleteBlackout(
+  date: string,
+): Promise<{ ok: true } | ApiError> {
+  const safeDate = safeBlackoutDate(date);
+  if (safeDate === null) return { error: "Date invalide" };
+  return fetchJson<{ ok: true }>(
+    `/admin/blackouts/${encodeURIComponent(safeDate)}`,
+    { method: "DELETE" },
   );
 }
 

@@ -5,12 +5,14 @@
   import Button from "$lib/components/Button.svelte";
   import AdminUtilisateursTab from "$lib/components/admin/AdminUtilisateursTab.svelte";
   import AdminChambresTab from "$lib/components/admin/AdminChambresTab.svelte";
+  import AdminDisponibilitesTab from "$lib/components/admin/AdminDisponibilitesTab.svelte";
   import AdminEmailsOtaTab from "$lib/components/admin/AdminEmailsOtaTab.svelte";
   import ReservationTableRow from "$lib/components/admin/ReservationTableRow.svelte";
   import type { InvoiceRequest, InvoiceResult } from "$lib/components/admin/InvoiceCreator.svelte";
   import {
     getMe,
     adminReservations,
+    adminSetReservationStatus,
     adminOutbox,
     requeueOutbox,
     adminGetSettings,
@@ -28,7 +30,15 @@
   let currentUserId = $state<number | null>(null);
 
   // ─── Tab state ───
-  let activeTab = $state<"reservations" | "outbox" | "settings" | "rooms" | "users" | "emails-ota">("reservations");
+  let activeTab = $state<
+    | "reservations"
+    | "outbox"
+    | "settings"
+    | "rooms"
+    | "users"
+    | "disponibilites"
+    | "emails-ota"
+  >("reservations");
 
   // ─── Reservations ───
   let searchQuery = $state("");
@@ -52,6 +62,7 @@
   let settingsSaving = $state(false);
   let settings = $state<AdminSettings>({
     nightlyPrice: 89,
+    weeklyPrice: 560,
     contactEmail: "info@aubergeduvieuxpont.ca",
     contactPhone: "418 655-1212",
     marketingRoomCount: 12,
@@ -59,6 +70,7 @@
     tps: 5,
     tvq: 9.975,
     accommodationTax: 3.5,
+    reservationsEnabled: true,
   });
   let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
 
@@ -165,6 +177,14 @@
     if (!Number.isInteger(settings.nightlyPrice) || settings.nightlyPrice <= 0) {
       errors.nightlyPrice = "Prix doit être un entier positif";
     }
+    const weeklyPrice = settings.weeklyPrice ?? 0;
+    if (!Number.isInteger(weeklyPrice) || weeklyPrice <= 0) {
+      errors.weeklyPrice = "Prix doit être un entier positif";
+    }
+    const assignableCount = settings.assignableRoomCount ?? 0;
+    if (!Number.isInteger(assignableCount) || assignableCount <= 0) {
+      errors.assignableRoomCount = "Nombre de chambres doit être un entier positif";
+    }
     if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
       errors.contactEmail = "Courriel invalide";
     }
@@ -193,6 +213,22 @@
       setTimeout(() => {
         settingsSaved = false;
       }, 3000);
+    }
+  }
+
+  // ─── Reservation status ───
+  async function handleSetStatus(
+    id: number,
+    status: "pending" | "confirmed" | "cancelled",
+  ) {
+    // Optimistic: flip immediately so the row badge updates without a round-trip.
+    const snapshot = reservations.slice();
+    reservations = reservations.map((r) => (r.id === id ? { ...r, status } : r));
+
+    const res = await adminSetReservationStatus(id, status);
+    if (isError(res)) {
+      reservations = snapshot; // rollback
+      reservationsError = res.error;
     }
   }
 
@@ -237,7 +273,9 @@
 
   // ─── Tab keyboard nav (ARIA tabs pattern) ───
   function onTablistKeydown(e: KeyboardEvent) {
-    const order = ["reservations", "outbox", "settings", "rooms", "users", "emails-ota"] as const;
+    const order = [
+      "reservations", "outbox", "settings", "rooms", "users", "disponibilites", "emails-ota",
+    ] as const;
     const idx = order.indexOf(activeTab);
     let next = idx;
     if (e.key === "ArrowRight") {
@@ -432,6 +470,21 @@
             </button>
             <button
               role="tab"
+              id="tab-disponibilites"
+              aria-controls="panel-disponibilites"
+              aria-selected={activeTab === "disponibilites"}
+              tabindex={activeTab === "disponibilites" ? 0 : -1}
+              class="page-admin__tab {activeTab === 'disponibilites' ? 'page-admin__tab--active' : ''}"
+              onclick={() => {
+                activeTab = "disponibilites";
+              }}
+              onkeydown={onTablistKeydown}
+              data-testid="tab-disponibilites"
+            >
+              Disponibilités
+            </button>
+            <button
+              role="tab"
               id="tab-emails-ota"
               aria-controls="panel-emails-ota"
               aria-selected={activeTab === "emails-ota"}
@@ -513,17 +566,22 @@
                     <th scope="col">Départ</th>
                     <th scope="col">Chambres</th>
                     <th scope="col">Message</th>
+                    <th scope="col">Statut</th>
                     <th scope="col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {#if reservations.length === 0 && !reservationsLoading}
                     <tr>
-                      <td colspan="9" class="page-admin__empty">Aucune réservation trouvée.</td>
+                      <td colspan="10" class="page-admin__empty">Aucune réservation trouvée.</td>
                     </tr>
                   {:else}
                     {#each reservations as row (row.id)}
-                      <ReservationTableRow {row} onCreateInvoice={createInvoice} />
+                      <ReservationTableRow
+                        {row}
+                        onCreateInvoice={createInvoice}
+                        onSetStatus={handleSetStatus}
+                      />
                     {/each}
                   {/if}
                 </tbody>
@@ -825,6 +883,80 @@
                   >
                 </div>
 
+                <!-- Weekly price (int > 0) -->
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-weekly-price">
+                    Prix hebdomadaire ($)
+                  </label>
+                  <input
+                    id="input-weekly-price"
+                    type="number"
+                    min="1"
+                    bind:value={settings.weeklyPrice}
+                    class="page-admin__search-input page-admin__tax-input"
+                    data-testid="input-weekly-price"
+                    aria-describedby={settingsErrors.weeklyPrice ? "err-weekly-price" : undefined}
+                    aria-invalid={!!settingsErrors.weeklyPrice}
+                  />
+                  {#if settingsErrors.weeklyPrice}
+                    <span
+                      class="page-admin__field-error"
+                      id="err-weekly-price"
+                      role="alert"
+                      data-testid="error-weekly-price">{settingsErrors.weeklyPrice}</span
+                    >
+                  {/if}
+                </div>
+
+                <!-- Assignable room count (int > 0) -->
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="input-assignable-rooms">
+                    Chambres disponibles à l'attribution
+                    <span class="page-admin__field-hint">(pour le calcul de disponibilité)</span>
+                  </label>
+                  <input
+                    id="input-assignable-rooms"
+                    type="number"
+                    min="1"
+                    bind:value={settings.assignableRoomCount}
+                    class="page-admin__search-input page-admin__tax-input"
+                    data-testid="input-assignable-rooms"
+                    aria-describedby={settingsErrors.assignableRoomCount
+                      ? "err-assignable-rooms"
+                      : undefined}
+                    aria-invalid={!!settingsErrors.assignableRoomCount}
+                  />
+                  {#if settingsErrors.assignableRoomCount}
+                    <span
+                      class="page-admin__field-error"
+                      id="err-assignable-rooms"
+                      role="alert"
+                      data-testid="error-assignable-rooms"
+                      >{settingsErrors.assignableRoomCount}</span
+                    >
+                  {/if}
+                </div>
+
+                <!-- Reservations enabled toggle -->
+                <div class="page-admin__field">
+                  <label class="page-admin__field-label" for="toggle-reservations-enabled">
+                    Réservations actives
+                  </label>
+                  <div class="page-admin__toggle-wrap">
+                    <input
+                      id="toggle-reservations-enabled"
+                      type="checkbox"
+                      bind:checked={settings.reservationsEnabled}
+                      class="page-admin__toggle"
+                      data-testid="toggle-reservations-enabled"
+                      aria-label="Activer ou désactiver les réservations"
+                    />
+                    <span class="page-admin__toggle-label" aria-hidden="true">
+                      {settings.reservationsEnabled ? "Activées" : "En pause (maintenance)"}
+                    </span>
+                  </div>
+                </div>
+
                 {#if settingsSaved}
                   <div class="page-admin__save-success" role="status" data-testid="settings-saved">
                     Paramètres enregistrés.
@@ -952,6 +1084,21 @@
         <div class="page-admin__panel-inner">
           {#if currentUserId !== null && activeTab === "users"}
             <AdminUtilisateursTab {currentUserId} />
+          {/if}
+        </div>
+      </div>
+
+      <!-- Disponibilités panel -->
+      <div
+        role="tabpanel"
+        id="panel-disponibilites"
+        aria-labelledby="tab-disponibilites"
+        hidden={activeTab !== "disponibilites"}
+        data-testid="panel-disponibilites"
+      >
+        <div class="page-admin__panel-inner">
+          {#if activeTab === "disponibilites"}
+            <AdminDisponibilitesTab assignableRoomCount={settings.assignableRoomCount ?? 12} />
           {/if}
         </div>
       </div>
@@ -1725,6 +1872,67 @@
     }
   }
 
+  /* ─── Reservations-enabled toggle ─── */
+  .page-admin__toggle-wrap {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  /* iOS-style switch — appearance: none lets us paint the track ourselves. */
+  .page-admin__toggle {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    min-width: 44px; /* touch target width */
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--color-outline-variant);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background-color 180ms ease;
+    flex-shrink: 0;
+  }
+
+  .page-admin__toggle:checked {
+    background-color: var(--color-forest); /* #1a5c2d — already defined in .page-admin */
+  }
+
+  .page-admin__toggle::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    transition: transform 180ms cubic-bezier(0.33, 1, 0.68, 1);
+    pointer-events: none;
+  }
+
+  .page-admin__toggle:checked::after {
+    transform: translateX(20px);
+  }
+
+  .page-admin__toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .page-admin__toggle,
+    .page-admin__toggle::after {
+      transition: none;
+    }
+  }
+
+  .page-admin__toggle-label {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    color: var(--color-ink-soft, var(--color-ink-variant));
+    line-height: 1.4;
+  }
 </style>
 
 <svelte:head>

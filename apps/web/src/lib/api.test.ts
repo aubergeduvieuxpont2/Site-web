@@ -11,6 +11,7 @@ import {
   changePassword,
   getProfile,
   adminReservations,
+  adminSetReservationStatus,
   adminOutbox,
   requeueOutbox,
   createReservation,
@@ -285,6 +286,73 @@ describe("admin helpers", () => {
     stubFetch({ error: "Accès refusé" }, 403);
     const res = await adminReservations();
     expect(res).toEqual({ error: "Accès refusé" });
+  });
+});
+
+describe("adminSetReservationStatus", () => {
+  it("PATCHes the status to /api/admin/reservations/:id/status", async () => {
+    const { calls } = stubFetch({
+      reservation: { id: 7, status: "confirmed" },
+    });
+    const res = await adminSetReservationStatus(7, "confirmed");
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/admin/reservations/7/status");
+    expect(init.method).toBe("PATCH");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({ status: "confirmed" });
+    expect(res).toEqual({ reservation: { id: 7, status: "confirmed" } });
+  });
+
+  it("accepts each valid status literal", async () => {
+    const { calls } = stubFetch({ reservation: { id: 3 } });
+    await adminSetReservationStatus(3, "pending");
+    expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
+      status: "pending",
+    });
+    await adminSetReservationStatus(3, "cancelled");
+    expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
+      status: "cancelled",
+    });
+  });
+
+  it("truncates a non-integer id before use", async () => {
+    const { calls } = stubFetch({ reservation: { id: 4 } });
+    await adminSetReservationStatus(4.9, "confirmed");
+    expect(lastCall(calls).url).toBe("/api/admin/reservations/4/status");
+  });
+
+  it("rejects a non-positive id without calling fetch", async () => {
+    const { calls } = stubFetch({ reservation: {} });
+    const res = await adminSetReservationStatus(0, "confirmed");
+    expect(res).toEqual({ error: "Identifiant invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("rejects NaN / Infinity ids without calling fetch", async () => {
+    const { calls } = stubFetch({ reservation: {} });
+    expect(await adminSetReservationStatus(Number.NaN, "confirmed")).toEqual({
+      error: "Identifiant invalide",
+    });
+    expect(
+      await adminSetReservationStatus(Number.POSITIVE_INFINITY, "confirmed"),
+    ).toEqual({ error: "Identifiant invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("rejects an invalid status literal without calling fetch", async () => {
+    const { calls } = stubFetch({ reservation: {} });
+    const res = await adminSetReservationStatus(
+      7,
+      "bogus" as unknown as "confirmed",
+    );
+    expect(res).toEqual({ error: "Statut invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("maps a 404 to an error body", async () => {
+    stubFetch({ error: "Introuvable" }, 404);
+    const res = await adminSetReservationStatus(999, "confirmed");
+    expect(res).toEqual({ error: "Introuvable" });
   });
 });
 

@@ -65,6 +65,7 @@ function detail(over: Partial<AdminUserDetail> = {}): AdminUserDetail {
     hubspot_contact_id: "hs-42",
     discount_percent: null,
     fixed_nightly_price: null,
+    fixed_weekly_price: null,
     ...over,
   };
 }

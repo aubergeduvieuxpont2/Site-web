@@ -45,7 +45,11 @@
       </p>
       <div class="page-accueil__hero-ctas" data-testid="hero-ctas">
         <div data-testid="hero-cta-reserver">
-          <Button variant="action" href="/contact">Réserver</Button>
+          {#if settings.reservationsEnabled}
+            <Button variant="action" href="/contact">Réserver</Button>
+          {:else}
+            <Button variant="action" disabled>Réserver</Button>
+          {/if}
         </div>
         <div data-testid="hero-cta-lesite">
           <Button variant="secondary" href="/le-site">Le site</Button>
@@ -218,7 +222,11 @@
         Réservez directement par formulaire, sans intermédiaire.
       </p>
       <div data-testid="cta-reserver">
-        <Button variant="action" href="/contact">Réserver maintenant</Button>
+        {#if settings.reservationsEnabled}
+          <Button variant="action" href="/contact">Réserver maintenant</Button>
+        {:else}
+          <Button variant="action" disabled>Réserver maintenant</Button>
+        {/if}
       </div>
     </div>
   </section>

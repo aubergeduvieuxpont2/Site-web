@@ -4,7 +4,8 @@
   import { afterNavigate } from "$app/navigation";
   import Nav from "$lib/components/Nav.svelte";
   import Footer from "$lib/components/Footer.svelte";
-  import { loadSettings } from "$lib/settings.svelte";
+  import MaintenanceBanner from "$lib/components/MaintenanceBanner.svelte";
+  import { loadSettings, settings } from "$lib/settings.svelte";
   import { loadAuth } from "$lib/auth.svelte";
 
   // The shell only needs the children snippet. The authenticated user loaded in
@@ -44,6 +45,10 @@
 </a>
 
 <Nav />
+
+{#if !settings.reservationsEnabled}
+  <MaintenanceBanner />
+{/if}
 
 <main
   id="main"

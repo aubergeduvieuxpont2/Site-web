@@ -5,6 +5,7 @@ import ReservationTableRow, {
   formatDateOnly,
   displayNameOf,
   truncateMessage,
+  statusLabel,
 } from "../ReservationTableRow.svelte";
 import type { InvoiceResult } from "../InvoiceCreator.svelte";
 import type { ReservationRow } from "$lib/api";
@@ -37,6 +38,7 @@ function baseRow(overrides: Partial<ReservationRow> = {}): ReservationRow {
     people: 3,
     room_count: 2,
     message: "Bonjour",
+    status: "pending",
     created_at: "2026-07-01",
     ...overrides,
   };
@@ -48,6 +50,7 @@ function props(rowOverrides: Partial<ReservationRow> = {}) {
     onCreateInvoice: vi.fn(
       async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
     ),
+    onSetStatus: vi.fn(),
   };
 }
 
@@ -108,6 +111,20 @@ describe("truncateMessage", () => {
   });
 });
 
+describe("statusLabel", () => {
+  it("maps each known status to its French label", () => {
+    expect(statusLabel("confirmed")).toBe("Confirmé");
+    expect(statusLabel("cancelled")).toBe("Annulé");
+    expect(statusLabel("pending")).toBe("En attente");
+  });
+
+  it("defaults to En attente for null, undefined, or unknown values", () => {
+    expect(statusLabel(null)).toBe("En attente");
+    expect(statusLabel(undefined)).toBe("En attente");
+    expect(statusLabel("bogus")).toBe("En attente");
+  });
+});
+
 // ── Rendering ────────────────────────────────────────────────────────────────
 describe("ReservationTableRow — cells", () => {
   it("renders the split name, email, and phone", () => {
@@ -158,6 +175,91 @@ describe("ReservationTableRow — cells", () => {
     expect(getByTestId("reservation-row").getAttribute("data-reservation-id")).toBe(
       "7",
     );
+  });
+});
+
+describe("ReservationTableRow — status cell", () => {
+  it("renders the pending badge and both action buttons by default", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("En attente");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--pending",
+    );
+    expect(badge.getAttribute("aria-label")).toBe("Statut: En attente");
+    expect(getByTestId("btn-status-confirm")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel")).not.toBeNull();
+  });
+
+  it("treats a null status as pending", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: null }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("En attente");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--pending",
+    );
+  });
+
+  it("hides Confirmer when already confirmed", () => {
+    const { getByTestId, queryByTestId } = render(ReservationTableRow, {
+      props: props({ status: "confirmed" }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("Confirmé");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--confirmed",
+    );
+    expect(queryByTestId("btn-status-confirm")).toBeNull();
+    expect(getByTestId("btn-status-cancel")).not.toBeNull();
+  });
+
+  it("hides Annuler when already cancelled", () => {
+    const { getByTestId, queryByTestId } = render(ReservationTableRow, {
+      props: props({ status: "cancelled" }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("Annulé");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--cancelled",
+    );
+    expect(getByTestId("btn-status-confirm")).not.toBeNull();
+    expect(queryByTestId("btn-status-cancel")).toBeNull();
+  });
+
+  it("invokes onSetStatus with the row id and target status", async () => {
+    const onSetStatus = vi.fn();
+    const { getByTestId } = render(ReservationTableRow, {
+      props: {
+        row: baseRow({ status: "pending" }),
+        onCreateInvoice: vi.fn(
+          async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
+        ),
+        onSetStatus,
+      },
+    });
+
+    await fireEvent.click(getByTestId("btn-status-confirm"));
+    expect(onSetStatus).toHaveBeenCalledWith(7, "confirmed");
+
+    await fireEvent.click(getByTestId("btn-status-cancel"));
+    expect(onSetStatus).toHaveBeenCalledWith(7, "cancelled");
+  });
+
+  it("does not throw when onSetStatus is omitted (optional callback)", async () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: {
+        row: baseRow({ status: "pending" }),
+        onCreateInvoice: vi.fn(
+          async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
+        ),
+      },
+    });
+    await fireEvent.click(getByTestId("btn-status-confirm"));
+    // No assertion needed — the optional-chained call must be a no-op, not a throw.
   });
 });
 

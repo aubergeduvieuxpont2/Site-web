@@ -61,7 +61,7 @@ export type StayTaxRates = {
 };
 
 export type StayEstimate = {
-  base: number;           // nights × rooms × nightlyRate, rounded to cents
+  base: number;           // per-room weekly-block subtotal × rooms, rounded to cents
   hebergementTax: number; // base × accommodationTax/100, rounded to cents
   tps: number;            // (base + hebergementTax) × tps/100, rounded to cents
   tvq: number;            // (base + hebergementTax + tps) × tvq/100, rounded to cents
@@ -74,25 +74,39 @@ function round2(x: number): number {
 
 /**
  * Computes a compounding tax cascade for a stay estimate.
- * Each line is independently rounded to cents; the total is the sum of rounded lines.
- * Non-finite, NaN, or negative inputs for nights/rooms/nightlyRate return all zeros.
+ *
+ * The base applies the shared weekly-block rule (identical to
+ * `apps/api/src/pricing.ts::computeBase`): stays of 7+ nights bill whole weeks at
+ * `weeklyRate` plus the remainder at `nightlyRate`; shorter stays bill nightly.
+ * `weeklyRate` defaults to `nightlyRate * 7` so a caller that omits it gets the
+ * plain nightly behaviour unchanged.
+ *
+ * Each tax line is independently rounded to cents; the total is the sum of the
+ * rounded lines. Non-finite, NaN, or negative inputs for
+ * nights/rooms/nightlyRate/weeklyRate return all zeros.
  */
 export function estimateStay(
   nights: number,
   rooms: number,
   nightlyRate: number,
-  rates: StayTaxRates
+  rates: StayTaxRates,
+  weeklyRate: number = nightlyRate * 7
 ): StayEstimate {
   const zero: StayEstimate = { base: 0, hebergementTax: 0, tps: 0, tvq: 0, total: 0 };
   if (
     !isFinite(nights) || nights < 0 ||
     !isFinite(rooms) || rooms < 0 ||
-    !isFinite(nightlyRate) || nightlyRate < 0
+    !isFinite(nightlyRate) || nightlyRate < 0 ||
+    !isFinite(weeklyRate) || weeklyRate < 0
   ) {
     return zero;
   }
 
-  const base = round2(nights * rooms * nightlyRate);
+  const perRoom =
+    nights >= 7
+      ? Math.floor(nights / 7) * weeklyRate + (nights % 7) * nightlyRate
+      : nights * nightlyRate;
+  const base = round2(perRoom * rooms);
   const hebergementTax = round2(base * rates.accommodationTax / 100);
   const tps = round2((base + hebergementTax) * rates.tps / 100);
   const tvq = round2((base + hebergementTax + tps) * rates.tvq / 100);

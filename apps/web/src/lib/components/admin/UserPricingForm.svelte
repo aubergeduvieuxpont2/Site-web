@@ -3,11 +3,13 @@
   // task). Mirrors the body accepted by POST /api/admin/users/:id/pricing.
   export type PricingMode = "public" | "discount" | "fixed";
 
-  // Exactly one of the two columns is non-null; the other is always nulled so
-  // mutual exclusivity is enforced on the wire, not just in the UI.
+  // Exactly one pricing strategy is active at a time; the inactive columns are
+  // always nulled so mutual exclusivity is enforced on the wire, not just in the
+  // UI. In fixed mode both the nightly and weekly fixed prices travel together.
   export type PricingRequest = {
     discountPercent: number | null;
     fixedNightlyPrice: number | null;
+    fixedWeeklyPrice: number | null;
   };
 
   // The callback resolves to success or an `{ error }` shape (mirrors api.ts's
@@ -15,13 +17,16 @@
   // the parent wires the actual API client.
   export type PricingResult = { ok: true } | { error: string };
 
-  // Pure: derive the starting mode from the two stored DB columns. Fixed wins
-  // if both are somehow set (defensive — the API keeps them exclusive).
+  // Pure: derive the starting mode from the stored DB columns. Fixed wins if
+  // both a fixed and a discount value are somehow set (defensive — the API keeps
+  // them exclusive). A stored weekly-only fixed price still counts as fixed mode
+  // even when the nightly column is null.
   export function initialPricingMode(
     discount: number | null,
     fixed: number | null,
+    fixedWeekly?: number | null,
   ): PricingMode {
-    if (fixed != null) return "fixed";
+    if (fixed != null || fixedWeekly != null) return "fixed";
     if (discount != null) return "discount";
     return "public";
   }
@@ -43,6 +48,25 @@
     }
     return publicPrice;
   }
+
+  // Pure: compute the effective weekly (7+ nights) price. Mirrors the nightly
+  // rule and the server-side `resolveEffectiveWeekly` resolution — a discount is
+  // applied to the public weekly rate, a fixed weekly amount overrides it, and
+  // anything invalid falls back to the public weekly price. Exported for tests.
+  export function computeEffectiveWeekly(
+    mode: PricingMode,
+    publicWeekly: number,
+    discount: number,
+    fixedWeekly: number,
+  ): number {
+    if (mode === "discount" && Number.isFinite(discount) && discount >= 0 && discount <= 100) {
+      return Math.round(publicWeekly * (1 - discount / 100) * 100) / 100;
+    }
+    if (mode === "fixed" && Number.isFinite(fixedWeekly) && fixedWeekly >= 0) {
+      return fixedWeekly;
+    }
+    return publicWeekly;
+  }
 </script>
 
 <script lang="ts">
@@ -50,14 +74,20 @@
   let {
     userId,
     publicNightlyPrice,
+    // Optional with a sensible fallback so a caller that hasn't yet wired the
+    // weekly rate still renders (mirrors the settings `weeklyPrice` default).
+    publicWeeklyPrice = 560,
     initialDiscount = null,
     initialFixed = null,
+    initialFixedWeekly = null,
     onSavePricing,
   }: {
     userId: number | string;
     publicNightlyPrice: number;
+    publicWeeklyPrice?: number;
     initialDiscount?: number | string | null;
     initialFixed?: number | string | null;
+    initialFixedWeekly?: number | string | null;
     onSavePricing: (body: PricingRequest) => Promise<PricingResult>;
   } = $props();
 
@@ -68,20 +98,28 @@
   // correctly, while keeping `null`/`undefined` as `null`.
   const coercedDiscount = initialDiscount == null ? null : Number(initialDiscount);
   const coercedFixed = initialFixed == null ? null : Number(initialFixed);
+  const coercedFixedWeekly = initialFixedWeekly == null ? null : Number(initialFixedWeekly);
 
   // ─── Form state (initialised once from props) ───
-  let mode = $state<PricingMode>(initialPricingMode(coercedDiscount, coercedFixed));
+  let mode = $state<PricingMode>(
+    initialPricingMode(coercedDiscount, coercedFixed, coercedFixedWeekly),
+  );
   let discountValue = $state<number>(coercedDiscount ?? 0);
   let fixedValue = $state<number>(coercedFixed ?? 0);
+  let fixedWeeklyValue = $state<number>(coercedFixedWeekly ?? 0);
   let dirty = $state(false);
   let loading = $state(false);
   let discountError = $state<string | null>(null);
   let fixedError = $state<string | null>(null);
+  let fixedWeeklyError = $state<string | null>(null);
   let status = $state<{ state: "success" | "error"; msg: string } | null>(null);
 
   // ─── Live effective-price preview ───
   const effective = $derived(
     computeEffectivePrice(mode, publicNightlyPrice, discountValue, fixedValue),
+  );
+  const effectiveWeekly = $derived(
+    computeEffectiveWeekly(mode, publicWeeklyPrice, discountValue, fixedWeeklyValue),
   );
 
   const currencyFmt = new Intl.NumberFormat("fr-CA", {
@@ -92,6 +130,10 @@
 
   const previewText = $derived(
     currencyFmt.format(Number.isFinite(effective) ? effective : publicNightlyPrice) + " /nuit",
+  );
+  const weeklyPreviewText = $derived(
+    currencyFmt.format(Number.isFinite(effectiveWeekly) ? effectiveWeekly : publicWeeklyPrice) +
+      " /semaine",
   );
 
   // ─── Handlers ───
@@ -112,9 +154,16 @@
     status = null;
   }
 
+  function onFixedWeeklyInput() {
+    fixedWeeklyError = null;
+    dirty = true;
+    status = null;
+  }
+
   function validate(): boolean {
     discountError = null;
     fixedError = null;
+    fixedWeeklyError = null;
     if (mode === "discount") {
       if (!Number.isFinite(discountValue) || discountValue < 0 || discountValue > 100) {
         discountError = "La remise doit être comprise entre 0 et 100 %.";
@@ -123,6 +172,10 @@
     } else if (mode === "fixed") {
       if (!Number.isFinite(fixedValue) || fixedValue < 0) {
         fixedError = "Le prix fixe doit être un montant positif.";
+        return false;
+      }
+      if (!Number.isFinite(fixedWeeklyValue) || fixedWeeklyValue < 0) {
+        fixedWeeklyError = "Le prix hebdomadaire doit être un montant positif.";
         return false;
       }
     }
@@ -138,6 +191,7 @@
     const body: PricingRequest = {
       discountPercent: mode === "discount" ? discountValue : null,
       fixedNightlyPrice: mode === "fixed" ? fixedValue : null,
+      fixedWeeklyPrice: mode === "fixed" ? fixedWeeklyValue : null,
     };
 
     loading = true;
@@ -168,8 +222,15 @@
   <header class="upf-header">
     <h3 class="upf-title" id="upf-title">Tarification</h3>
     <div class="upf-preview-badge" role="status" aria-label="Prix effectif actuel" data-testid="upf-preview-badge">
-      <span class="upf-preview-label">Prix effectif</span>
-      <span class="upf-preview-amount" data-testid="upf-preview-amount">{previewText}</span>
+      <div class="upf-preview-col">
+        <span class="upf-preview-label">Nuit</span>
+        <span class="upf-preview-amount" data-testid="upf-preview-amount">{previewText}</span>
+      </div>
+      <span class="upf-preview-sep" aria-hidden="true"></span>
+      <div class="upf-preview-col">
+        <span class="upf-preview-label">Semaine (7+ nuits)</span>
+        <span class="upf-preview-amount" data-testid="upf-preview-weekly-amount">{weeklyPreviewText}</span>
+      </div>
     </div>
   </header>
 
@@ -291,6 +352,40 @@
             </span>
           {/if}
         </div>
+
+        <div class="upf-input-row upf-input-row--sep" data-testid="upf-fixed-weekly-row">
+          <label class="upf-input-label" for="upf-fixed-weekly-input">Prix par semaine (7+ nuits)</label>
+          <div class="upf-input-wrapper">
+            <span class="upf-input-prefix" aria-hidden="true">$</span>
+            <input
+              class="upf-input upf-input--prefixed"
+              type="number"
+              id="upf-fixed-weekly-input"
+              data-testid="upf-fixed-weekly-input"
+              min="0"
+              step="0.01"
+              placeholder="ex : 490"
+              bind:value={fixedWeeklyValue}
+              oninput={onFixedWeeklyInput}
+              disabled={loading}
+              aria-describedby="upf-fixed-weekly-hint upf-fixed-weekly-error"
+            />
+            <span class="upf-input-suffix" aria-hidden="true">$/sem.</span>
+          </div>
+          <span class="upf-input-hint" id="upf-fixed-weekly-hint">
+            Tarif hebdomadaire pour séjours de 7 nuits et plus
+          </span>
+          {#if fixedWeeklyError}
+            <span
+              class="upf-input-error"
+              id="upf-fixed-weekly-error"
+              role="alert"
+              data-testid="upf-fixed-weekly-error"
+            >
+              {fixedWeeklyError}
+            </span>
+          {/if}
+        </div>
       {/if}
     </div>
   {/if}
@@ -372,14 +467,29 @@
     margin: 0;
   }
 
+  /* ── Dual preview badge layout ── */
   .upf-preview-badge {
     display: inline-flex;
-    align-items: center;
-    gap: 8px;
+    align-items: stretch;
+    gap: 0;
     background: var(--upf-primary);
     color: var(--upf-primary-text);
     border-radius: 2px;
-    padding: 5px 12px;
+    overflow: hidden;
+  }
+
+  .upf-preview-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 14px;
+  }
+
+  .upf-preview-sep {
+    width: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+    align-self: stretch;
   }
 
   .upf-preview-label {
@@ -512,6 +622,13 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  /* ── Weekly input row separator ── */
+  .upf-input-row--sep {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--upf-border);
   }
 
   .upf-input-label {

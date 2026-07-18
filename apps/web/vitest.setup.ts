@@ -18,3 +18,23 @@ global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
 } as any;
+
+// Polyfill Element.animate for jsdom — Svelte transitions (fade/fly) call it
+// when components mount/unmount. jsdom has no Web Animations API, so return a
+// minimal Animation-like stub whose finished promise resolves immediately.
+if (typeof Element !== "undefined" && !Element.prototype.animate) {
+  Element.prototype.animate = function animate() {
+    return {
+      finished: Promise.resolve(),
+      cancel() {},
+      finish() {},
+      play() {},
+      pause() {},
+      reverse() {},
+      addEventListener() {},
+      removeEventListener() {},
+      onfinish: null,
+      oncancel: null,
+    } as unknown as Animation;
+  };
+}
