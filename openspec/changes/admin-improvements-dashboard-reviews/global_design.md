@@ -1,171 +1,140 @@
 ## Global Design Strategy
 
-The site already uses **IBM Plex Sans** with a terracotta/ember palette and cool-blue surfaces. This design extends — not overrides — that system. The new motif is **"operational warmth"**: admin surfaces get a precision-instrument aesthetic (dark charcoal stat cards, monospace codes, tight data tables), while public review surfaces lean into the inn's identity (amber stars, warm surfaces, gentle serif headlines). The one unforgettable visual: the Aperçu dashboard's charcoal stat cards against the cool admin surface, with ember-amber numbers that feel like a well-read ledger — not a SaaS clone.
+The Auberge du Vieux Pont admin and review UIs operate within an established **"Industrial Zen"** design language — cool off-white surfaces (#f7f9fb), warm terracotta/orange accent (#fd761a / #9d4300), and IBM Plex as the exclusive typeface family. All new components extend this system; they do not override it.
+
+The one design decision that elevates the new work above generic: **IBM Plex Serif** (already loaded) is used for large display numerals — dashboard stat counts, average review ratings. This creates an editorial weight contrast against the IBM Plex Sans UI shell without introducing a foreign font. Think hotel ledger meets operations dashboard.
+
+Admin additions (Aperçu, Paramètres, Avis tabs) feel like a well-run boutique back-office: data-dense but unhurried, with generous card padding and deliberate whitespace. Public review surfaces (/avis, /avis/nouveau, ReviewsStrip) are warm and human — parchment-warm card backgrounds, italic serif body text, terracotta star fills.
 
 ### Colour Palette
-All tokens extend the existing `:root` design system; no existing token is redefined.
+All values reference existing CSS custom properties from `apps/web/src/app.css @theme`.
 
-- `--color-surface: #f7f9fb` (existing — admin page background)
-- `--color-surface-2: #f2f4f6` (existing — card/row backgrounds)
-- `--color-surface-3: #eceef0` (existing — sunken inputs)
-- `--color-ink: #191c1e` (existing — primary text, 14.8:1 on surface)
-- `--color-ink-soft: #45464d` (existing — secondary text, 8.0:1 on surface)
-- `--color-ink-mute: #76777d` (existing — muted/placeholder, 4.6:1 on surface ✓ AA)
-- `--color-terracotta: #9d4300` (existing brand accent, 6.1:1 on surface ✓)
-- `--color-terracotta-bright: #fd761a` (existing — hover/badge)
-- `--color-ember: #ffb690` (existing — warm highlight)
-- `--color-ember-pale: #ffdbca` (existing — warm tint backgrounds)
-- `--color-charcoal: #2d3133` (existing — dark card surfaces for Aperçu)
-- `--color-on-charcoal: #eff1f3` (existing — text on charcoal, 11.5:1 ✓)
-- `--color-on-charcoal-soft: #c6c6cd` (existing — secondary text on charcoal, 7.2:1 ✓)
-- `--color-hairline: #c6c6cd` (existing — borders)
-- `--color-hairline-2: #e0e3e5` (existing — subtle dividers)
-- NEW `--color-star: #9d4300` (reuse terracotta — amber star, 6.1:1 on surface ✓)
-- NEW `--color-pending-badge-bg: #fd761a` (terracotta-bright on charcoal = 4.9:1 ✓)
-- NEW `--color-pending-badge-text: #191c1e` (ink on ember-pale badge variant)
-- NEW `--color-stat-number: #fd761a` (large display numerals on charcoal — decorative, AA not required at display size; on surface they use `--color-terracotta` for AA compliance)
-- Status: confirmed=`#1a6e3c` (7.1:1 ✓), pending=`#7a5c00` (4.7:1 ✓), cancelled=`#76777d` (4.6:1 ✓), rejected=`#8b1a1a` (7.3:1 ✓)
+**Surfaces (existing tokens):**
+- `--color-surface`: #f7f9fb — page background
+- `--color-surface-2`: #f2f4f6 — card wells, table stripes
+- `--color-surface-3`: #eceef0 — inputs, inline chips
+- Admin warm surface: #f4efe6 — warm beige for admin tab bodies (existing usage pattern)
+
+**Ink (existing tokens):**
+- `--color-ink`: #191c1e — primary text
+- `--color-ink-soft`: #45464d — secondary text
+- `--color-ink-mute`: #76777d — captions, placeholders
+- `--color-outline-variant`: #c6c6cd — borders, dividers
+- `--color-hairline`: #c6c6cd — table lines
+
+**Accent (existing tokens):**
+- `--color-terracotta`: #9d4300 — primary action, links
+- `--color-terracotta-bright`: #fd761a — hover state, star fill, active badges
+- `--color-ember`: #ffb690 — light tint backgrounds (pending badge)
+- `--color-ember-pale`: #ffdbca — very light tint (admin badge bg)
+
+**Semantic (existing + derived):**
+- `--color-forest`: #1a5c2d — "approved", positive availability, toggle-on
+- `--color-forest-surface`: #d4ede0 — approved card tint, availability bars at ≥50%
+- `--color-error`: #ba1a1a — destructive actions, rejected state
+- Pending: use `--color-ember-pale` bg + `--color-terracotta` text
+- Rejected: use `#fde8e8` bg + `--color-error` text (derive inline)
+
+**New token (one addition):**
+- `--color-star`: #fd761a — alias for star fill (= `--color-terracotta-bright`); define in component scope
 
 ### Typography
-- **Primary**: `"IBM Plex Sans", "IBM Plex Sans Fallback", sans-serif` (existing webfont, already loaded — no new network requests)
-- **Display / callout numbers**: `"Playfair Display", Georgia, "Times New Roman", serif` — used exclusively for: Aperçu dashboard stat figures, the `/avis` page average-rating header, and the `/avis/nouveau` page title. Load via `<link rel="preload">` using the variable-weight subset from Google Fonts (latin only, `wght@400..700`).
-- **Monospace / codes**: `"IBM Plex Mono", "Courier New", monospace` — used for reservation codes (`AVP-XXXXXX`), dates in detail modal, occupancy ratios.
-- Sizes: 11px label / 13px body-sm / 14px body / 16px body-lg / 20px h3 / 24px h2 / 32px h1 / 40px stat-display
-- Line-height: 1.5 body, 1.3 headings, 1.0 stat numbers
+All from the existing IBM Plex family (self-hosted):
+
+- **Display numerals** (stat cards, avg rating): `"IBM Plex Serif"`, weight 700, size 2.5rem–3.5rem — creates editorial weight for big numbers
+- **UI body**: `"IBM Plex Sans"`, weight 400/500/600, 0.875rem–1rem — existing baseline
+- **Monospace** (reservation codes, dates, availability counts): `"IBM Plex Mono"`, weight 400, 0.8125rem
+- **Review body text**: `"IBM Plex Serif"`, weight 400, 1rem, `font-style: italic` — makes reviews feel human and quotation-like
 
 ### Spacing
-- Base unit: 4px; scale: `xs`=4 `sm`=8 `md`=12 `lg`=16 `xl`=24 `2xl`=32 `3xl`=48 `4xl`=64
+Existing scale from `@theme`:
+- `--space-xs`: 0.5rem (8px)
+- `--space-sm`: 0.75rem (12px)
+- `--space-md`: 1.25rem (20px)
+- `--space-lg`: 2rem (32px)
+- `--space-xl`: 3rem (48px)
+- `--space-2xl`: 4.5rem (72px)
+
+Card padding: `--space-md` (20px). Section gap between cards: `--space-lg` (32px). Tab body padding: `--space-md` sides.
 
 ### Accessibility
-- Minimum contrast ratio: 4.5:1 (WCAG AA) — all text tokens verified above
-- Keyboard navigation: all interactive elements reachable via Tab; modal focus trap; row-as-button keyboard activation
-- Focus indicator: `outline: 2px solid var(--color-terracotta); outline-offset: 2px` on all focused elements
+- Minimum contrast ratio: 4.5:1 (WCAG AA) — terracotta #9d4300 on white: 5.74:1 ✓; ink #191c1e on surface #f7f9fb: 16.4:1 ✓
+- All interactive elements (tab buttons, filter pills, star picker inputs, approve/reject buttons) reachable via Tab; all buttons have visible `:focus-visible` ring using `outline: 2px solid var(--color-terracotta); outline-offset: 2px`
 - ARIA roles required:
-  - `admin-tab-nav`: `role="tablist"` on `.page-admin__tabs-inner`; `role="tab"` + `aria-selected` on each button; `aria-controls` → corresponding panel id
-  - `modal`: `role="dialog"` `aria-modal="true"` `aria-labelledby="modal-title"` on the container; `aria-label="Fermer"` on the close button
-  - `reservation-table-row`: `role="row"` in table context; the clickable row wrapper uses `role="button"` `tabindex="0"` `aria-label="Voir les détails de [nom]"`; Actions cell `role="cell"` with buttons using `aria-label` including the guest name
-  - `reservation-detail-modal`: inherits `modal` roles; each section (`role="region"` `aria-labelledby`) for Détails, Facture, Chambres
-  - `admin-parametres-tab`: each card is a `<fieldset>` with `<legend>`; sticky save `type="submit"` with `aria-live="polite"` status message; toggles are `role="switch"` `aria-checked`
-  - `admin-disponibilites-tab`: date pickers are `<input type="date">` with explicit `<label for>`; range list rows use `role="row"` in a `<table>`; delete buttons `aria-label="Supprimer la plage [dates]"`
-  - `admin-apercu-tab`: `role="region"` `aria-label="Tableau de bord"` for the whole tab; each stat card `role="figure"` with `aria-label`; availability strip `role="img"` `aria-label="Disponibilité sur 7 jours"` with a visually-hidden text summary
-  - `avis-nouveau-page`: star picker `role="radiogroup"` `aria-label="Note sur 5 étoiles"` with `role="radio"` on each star; textarea `aria-describedby` pointing to character-count; success state announced via `role="alert"`
-  - `admin-avis-tab`: status filter `role="tablist"` with `role="tab"` + `aria-selected`; pending badge `aria-label="N avis en attente"` on the parent tab
-  - `reviews-strip`: `role="region"` `aria-label="Avis de nos clients"`; star display `aria-label="[N] étoiles sur 5"`
-  - `avis-page`: `<main>`; average rating heading with `aria-label`; list of reviews as `<article>` per review
+  - `admin-tab-nav`: `role="tablist"` on tab container; `role="tab"` + `aria-selected` + `aria-controls` on each tab button; pending badge uses `aria-label="N avis en attente"`
+  - `admin-apercu-tab`: `role="region" aria-label="Aperçu"` on root; stat cards use `<dl>/<dt>/<dd>` structure for screen-reader semantics; availability strip `role="list"` with each day as `role="listitem"`
+  - `admin-parametres-tab`: `role="region" aria-label="Paramètres"` on root; each settings card is a `<section>` with `<h2>`; toggles are `<input type="checkbox" role="switch">`
+  - `admin-disponibilites-tab`: `role="group"` on range picker pair with `aria-labelledby`; grouped range table `role="table"` with `role="row"`, `role="rowheader"`, `role="cell"`
+  - `admin-avis-tab`: `role="region" aria-label="Avis clients"` on root; status filter is `role="tablist"` with `role="tab"` + `aria-selected`; review list is `role="list"`
+  - `reviews-strip`: `role="region" aria-label="Avis clients"` on section; `role="list"` for card row
+  - `avis-page`: `<h1>` for avg rating display; review list `role="list"`, each card `role="listitem"`
+  - `avis-nouveau-page`: star picker uses `<fieldset>/<legend>` with `role="radiogroup"`; each star is `<input type="radio">`; textarea has explicit `<label>`; error state has `role="alert"`
+- Mobile touch targets: 44px minimum height for all interactive controls; tab buttons at 375px use reduced padding but maintain height
+- No auto-playing animation; `prefers-reduced-motion: reduce` collapses any transitions to 0ms
 
 ### Security
-- No `innerHTML` assignments — use `textContent`, Svelte's `{expression}` interpolation, or `@html` only on server-sanitized content
-- No `eval()` or `Function()`
-- All user-supplied review body content escaped by Svelte's default templating (no `@html`)
-- Reservation codes displayed with `{code}`, never injected raw
-- Rating numbers validated `1..5` before rendering star loops (prevents `Array(NaN)`)
+- No `innerHTML` assignments — use Svelte's `{text}` binding (auto-escaped) or explicit `textContent`
+- Review body text rendered via Svelte text interpolation, never raw HTML — XSS-safe by construction
+- Reservation codes are server-generated and only echoed; never eval'd or DOM-parsed
+- Form inputs use `maxlength` attributes matching server-side schema limits (body: 2000 chars)
+- Admin moderation actions use `fetch` with explicit `method: 'PATCH'` — no URL manipulation of action
 
 ## Component Inventory
 
 - component: admin-tab-nav
-  description: Admin page tab navigation bar — CSS-only fix to hide horizontal scrollbar while preserving mobile scroll; padding reduction at ≤1280px so all tabs + Courriels link fit without overflow; pending-count badge on Avis tab when added in WS-D
-  inputs: activeTab (string), tabs array with optional badge counts, Courriels link href
-  interactions: tab button clicks to switch active tab; keyboard Tab/Enter/Space navigation
+  description: Tab shell modifications — hide scrollbar at ≥1024px, compress tab padding at 1280px/1024px, add apercu as first tab (default) and avis tab with pending-count badge; activeTab union extended to include 'apercu' | 'avis'
+  inputs: activeTab state, pendingReviewCount number
+  interactions: tab button click switches activeTab; badge reflects pending review count from adminReviews API
   kind: nav
   depends_on: []
   designer_model: claude-sonnet-4-6
   builder_model: claude-sonnet-4-6
   ralph: 1
 
-- component: modal
-  description: Shared base modal — portaled to `<body>` via the existing `portal` action; role="dialog" aria-modal="true"; backdrop click-to-close; Escape key close; Tab focus trap over visible focusable children; restores focus to the previously focused element on close. Props: open, onclose, title?, size? (sm/md/lg). Children slot. Visual: clean white card, slight drop shadow, rounded-lg corners, header with title and ×-button.
-  inputs: open (boolean), onclose (callback), title (string, optional), size ('sm'|'md'|'lg', default 'md')
-  interactions: backdrop click → close; Escape keydown → close; Tab wraps inside modal; close button click
+- component: admin-apercu-tab
+  description: Dashboard panel with 4 stat cards (guests this week with delta vs last week, current-month occupancy %, returning customer count) and a 7-day availability strip showing free rooms per day as a labeled bar; null occupancy renders "—"; fully responsive single column at 375px
+  inputs: adminDashboard() API response — guestsThisWeek, guestsLastWeek, next7Days array, occupancy object, returningCustomers
+  interactions: display-only; refresh on tab activation
   kind: panel
-  depends_on: []
+  depends_on: [admin-tab-nav]
   designer_model: claude-sonnet-4-6
   builder_model: claude-sonnet-4-6
-  ralph: 2
-
-- component: room-assignment-drawer
-  description: Existing RoomAssignmentDrawer.svelte refactored to use Modal as its shell — replace inline portal/backdrop/focus-trap/Escape with `<Modal open={open} onclose={onclose} title="Assigner les chambres" size="lg">`. All existing props, Zod validation, and assignment logic preserved verbatim. All existing RoomAssignmentDrawer.test.ts assertions must pass unchanged.
-  inputs: existing props (reservation, rooms, onclose, open)
-  interactions: room selection form, save action — identical to current behavior
-  kind: panel
-  depends_on: [modal]
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-sonnet-4-6
-  ralph: 1
-
-- component: reservation-table-row
-  description: Compact reservations table row reduced to 6 columns — Nom · Arrivée · Départ · Chambres · Statut · Actions. Row is focusable (tabindex="0" role="button") with pointer cursor; click and Enter/Space fire onopen(reservation). Confirmer/Annuler remain in the Actions cell and call event.stopPropagation() (and on keydown) to never bubble to the row handler. Status badge uses existing status colour tokens. Removed columns: Courriel, Téléphone, Pers., Message.
-  inputs: reservation object, onopen callback, onConfirm callback, onCancel callback
-  interactions: row click/Enter/Space → onopen; Confirmer button (stopPropagation); Annuler button (stopPropagation)
-  kind: card
-  depends_on: []
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-sonnet-4-6
-  ralph: 2
-
-- component: reservation-detail-modal
-  description: Full reservation detail modal built on Modal.svelte (size="lg"). Displays reservation code (IBM Plex Mono, terracotta, prominent), full name, email, phone, people count, message, source+external_ref, created_at, status. Below details: collapsible Facture section (hosts InvoiceCreator) and Chambres section (hosts the RoomAssignmentDrawer trigger button). Three-column grid on desktop, single column on mobile. Code is the hero element — visually distinct at the top of the modal.
-  inputs: reservation (full object including code), open (boolean), onclose callback
-  interactions: open/close Facture accordion; trigger RoomAssignmentDrawer; close modal
-  kind: panel
-  depends_on: [modal, room-assignment-drawer]
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-sonnet-4-6
-  ralph: 2
+  ralph: 3
 
 - component: admin-parametres-tab
-  description: Settings tab extracted into AdminParametresTab.svelte as five grouped <fieldset> cards in order — (1) Tarification & taxes (nightlyPrice, weeklyPrice, tps, tvq, accommodationTax); (2) Coordonnées (contactEmail, contactPhone); (3) Réservations (reservationsEnabled toggle, assignableRoomCount read-only); (4) Courriels automatiques (4 existing email toggles + new emailReviewRequestEnabled); (5) Sécurité (current/new password with its own "Changer" button). One sticky bottom save button submits all non-password settings via adminUpdateSettings. Password change stays a separate call inside card 5. Every existing field behavior preserved. Toggles use role="switch" aria-checked pattern.
-  inputs: adminSettings object, loading state, onSave callback, onChangePassword callback
-  interactions: text inputs, number inputs, toggle switches, sticky save click, password change click; all fields validation mirrors existing behavior
-  kind: page
-  depends_on: []
+  description: NET-NEW settings panel with five grouped cards in order — Tarification & taxes (nightlyPrice, weeklyPrice, tps, tvq, accommodationTax), Coordonnées (contactEmail, contactPhone), Réservations (reservationsEnabled toggle + read-only assignableRoomCount), Courriels automatiques (5 email toggles including emailReviewRequestEnabled), Sécurité (current + new password with its own Changer button); one sticky save button for all settings via adminUpdateSettings; responsive stack at 375px
+  inputs: all AdminSettings fields; adminUpdateSettings handler; password change handler
+  interactions: field edits update local state; sticky save submits all settings; password card has its own submit; success/error toast messaging preserved from existing implementation
+  kind: panel
+  depends_on: [admin-tab-nav]
   designer_model: claude-sonnet-4-6
   builder_model: claude-opus-4-8
-  ralph: 3
-
-- component: admin-disponibilites-tab
-  description: Updated AdminDisponibilitesTab.svelte with range-aware create/delete. Create form gains a start-date picker and end-date picker (end defaults to start value on change; validated start ≤ end, span ≤366). Submit calls adminCreateBlackoutRange. List display groups consecutive days with identical rooms_blocked and note into a single range row ("12 → 18 août · 12 chambres · note") computed client-side; non-consecutive or differing days remain separate rows. Range row delete calls adminDeleteBlackoutRange(start, end); single-day row delete calls existing single-day endpoint. All existing single-day behavior and availability math unchanged.
-  inputs: blackout dates array (sorted), assignableRoomCount
-  interactions: start/end date pickers, create range form submit, delete row (single-day or range), loading states
-  kind: page
-  depends_on: []
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-opus-4-8
-  ralph: 3
-
-- component: admin-apercu-tab
-  description: New AdminApercuTab.svelte — default landing tab. Layout top-to-bottom: (a) stat card row — guests this week (large Playfair Display number, "vs semaine dernière" delta with ▲/▼ arrow in terracotta/mute); (b) occupancy card row — currentMonth, previousMonth, sameMonthLastYear as percentages each with a delta, "—" for null; (c) returning-customers stat card; (d) 7-day availability strip — 7 day columns (day label + date, free-room bar, available count), bars fill proportionally to available/assignableRoomCount. Charcoal (#2d3133) card backgrounds with on-charcoal text for the stat cards; availability strip on surface-2 with terracotta fill bars. Wraps to single column at 375px.
-  inputs: DashboardResponse (guestsThisWeek, guestsLastWeek, next7Days, occupancy, returningCustomers), assignableRoomCount for strip scale
-  interactions: none (read-only display); data fetched on mount via adminDashboard()
-  kind: page
-  depends_on: []
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-sonnet-4-6
   ralph: 2
 
-- component: avis-nouveau-page
-  description: Public /avis/nouveau page. Reads ?code= query param; calls reviewEligibility on mount — shows generic error screen for invalid/ineligible codes. For eligible guests: greeting "Bonjour [firstName]", 1–5 interactive star picker (role="radiogroup"; each star is a radio input visually styled as a filled/hollow star icon in terracotta; keyboard-selectable), textarea (10–2000 chars with live character counter), submit button. On success: thank-you screen with confirmation message. On 409: "Vous avez déjà soumis un avis." All error states generic (no reservation data leak). No login required. Warm surface-2 card on surface background. Playfair Display for the page heading.
-  inputs: URL search params (?code=)
-  interactions: star selection (keyboard + click), textarea input, form submit, loading states, success/error state transitions
-  kind: page
-  depends_on: []
+- component: admin-disponibilites-tab
+  description: Fix existing component — range date pickers (start + end, end defaults to start for single-day), calling adminUpsertBlackoutRange; range list groups consecutive days with identical rooms_blocked and note into one row with a single range-delete action (adminDeleteBlackoutRange); fixes a11y_no_noninteractive_tabindex warning and state_referenced_locally warning on assignableRoomCount
+  inputs: blackout_dates array from API; assignableRoomCount (via $derived); start/end date picker values
+  interactions: submit range form; delete range row (expands to per-day batch delete); date end defaults to start on start change
+  kind: panel
+  depends_on: [admin-tab-nav]
   designer_model: claude-sonnet-4-6
   builder_model: claude-opus-4-8
-  ralph: 3
+  ralph: 2
 
 - component: admin-avis-tab
-  description: New AdminAvisTab.svelte — admin review moderation. Status filter tabs at top (Pending/Approuvés/Rejetés/Tous, default Pending) with a pending-count badge on the parent nav tab. Review list: each row shows star rating (compact 1–5 display), display_name, excerpt of body (expandable), staysCount/nightsTotal, reservation code (monospace), created_at, and Approuver/Rejeter action buttons. Re-moderation allowed (buttons toggle based on current status). PATCH /api/admin/reviews/:id on action. Empty state per filter.
-  inputs: AdminReviewsResponse, status filter state
-  interactions: status filter tab switch, Approuver button, Rejeter button, body expand/collapse, loading states
-  kind: page
-  depends_on: []
+  description: Review moderation panel with status filter pills (pending default, approved, rejected), review cards showing displayName, rating, body, staysCount, nightsTotal, createdAt, plus reservation code; Approuver and Rejeter buttons call adminModerateReview and refresh the pending badge count in admin-tab-nav
+  inputs: adminReviews(status) API response; adminModerateReview handler; pendingCount binding
+  interactions: filter pill click changes status filter and reloads list; Approuver/Rejeter buttons patch review status and decrement/update badge
+  kind: panel
+  depends_on: [admin-tab-nav]
   designer_model: claude-sonnet-4-6
   builder_model: claude-opus-4-8
   ralph: 2
 
 - component: reviews-strip
-  description: Public homepage reviews strip — renders up to 3 most-recent approved reviews as horizontal cards (wraps on mobile). Each card: star display (filled stars in --color-star), body excerpt (2 lines clamped), "Marie T. · 3 séjours · 12 nuits" attribution line in ink-mute. Renders nothing (no wrapper, no empty state) when reviews array is empty — controlled by parent. Warm ember-pale (#ffdbca) tint on card background to evoke hospitality warmth, distinct from the admin surface. Section heading "Ce que disent nos clients" in Playfair Display.
-  inputs: reviews (PublicReview[], max 3), averageRating (number | null)
-  interactions: none (display only)
+  description: Public homepage section showing up to 3 approved reviews as cards with display name, terracotta star fill rating, italic serif body excerpt, and stay stats caption; section is entirely hidden (display:none) when no approved reviews exist; links to /avis for more
+  inputs: publicReviews() API response (≤3 items)
+  interactions: display-only; link to /avis page
   kind: section
   depends_on: []
   designer_model: claude-sonnet-4-6
@@ -173,21 +142,31 @@ All tokens extend the existing `:root` design system; no existing token is redef
   ralph: 2
 
 - component: avis-page
-  description: Public /avis page — all approved reviews, newest first. Header section: average star rating displayed as a large Playfair Display number + star row + "(N avis)" in ink-soft. Reviews in a 2-column grid (single column mobile). Each card identical to reviews-strip card style but full body (no clamping). Responsive at 375px. Consistent with site's existing public page styles (surface background, IBM Plex Sans body text).
-  inputs: PublicReviewsResponse (reviews, averageRating, total) fetched on load
-  interactions: none (display only)
+  description: Public page listing all approved reviews newest-first with an average-rating header (large IBM Plex Serif Bold numeral + filled stars + review count); each review card shows displayName, rating, italic serif body, staysCount/nightsTotal caption in monospace; empty state when no approved reviews
+  inputs: publicReviews() API response (all approved); computed averageRating
+  interactions: display-only; footer link from /avis
   kind: page
   depends_on: [reviews-strip]
   designer_model: claude-sonnet-4-6
   builder_model: claude-sonnet-4-6
   ralph: 2
 
-- component: footer-update
-  description: Minor update to Footer.svelte — add a "/avis" navigation link ("Avis clients") in the appropriate existing nav list. Match existing footer link style exactly. No layout changes.
-  inputs: existing footer props (unchanged)
-  interactions: navigation link
-  kind: section
+- component: avis-nouveau-page
+  description: Multi-step public review submission page — (1) eligibility check on load from ?code= query param, generic error state for invalid/ineligible codes; (2) star picker (1–5, implemented as radio inputs in a fieldset, large 48px terracotta fill on select/hover) + textarea (10–2000 chars with live count); (3) thanks screen after successful POST; no login required
+  inputs: ?code= URL param; reviewEligibility() and submitReview() API calls
+  interactions: star radio selection; textarea input with character count; submit button with loading state; error and thanks screens as separate view states
+  kind: page
   depends_on: []
   designer_model: claude-sonnet-4-6
-  builder_model: claude-sonnet-4-6
+  builder_model: claude-opus-4-8
+  ralph: 3
+
+- component: footer-avis-link
+  description: Add /avis hyperlink to the existing Footer.svelte nav — a single anchor in the existing footer link row, French label "Avis clients", no visual change to footer layout
+  inputs: none (static link)
+  interactions: navigation link to /avis
+  kind: nav
+  depends_on: []
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-haiku-4-5-20251001
   ralph: none

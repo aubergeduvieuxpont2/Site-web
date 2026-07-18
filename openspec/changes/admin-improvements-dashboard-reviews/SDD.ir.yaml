@@ -1,751 +1,436 @@
 REQ:
-  R-UX-001:
-    actor: Admin user
-    capability: use the admin tab nav without a visible scrollbar and without desktop
-      overflow
-    constraints: keep overflow-x auto for mobile; fit row at 1280 and 1024px; scrollable
-      at 375px
-    priority: MUST
-    tests:
-    - T-UX-001a
-  R-UX-002:
-    actor: Admin user
-    capability: edit all settings in five grouped cards with one save button
-    constraints: password change keeps its own button; existing field behavior unchanged
-    priority: MUST
-    tests:
-    - T-UX-002a
-  R-UX-003:
-    actor: Admin user
-    capability: open a reservation detail modal from a compact table row
-    constraints: Confirmer/Annuler stay in-row and do not open the modal; Enter/Space
-      open it
-    priority: MUST
-    tests:
-    - T-UX-003a
-    - T-UX-003b
-  R-UX-004:
-    actor: Developer
-    capability: reuse a shared Modal component with portal, focus trap, Escape, focus
-      return
-    constraints: RoomAssignmentDrawer refactored onto it with no behavior change
-    priority: MUST
-    tests:
-    - T-UX-004a
   R-SET-001:
     actor: Admin user
-    capability: "toggle email_review_request_enabled in Param\xE8tres"
-    constraints: default false; round-trips admin GET/POST; absent from public settings
+    capability: manage all site settings from grouped Paramètres cards with one save
+    constraints: five cards in order; single sticky save; password keeps its own button; emailReviewRequestEnabled surfaced (API already exists)
     priority: MUST
-    tests:
-    - T-SET-001a
+    tests: [T-SET-001a, T-SET-001b]
+  R-SET-002:
+    actor: Developer
+    capability: settings.test.ts fixtures match the current SettingsUpdateSchema
+    constraints: schema is source of truth; add missing required fields to fixtures; do not weaken schema
+    priority: MUST
+    tests: [T-SET-002a]
+  R-NAV-001:
+    actor: Admin user
+    capability: use the admin tab bar with no visible scrollbar at desktop and scrollable at 375px
+    constraints: scrollbar-width none + ::-webkit-scrollbar display none; overflow-x auto kept; fits at 1280/1024px
+    priority: MUST
+    tests: [T-NAV-001a]
   R-BLK-001:
     actor: Admin user
-    capability: create a blackout over a date range expanded to per-day rows
-    constraints: startDate <= endDate; span <= 366 days; single-day endpoints unchanged
+    capability: create and delete blocked-date ranges
+    constraints: validate ISO dates, startDate<=endDate, span<=366d; expand to per-day upserts; single-day endpoints unchanged
     priority: MUST
-    tests:
-    - T-BLK-001a
-    - T-BLK-001b
+    tests: [T-BLK-001a, T-BLK-001b]
   R-BLK-002:
     actor: Admin user
-    capability: delete a blackout range and see consecutive identical days grouped
-      in the list
-    constraints: grouping display-only, client-side
+    capability: see consecutive identical blocked days grouped into one range row
+    constraints: identical rooms_blocked AND note; client-side display only; range delete
     priority: MUST
-    tests:
-    - T-BLK-002a
+    tests: [T-BLK-002a]
   R-DASH-001:
     actor: Admin user
-    capability: "view an Aper\xE7u dashboard of guests, availability, occupancy, returning\
-      \ customers"
-    constraints: "occupancy null when denominator 0; Aper\xE7u is default tab; responsive\
-      \ at 375px"
+    capability: view an Aperçu dashboard as the default landing tab
+    constraints: stat cards + 7-day strip; null occupancy renders em dash; responsive 375px
     priority: MUST
-    tests:
-    - T-DASH-001a
-    - T-DASH-001b
+    tests: [T-DASH-001a, T-DASH-001b]
   R-REV-001:
     actor: System
     capability: assign a unique human-facing code to every reservation
-    constraints: AVP- plus 6 Crockford base32 chars (no 0/1/I/O); backfilled; unique;
-      set on new inserts
+    constraints: AVP- + 6-char Crockford base32 (no 0 1 I O); backfill existing rows SQL-side; generate at both insert sites
     priority: MUST
-    tests:
-    - T-REV-001a
+    tests: [T-REV-001a, T-REV-001b]
   R-REV-002:
     actor: Guest
-    capability: submit one moderated review via a public code-based flow
-    constraints: rate-limited; generic errors for invalid codes; masked name; snapshot
-      stays/nights; 409 on repeat
+    capability: check eligibility and submit one moderated review per stay without login
+    constraints: rating 1-5, body 10-2000; masked display_name; snapshot stays/nights; 409 on repeat; generic errors on invalid code; rate-limited
     priority: MUST
-    tests:
-    - T-REV-002a
-    - T-REV-002b
-    - T-REV-002c
+    tests: [T-REV-002a, T-REV-002b, T-REV-002c]
   R-REV-003:
-    actor: System
-    capability: enqueue review-request emails via cron for recently departed stays
-    constraints: gated by email_review_request_enabled; 3-day window; dedupe via review_requests
-    priority: MUST
-    tests:
-    - T-REV-003a
-  R-REV-004:
     actor: Admin user
-    capability: moderate reviews (approve/reject, re-moderate) with a pending badge
-    constraints: default pending filter; PATCH sets status and moderated_at
+    capability: moderate reviews from an Avis tab with a pending-count badge
+    constraints: status filter default pending; approve/reject; re-moderation allowed
     priority: MUST
-    tests:
-    - T-REV-004a
+    tests: [T-REV-003a]
+  R-REV-004:
+    actor: Any visitor
+    capability: see approved reviews on the homepage strip and /avis page
+    constraints: approved only newest-first; strip <=3 hidden when empty; /avis average header; footer link
+    priority: MUST
+    tests: [T-REV-004a, T-REV-004b]
   R-REV-005:
-    actor: Public visitor
-    capability: view approved reviews on a homepage strip and an /avis page
-    constraints: approved only; masked; strip <=3 hidden when empty; average rating
-      on /avis; footer link
+    actor: System (cron)
+    capability: enqueue review-request emails for recently departed stays
+    constraints: confirmed, departed <=3d, has email, no request row, no review; gated by email_review_request_enabled; runs before drainEmailOutbox; deduped by PK
     priority: MUST
-    tests:
-    - T-REV-005a
+    tests: [T-REV-005a]
+
 E:
-  E-Reservation:
-    fields:
-      id: bigint
-      code: text
-      name: text
-      first_name: text
-      last_name: text
-      email: text
-      phone: text
-      arrive: date
-      depart: date
-      people: int
-      room_count: int
-      source: text
-      external_ref: text
-      status: text
-      user_id: bigint
-    keys:
-    - id
-    - code
-    invariants:
-    - INV-code-unique
-    - INV-code-format
-  E-Review:
-    fields:
-      id: bigint
-      reservation_id: bigint
-      rating: int
-      body: text
-      status: text
-      display_name: text
-      stays_count: int
-      nights_total: int
-      created_at: timestamptz
-      moderated_at: timestamptz
-    keys:
-    - id
-    - reservation_id
-    invariants:
-    - INV-one-review-per-reservation
-    - INV-masked-identity
-  E-ReviewRequest:
-    fields:
-      reservation_id: bigint
-      channel: text
-      sent_at: timestamptz
-    keys:
-    - reservation_id
-    invariants:
-    - INV-request-dedupe
-  E-BlackoutDate:
-    fields:
-      date: date
-      rooms_blocked: int
-      note: text
-    keys:
-    - date
-    invariants: []
   E-Settings:
     fields:
       key: text
       value: text
-    keys:
-    - key
-    invariants: []
+    invariants: [INV-schema-fixture-parity]
+  E-BlackoutDate:
+    fields:
+      date: date (PK)
+      rooms_blocked: integer
+      note: text
+    invariants: [INV-perday-storage]
+  E-Reservation:
+    fields:
+      id: bigint (PK)
+      code: text (unique, AVP-XXXXXX)
+      name: text
+      email: text
+      arrive: date
+      depart: date
+      people: integer
+      room_count: integer
+      status: text (pending|confirmed|cancelled)
+      user_id: bigint (nullable)
+    invariants: [INV-code-unique]
+  E-Review:
+    fields:
+      id: bigint (PK)
+      reservation_id: bigint (unique, FK)
+      rating: integer (1..5)
+      body: text
+      status: text (pending|approved|rejected)
+      display_name: text (masked)
+      stays_count: integer
+      nights_total: integer
+      created_at: timestamptz
+      moderated_at: timestamptz (nullable)
+    invariants: [INV-one-review-per-reservation, INV-identity-never-public]
+  E-ReviewRequest:
+    fields:
+      reservation_id: bigint (PK, FK)
+      channel: text (default email)
+      sent_at: timestamptz
+    invariants: [INV-one-request-per-reservation]
+
 OP:
-  OP-Blackout.createRange:
-    input: '{ startDate, endDate, roomsBlocked, note }'
-    auth:
-    - admin
-    pre:
-    - startDate <= endDate
-    - span <= 366 days
-    err:
-    - ERR-VALIDATION
-    out: '{ count }'
+  OP-Blackout.upsertRange:
+    input: { startDate: string, endDate: string, roomsBlocked: integer, note: string }
+    auth: [admin]
+    pre: [valid ISO dates, startDate<=endDate, span<=366]
+    err: [ERR-BADRANGE]
+    out: { count: integer }
   OP-Blackout.deleteRange:
-    input: '{ start, end }'
-    auth:
-    - admin
-    pre: []
-    err:
-    - ERR-VALIDATION
-    out: '{ deleted }'
+    input: { start: string, end: string }
+    auth: [admin]
+    pre: [valid ISO dates, start<=end]
+    err: [ERR-BADRANGE]
+    out: { deleted: integer }
   OP-Dashboard.get:
-    input: '{}'
-    auth:
-    - admin
+    input: {}
+    auth: [admin]
     pre: []
     err: []
-    out: '{ guestsThisWeek, guestsLastWeek, next7Days, occupancy, returningCustomers
-      }'
+    out: { guestsThisWeek: integer, guestsLastWeek: integer, next7Days: array, occupancy: object, returningCustomers: integer }
   OP-Review.eligibility:
-    input: '{ code }'
-    auth:
-    - public
+    input: { code: string }
+    auth: [public-ratelimited]
     pre: []
-    err:
-    - ERR-GENERIC
-    out: '{ eligible, firstName, reason }'
+    err: []
+    out: { eligible: boolean, firstName: string, reason: string }
   OP-Review.submit:
-    input: '{ code, rating, body }'
-    auth:
-    - public
-    pre:
-    - rating between 1 and 5
-    - body length 10..2000
-    - code eligible
-    err:
-    - ERR-GENERIC
-    - ERR-CONFLICT
-    out: '{ ok }'
-  OP-Review.publicList:
-    input: '{ limit }'
-    auth:
-    - public
+    input: { code: string, rating: integer, body: string }
+    auth: [public-ratelimited]
+    pre: [rating 1..5, body 10..2000, eligible]
+    err: [ERR-DUPLICATE, ERR-INELIGIBLE]
+    out: { ok: true }
+  OP-Review.listPublic:
+    input: { limit: integer }
+    auth: [public]
     pre: []
     err: []
-    out: '{ reviews, averageRating, total }'
-  OP-Review.adminList:
-    input: '{ status }'
-    auth:
-    - admin
+    out: { reviews: array, averageRating: number }
+  OP-Review.listAdmin:
+    input: { status: string }
+    auth: [admin]
     pre: []
     err: []
-    out: '{ reviews, pendingCount }'
+    out: { reviews: array, pendingCount: integer }
   OP-Review.moderate:
-    input: '{ id, status }'
-    auth:
-    - admin
-    pre:
-    - status in approved,rejected
-    err:
-    - ERR-NOTFOUND
-    - ERR-VALIDATION
-    out: '{ review }'
-  OP-ReviewRequest.cronEnqueue:
-    input: '{}'
-    auth:
-    - system
-    pre:
-    - email_review_request_enabled true
-    err: []
-    out: '{ enqueued }'
+    input: { id: integer, status: string }
+    auth: [admin]
+    pre: [status in approved|rejected]
+    err: [ERR-NOTFOUND]
+    out: { review: object }
+
 AUTH:
-  admin: authenticated user with role == admin (inline getAuthUser check; 401 unauth,
-    403 non-admin)
-  public: unauthenticated; rate-limited on cf-connecting-ip via general bucket 30/15min
-  system: cron scheduled handler, no user
+  admin: authenticated user with role === 'admin' (inline getAuthUser check, no new middleware)
+  public: unauthenticated read endpoint
+  public-ratelimited: unauthenticated endpoint gated by rateLimitAllow
+
 INV:
-  INV-code-unique: every reservations.code is unique (enforced by reservations_code_key)
-  INV-code-format: reservations.code matches AVP- plus 6 chars of ABCDEFGHJKLMNPQRSTUVWXYZ23456789
-  INV-one-review-per-reservation: at most one review row per reservation_id
-  INV-masked-identity: public review output never exposes raw guest name or email
-  INV-request-dedupe: at most one review_requests row per reservation_id
-  INV-availability-unchanged: blackout ranges expand to per-day rows; availability
-    math is untouched
-  INV-exports-preserved: index.ts keeps default { fetch, scheduled } and export {
-    app }
+  INV-schema-fixture-parity: settings test fixtures must satisfy SettingsUpdateSchema; schema is never weakened to fit tests
+  INV-perday-storage: blackout_dates remains one row per day; availability math unchanged
+  INV-code-unique: every reservation has a globally unique AVP- code
+  INV-one-review-per-reservation: at most one review per reservation (UNIQUE reservation_id)
+  INV-one-request-per-reservation: at most one review_request per reservation (PK)
+  INV-identity-never-public: raw guest identity is never exposed; only masked display_name
+
 ERR:
-  ERR-VALIDATION:
+  ERR-BADRANGE:
     code: 400
-    meaning: invalid input (dates, span, rating, body, status)
-  ERR-GENERIC:
-    code: 400
-    meaning: generic rejection for invalid or ineligible review code (no data leak)
-  ERR-CONFLICT:
+    meaning: invalid or inverted dates, or span exceeds 366 days
+  ERR-DUPLICATE:
     code: 409
     meaning: a review already exists for this reservation
+  ERR-INELIGIBLE:
+    code: 400
+    meaning: generic ineligible/invalid code response (no reservation data leaked)
   ERR-NOTFOUND:
     code: 404
     meaning: review not found
-  ERR-UNAUTH:
-    code: 401
-    meaning: not authenticated
-  ERR-FORBIDDEN:
-    code: 403
-    meaning: authenticated but not admin
+
 API:
   POST /api/admin/blackouts/range:
-    input: BlackoutRangeCreateBody
-    output: '{ count }'
-    errors:
-    - ERR-VALIDATION
-    - ERR-UNAUTH
-    - ERR-FORBIDDEN
+    input: OP-Blackout.upsertRange
+    output: { count: integer }
+    errors: [ERR-BADRANGE]
     auth: admin
   DELETE /api/admin/blackouts/range:
-    input: '{ start, end }'
-    output: '{ deleted }'
-    errors:
-    - ERR-VALIDATION
-    - ERR-UNAUTH
-    - ERR-FORBIDDEN
+    input: OP-Blackout.deleteRange
+    output: { deleted: integer }
+    errors: [ERR-BADRANGE]
     auth: admin
   GET /api/admin/dashboard:
-    input: '{}'
-    output: DashboardResponse
-    errors:
-    - ERR-UNAUTH
-    - ERR-FORBIDDEN
+    input: {}
+    output: OP-Dashboard.get
+    errors: []
     auth: admin
   GET /api/reviews/eligibility:
-    input: '{ code }'
-    output: EligibilityResponse
-    errors:
-    - ERR-GENERIC
-    auth: public
+    input: { code: string }
+    output: { eligible: boolean, firstName: string, reason: string }
+    errors: []
+    auth: public-ratelimited
   POST /api/reviews:
-    input: ReviewSubmitBody
-    output: '{ ok }'
-    errors:
-    - ERR-GENERIC
-    - ERR-CONFLICT
-    auth: public
+    input: OP-Review.submit
+    output: { ok: true }
+    errors: [ERR-DUPLICATE, ERR-INELIGIBLE]
+    auth: public-ratelimited
   GET /api/reviews:
-    input: '{ limit }'
-    output: PublicReviewsResponse
+    input: { limit: integer }
+    output: OP-Review.listPublic
     errors: []
     auth: public
   GET /api/admin/reviews:
-    input: '{ status }'
-    output: AdminReviewsResponse
-    errors:
-    - ERR-UNAUTH
-    - ERR-FORBIDDEN
+    input: { status: string }
+    output: OP-Review.listAdmin
+    errors: []
     auth: admin
   PATCH /api/admin/reviews/:id:
-    input: ReviewModerateBody
-    output: '{ review }'
-    errors:
-    - ERR-VALIDATION
-    - ERR-NOTFOUND
-    - ERR-UNAUTH
-    - ERR-FORBIDDEN
+    input: OP-Review.moderate
+    output: { review: object }
+    errors: [ERR-NOTFOUND]
     auth: admin
+
 UI:
-  screen-admin-tabs:
-    actions:
-    - switch-tab
-    state:
-    - apercu-default
-    - reservations
-    - disponibilites
-    - avis
-    - parametres
+  screen-admin-shell:
+    actions: [selectTab]
+    state: { activeTab default apercu }
   screen-apercu:
-    actions:
-    - load
-    state:
-    - loading
-    - loaded
-    - empty
+    actions: [load]
+    state: { loading, loaded, error }
   screen-parametres:
-    actions:
-    - save-settings
-    - change-password
-    state:
-    - idle
-    - saving
-    - saved
-    - error
-  screen-reservations:
-    actions:
-    - open-detail
-    - confirm
-    - cancel
-    state:
-    - list
-    - detail-modal-open
+    actions: [saveAll, changePassword]
+    state: { editing, saving, saved, error }
   screen-disponibilites:
-    actions:
-    - create-range
-    - delete-range
-    state:
-    - list-grouped
-    - form
+    actions: [upsertRange, deleteRange]
+    state: { list, saving }
   screen-avis-admin:
-    actions:
-    - filter-status
-    - approve
-    - reject
-    state:
-    - pending
-    - approved
-    - rejected
-  screen-avis-submit:
-    actions:
-    - check-eligibility
-    - submit
-    state:
-    - checking
-    - eligible
-    - ineligible
-    - submitted
+    actions: [filterStatus, approve, reject]
+    state: { pending, approved, rejected }
+  screen-avis-nouveau:
+    actions: [checkEligibility, submit]
+    state: { checking, eligible, ineligible, submitting, thanks, error }
   screen-avis-public:
-    actions:
-    - load
-    state:
-    - list
-    - empty
+    actions: [load]
+    state: { loaded, empty }
+
 DATA:
-  migration 0037_settings_review_request_toggle: seed email_review_request_enabled=false
-    (ON CONFLICT DO NOTHING)
-  migration 0038_reservations_code: ADD COLUMN IF NOT EXISTS code TEXT; SQL backfill
-    via md5; CREATE UNIQUE INDEX IF NOT EXISTS reservations_code_key
-  migration 0039_reviews: CREATE TABLE IF NOT EXISTS reviews + status/created index
-  migration 0040_review_requests: CREATE TABLE IF NOT EXISTS review_requests
-  reviews_status_created_idx: index on reviews(status, created_at desc)
+  0037_settings_review_request_toggle.sql: seed email_review_request_enabled=false (ON CONFLICT DO NOTHING)
+  0038_reservations_code.sql: ADD COLUMN IF NOT EXISTS code TEXT; SQL backfill AVP- code; CREATE UNIQUE INDEX IF NOT EXISTS
+  0039_reviews.sql: CREATE TABLE IF NOT EXISTS reviews; index on (status, created_at DESC)
+  0040_review_requests.sql: CREATE TABLE IF NOT EXISTS review_requests
+
 TEST:
-  T-UX-001a:
-    verifies: R-UX-001
-    behaviour: tabs-inner has scrollbar-hiding CSS and no desktop overflow class
-    steps:
-    - render admin page
-    - assert scrollbar-width none rule present
-  T-UX-002a:
-    verifies: R-UX-002
-    behaviour: AdminParametresTab renders five cards and one save button
-    steps:
-    - render component
-    - assert five card headings
-    - click save
-    - assert adminUpdateSettings called once
-  T-UX-003a:
-    verifies: R-UX-003
-    behaviour: row click opens detail modal
-    steps:
-    - render row
-    - click row
-    - assert onopen emitted with row
-  T-UX-003b:
-    verifies: R-UX-003
-    behaviour: action buttons stopPropagation
-    steps:
-    - render row
-    - click Confirmer
-    - assert onopen not emitted and status handler called
-  T-UX-004a:
-    verifies: R-UX-004
-    behaviour: Modal traps focus, closes on Escape, returns focus
-    steps:
-    - open Modal
-    - Tab cycles within
-    - press Escape
-    - assert closed and focus returned
   T-SET-001a:
     verifies: R-SET-001
-    behaviour: emailReviewRequestEnabled round-trips admin settings and is not public
-    steps:
-    - POST /api/admin/settings with toggle true
-    - GET /api/admin/settings assert true
-    - GET /api/settings assert key absent
+    behaviour: "AdminParametresTab renders five grouped cards in order with one save button and a separate password button"
+    steps: [render tab, assert card headings order, assert single save + separate Changer]
+  T-SET-001b:
+    verifies: R-SET-001
+    behaviour: "save submits all settings and emailReviewRequestEnabled round-trips"
+    steps: [toggle review-request, click save, assert adminUpdateSettings payload includes emailReviewRequestEnabled]
+  T-SET-002a:
+    verifies: R-SET-002
+    behaviour: "settings.test.ts is 46/46 green against SettingsUpdateSchema"
+    steps: [add missing required fields to fixtures, run vitest test/settings.test.ts, assert 0 failed]
+  T-NAV-001a:
+    verifies: R-NAV-001
+    behaviour: ".page-admin__tabs-inner hides scrollbar and fits full tab row at 1280/1024px, scrollable at 375px"
+    steps: [assert scrollbar-width none + webkit rule, assert overflow-x auto retained]
   T-BLK-001a:
     verifies: R-BLK-001
-    behaviour: range create expands to per-day rows
-    steps:
-    - POST /api/admin/blackouts/range 3-day span
-    - assert count 3 and 3 rows upserted
+    behaviour: "POST range with startDate>endDate or span>366 returns 400"
+    steps: [POST inverted -> 400, POST 400-day span -> 400]
   T-BLK-001b:
     verifies: R-BLK-001
-    behaviour: invalid span rejected
-    steps:
-    - POST with start>end -> 400
-    - POST with span>366 -> 400
+    behaviour: "valid 3-day range upserts 3 per-day rows; single-day endpoints unchanged"
+    steps: [POST 3-day range, assert count 3 and 3 rows, PUT single day still works]
   T-BLK-002a:
     verifies: R-BLK-002
-    behaviour: consecutive identical days grouped into one range row
-    steps:
-    - render list with adjacent identical days
-    - assert one range row; differing note -> two rows
+    behaviour: "consecutive identical days group into one range row; differing note or gap splits"
+    steps: [adjacent identical -> 1 row, adjacent differing note -> 2 rows, gap -> 2 rows]
   T-DASH-001a:
     verifies: R-DASH-001
-    behaviour: dashboard aggregates on fixtures
-    steps:
-    - seed confirmed reservations
-    - GET /api/admin/dashboard
-    - assert guest sums
-    - next7Days length 7
-    - returningCustomers
+    behaviour: "GET /api/admin/dashboard returns full payload; occupancy null when denominator 0"
+    steps: [fixture reservations, assert guest sums overlap edges, assert occupancy null on zero denominator]
   T-DASH-001b:
     verifies: R-DASH-001
-    behaviour: occupancy null when denominator 0
-    steps:
-    - set assignableRoomCount 0
-    - assert occupancy currentMonth null
+    behaviour: "Aperçu tab is default activeTab and renders em dash for null occupancy"
+    steps: [render admin shell, assert activeTab apercu, mock null occupancy -> em dash]
   T-REV-001a:
     verifies: R-REV-001
-    behaviour: code generation and backfill uniqueness
-    steps:
-    - generate many codes assert format and no dup; assert new insert sets code
+    behaviour: "generated code matches ^AVP-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$ and retries on collision"
+    steps: [generate many codes, assert format + uniqueness, simulate collision -> retry]
+  T-REV-001b:
+    verifies: R-REV-001
+    behaviour: "migration 0038 backfills all rows and is idempotent"
+    steps: [run migration twice, assert all rows have unique code, second run no-op]
   T-REV-002a:
     verifies: R-REV-002
-    behaviour: eligibility rules and generic invalid response
-    steps:
-    - valid departed code -> eligible true firstName; unknown code -> generic eligible
-      false
+    behaviour: "eligibility generic on invalid code; eligible only when departed+not cancelled+no review"
+    steps: [invalid code -> generic, valid departed -> eligible with firstName]
   T-REV-002b:
     verifies: R-REV-002
-    behaviour: submit masks name and snapshots stays/nights, 409 on repeat
-    steps:
-    - POST /api/reviews valid -> pending review display_name masked; repeat -> 409
+    behaviour: "submit masks display_name and snapshots stays/nights from multiple confirmed stays"
+    steps: [two confirmed departed stays, submit, assert display_name 'Marie T.' and stays_count/nights_total]
   T-REV-002c:
     verifies: R-REV-002
-    behaviour: rating and body validation
-    steps:
-    - rating 0 or 6 -> 400; body length 9 or 2001 -> 400
+    behaviour: "second submit for same reservation returns 409"
+    steps: [submit once, submit again -> 409]
   T-REV-003a:
     verifies: R-REV-003
-    behaviour: cron enqueues within window and dedupes
-    steps:
-    - seed departed confirmed reservation toggle on
-    - run pass
-    - assert review_requests row + email enqueued; run again assert no re-enqueue;
-      toggle off assert none
+    behaviour: "admin list filters by status and PATCH moderates + refreshes pending badge; re-moderation allowed"
+    steps: [GET status=pending, PATCH approve, assert pendingCount decremented, PATCH back to rejected]
   T-REV-004a:
     verifies: R-REV-004
-    behaviour: moderation transitions
-    steps:
-    - PATCH pending->approved sets moderated_at; approved->rejected allowed
+    behaviour: "GET /api/reviews returns approved only newest-first with averageRating"
+    steps: [seed approved+pending, GET, assert only approved and ordering]
+  T-REV-004b:
+    verifies: R-REV-004
+    behaviour: "homepage strip shows <=3 approved and is hidden when none"
+    steps: [zero approved -> strip absent, three approved -> strip present]
   T-REV-005a:
     verifies: R-REV-005
-    behaviour: public list approved only with average and empty strip
-    steps:
-    - GET /api/reviews returns approved only + averageRating; ReviewsStrip renders
-      nothing when empty
+    behaviour: "cron enqueues review-request for eligible departed stays and dedupes on rerun; gated by toggle"
+    steps: [toggle on -> insert request + enqueue, rerun -> no duplicate, toggle off -> none]
+
 NFR:
-  responsiveness: every touched screen renders at 375, 1024, 1280px
-  security: public review endpoints rate-limited on cf-connecting-ip; no data leak
-    for invalid codes; masked identity only
-  correctness: dashboard SQL null-safe; review submit idempotent-safe via unique constraint
-  compatibility: no new runtime deps; Crockford base32 on crypto.getRandomValues;
-    backfill uses built-in md5
-  testing: npm run typecheck green; all api and web vitest suites pass
+  security: admin endpoints gated by inline getAuthUser + role admin; public review endpoints rate-limited; invalid codes leak no reservation data
+  reliability: all migrations idempotent; review submission idempotent-safe via unique constraint
+  responsiveness: every touched screen usable at 375px; French copy
+  observability: reuse existing email_outbox + admin_audit patterns; no new telemetry
+
 FILE:
-  apps/api/migrations/0037_settings_review_request_toggle.sql: TASK-ws-a-toggle
-  apps/api/src/settings.ts: TASK-ws-a-toggle
-  apps/web/src/routes/admin/+page.svelte: TASK-ws-a-ui
-  apps/web/src/lib/components/Modal.svelte: TASK-ws-a-ui
-  apps/web/src/lib/components/admin/AdminParametresTab.svelte: TASK-ws-a-ui
-  apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-ws-a-ui
-  apps/web/src/lib/components/admin/ReservationDetailModal.svelte: TASK-ws-a-ui
-  apps/web/src/lib/components/admin/RoomAssignmentDrawer.svelte: TASK-ws-a-ui
+  apps/api/test/settings.test.ts: TASK-ws-a-paramtres
+  apps/web/src/lib/components/admin/AdminParametresTab.svelte: TASK-ws-a-paramtres
+  apps/web/src/routes/admin/+page.svelte: TASK-ws-a-paramtres
   apps/api/src/index.ts: TASK-ws-bcd-api
-  apps/api/src/dashboard.ts: TASK-ws-c-dash
+  apps/api/src/dashboard.ts: TASK-ws-c-dashboard
+  apps/api/src/dashboard.test.ts: TASK-ws-c-dashboard
+  apps/web/src/lib/components/admin/AdminApercuTab.svelte: TASK-ws-c-dashboard
+  apps/web/src/lib/components/admin/AdminDisponibilitesTab.svelte: TASK-ws-b-blackout
+  apps/web/src/lib/components/admin/AdminDisponibilitesTab.test.ts: TASK-ws-b-blackout
   apps/api/src/reservationCode.ts: TASK-ws-d-reviews-api
   apps/api/src/reviews.ts: TASK-ws-d-reviews-api
   apps/api/src/reviewRequests.ts: TASK-ws-d-reviews-api
   apps/api/src/emailOutbox.ts: TASK-ws-d-reviews-api
-  apps/api/migrations/0038_reservations_code.sql: TASK-ws-d-reviews-api
-  apps/api/migrations/0039_reviews.sql: TASK-ws-d-reviews-api
-  apps/api/migrations/0040_review_requests.sql: TASK-ws-d-reviews-api
-  apps/web/src/lib/components/admin/AdminApercuTab.svelte: TASK-ws-c-dash
-  apps/web/src/lib/components/admin/AdminDisponibilitesTab.svelte: TASK-ws-b-blackout
-  apps/web/src/lib/components/admin/AdminAvisTab.svelte: TASK-ws-d-reviews-ui
-  apps/web/src/lib/components/ReviewsStrip.svelte: TASK-ws-d-reviews-ui
-  apps/web/src/lib/components/Footer.svelte: TASK-ws-d-reviews-ui
-  apps/web/src/routes/avis/nouveau/+page.svelte: TASK-ws-d-reviews-ui
   apps/web/src/routes/avis/+page.svelte: TASK-ws-d-reviews-ui
-  apps/web/src/routes/+page.svelte: TASK-ws-d-reviews-ui
-  apps/web/src/lib/api.ts: TASK-ws-bcd-api
+  apps/web/src/routes/avis/nouveau/+page.svelte: TASK-ws-d-reviews-ui
+  apps/web/src/lib/components/ReviewsStrip.svelte: TASK-ws-d-reviews-ui
+  apps/web/src/lib/components/admin/AdminAvisTab.svelte: TASK-ws-d-reviews-ui
+  apps/web/src/lib/components/Footer.svelte: TASK-ws-d-reviews-ui
+  apps/web/src/lib/api.ts: TASK-ws-d-reviews-ui
+
 TASK:
-  TASK-ws-a-toggle:
-    scope:
-    - R-SET-001
-    - T-SET-001a
+  TASK-ws-a-paramtres:
+    scope: [R-SET-001, R-SET-002, R-NAV-001, E-Settings, T-SET-001a, T-SET-001b, T-SET-002a, T-NAV-001a]
     files:
-    - apps/api/migrations/0037_settings_review_request_toggle.sql
-    - apps/api/src/settings.ts
-    must_preserve:
-    - INV-exports-preserved
-    produce:
-    - code
-    - migrations
-    verifies:
-    - R-SET-001
-  TASK-ws-a-ui:
-    scope:
-    - R-UX-001
-    - R-UX-002
-    - R-UX-003
-    - R-UX-004
-    - T-UX-001a
-    - T-UX-002a
-    - T-UX-003a
-    - T-UX-003b
-    - T-UX-004a
-    files:
-    - apps/web/src/routes/admin/+page.svelte
-    - apps/web/src/lib/components/Modal.svelte
-    - apps/web/src/lib/components/admin/AdminParametresTab.svelte
-    - apps/web/src/lib/components/admin/ReservationTableRow.svelte
-    - apps/web/src/lib/components/admin/ReservationDetailModal.svelte
-    - apps/web/src/lib/components/admin/RoomAssignmentDrawer.svelte
-    must_preserve: []
-    produce:
-    - code
-    - tests
-    verifies:
-    - R-UX-001
-    - R-UX-002
-    - R-UX-003
-    - R-UX-004
+      - apps/api/test/settings.test.ts
+      - apps/web/src/lib/components/admin/AdminParametresTab.svelte
+      - apps/web/src/routes/admin/+page.svelte
+    must_preserve: [INV-schema-fixture-parity]
+    produce: [code, tests]
+    verifies: [R-SET-001, R-SET-002, R-NAV-001]
   TASK-ws-b-blackout:
-    scope:
-    - R-BLK-001
-    - R-BLK-002
-    - OP-Blackout.createRange
-    - OP-Blackout.deleteRange
-    - T-BLK-001a
-    - T-BLK-001b
-    - T-BLK-002a
+    scope: [R-BLK-001, R-BLK-002, OP-Blackout.upsertRange, OP-Blackout.deleteRange, E-BlackoutDate, ERR-BADRANGE, T-BLK-001a, T-BLK-001b, T-BLK-002a]
     files:
-    - apps/web/src/lib/components/admin/AdminDisponibilitesTab.svelte
-    must_preserve:
-    - INV-availability-unchanged
-    produce:
-    - code
-    - tests
-    verifies:
-    - R-BLK-001
-    - R-BLK-002
-  TASK-ws-c-dash:
-    scope:
-    - R-DASH-001
-    - OP-Dashboard.get
-    - T-DASH-001a
-    - T-DASH-001b
+      - apps/web/src/lib/components/admin/AdminDisponibilitesTab.svelte
+      - apps/web/src/lib/components/admin/AdminDisponibilitesTab.test.ts
+    must_preserve: [INV-perday-storage]
+    produce: [code, tests]
+    verifies: [R-BLK-001, R-BLK-002]
+  TASK-ws-c-dashboard:
+    scope: [R-DASH-001, OP-Dashboard.get, T-DASH-001a, T-DASH-001b]
     files:
-    - apps/api/src/dashboard.ts
-    - apps/web/src/lib/components/admin/AdminApercuTab.svelte
-    must_preserve: []
-    produce:
-    - code
-    - tests
-    verifies:
-    - R-DASH-001
+      - apps/api/src/dashboard.ts
+      - apps/api/src/dashboard.test.ts
+      - apps/web/src/lib/components/admin/AdminApercuTab.svelte
+    must_preserve: [INV-perday-storage]
+    produce: [code, tests]
+    verifies: [R-DASH-001]
   TASK-ws-d-reviews-api:
-    scope:
-    - R-REV-001
-    - R-REV-002
-    - R-REV-003
-    - R-REV-004
-    - OP-Review.submit
-    - OP-Review.eligibility
-    - OP-Review.publicList
-    - OP-Review.adminList
-    - OP-Review.moderate
-    - OP-ReviewRequest.cronEnqueue
-    - ERR-GENERIC
-    - ERR-CONFLICT
-    - T-REV-001a
-    - T-REV-002a
-    - T-REV-002b
-    - T-REV-002c
-    - T-REV-003a
-    - T-REV-004a
+    scope: [R-REV-001, R-REV-002, R-REV-003, R-REV-005, E-Reservation, E-Review, E-ReviewRequest, OP-Review.eligibility, OP-Review.submit, OP-Review.listPublic, OP-Review.listAdmin, OP-Review.moderate, ERR-DUPLICATE, ERR-INELIGIBLE, ERR-NOTFOUND, T-REV-001a, T-REV-001b, T-REV-002a, T-REV-002b, T-REV-002c, T-REV-003a, T-REV-005a]
     files:
-    - apps/api/src/reservationCode.ts
-    - apps/api/src/reviews.ts
-    - apps/api/src/reviewRequests.ts
-    - apps/api/src/emailOutbox.ts
-    - apps/api/migrations/0038_reservations_code.sql
-    - apps/api/migrations/0039_reviews.sql
-    - apps/api/migrations/0040_review_requests.sql
-    must_preserve:
-    - INV-code-unique
-    - INV-code-format
-    - INV-one-review-per-reservation
-    - INV-masked-identity
-    - INV-request-dedupe
-    - INV-exports-preserved
-    produce:
-    - code
-    - migrations
-    - tests
-    verifies:
-    - R-REV-001
-    - R-REV-002
-    - R-REV-003
-    - R-REV-004
+      - apps/api/src/reservationCode.ts
+      - apps/api/src/reviews.ts
+      - apps/api/src/reviewRequests.ts
+      - apps/api/src/emailOutbox.ts
+    must_preserve: [INV-code-unique, INV-one-review-per-reservation, INV-one-request-per-reservation, INV-identity-never-public]
+    produce: [code, migrations, tests]
+    verifies: [R-REV-001, R-REV-002, R-REV-003, R-REV-005]
   TASK-ws-bcd-api:
-    scope:
-    - OP-Blackout.createRange
-    - OP-Blackout.deleteRange
-    - OP-Dashboard.get
-    - OP-Review.eligibility
-    - OP-Review.submit
-    - OP-Review.publicList
-    - OP-Review.adminList
-    - OP-Review.moderate
-    - ERR-VALIDATION
+    scope: [OP-Blackout.upsertRange, OP-Blackout.deleteRange, OP-Dashboard.get, OP-Review.eligibility, OP-Review.submit, OP-Review.listPublic, OP-Review.listAdmin, OP-Review.moderate, R-REV-005]
     files:
-    - apps/api/src/index.ts
-    - apps/web/src/lib/api.ts
-    must_preserve:
-    - INV-availability-unchanged
-    - INV-exports-preserved
-    produce:
-    - code
-    verifies:
-    - R-BLK-001
-    - R-DASH-001
-    - R-REV-002
+      - apps/api/src/index.ts
+    must_preserve: [INV-perday-storage, INV-code-unique, INV-identity-never-public]
+    produce: [code]
+    verifies: [R-BLK-001, R-DASH-001, R-REV-001, R-REV-002, R-REV-003, R-REV-005]
   TASK-ws-d-reviews-ui:
-    scope:
-    - R-REV-005
-    - T-REV-005a
+    scope: [R-REV-002, R-REV-003, R-REV-004, T-REV-003a, T-REV-004a, T-REV-004b]
     files:
-    - apps/web/src/lib/components/admin/AdminAvisTab.svelte
-    - apps/web/src/lib/components/ReviewsStrip.svelte
-    - apps/web/src/lib/components/Footer.svelte
-    - apps/web/src/routes/avis/nouveau/+page.svelte
-    - apps/web/src/routes/avis/+page.svelte
-    - apps/web/src/routes/+page.svelte
-    must_preserve: []
-    produce:
-    - code
-    - tests
-    verifies:
-    - R-REV-004
-    - R-REV-005
+      - apps/web/src/routes/avis/+page.svelte
+      - apps/web/src/routes/avis/nouveau/+page.svelte
+      - apps/web/src/lib/components/ReviewsStrip.svelte
+      - apps/web/src/lib/components/admin/AdminAvisTab.svelte
+      - apps/web/src/lib/components/Footer.svelte
+      - apps/web/src/lib/api.ts
+    must_preserve: [INV-identity-never-public]
+    produce: [code, tests]
+    verifies: [R-REV-002, R-REV-003, R-REV-004]
+
 STATE:
   ST-01:
     status: locked
-    decision: email_review_request_enabled migration + settings.ts wiring ship in
-      WS-A (option a)
-    rationale: "keeps the Param\xE8tres card self-contained; WS-D only reads the toggle"
+    decision: Audit-and-fix the salvaged drafts; do not regenerate from scratch or renumber migrations 0037-0040
+    rationale: "drafts are largely coherent; regeneration risks regressing already-wired integrations"
   ST-02:
     status: locked
-    decision: reservation code backfilled SQL-side with built-in md5, then a unique
-      index enforces it
-    rationale: avoids pgcrypto dependency; index is the collision safety net
+    decision: SettingsUpdateSchema is the source of truth; fix settings.test.ts fixtures, never weaken the schema
+    rationale: "schema already matches spec sections 2 and 6; the 11 failures are stale fixtures"
   ST-03:
     status: locked
-    decision: occupancy numerator counts room_count times overlap-nights per confirmed
-      reservation
-    rationale: room-nights per spec; null when denominator 0
+    decision: Apercu is the default landing tab; Reservations moves to second
+    rationale: "operator decision in design spec Decisions and section 5"
   ST-04:
     status: locked
-    decision: Modal.svelte extracted and RoomAssignmentDrawer refactored before the
-      detail modal is built
-    rationale: both consume the same component
+    decision: email_review_request_enabled toggle API/schema/migration already exist; only surface it in the Parametres UI
+    rationale: "verified wired in settings.ts and migration 0037; re-adding would duplicate"
