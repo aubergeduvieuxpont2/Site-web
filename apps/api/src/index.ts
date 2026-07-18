@@ -98,11 +98,6 @@ export interface AdminUserRow {
   created_at: string;
 }
 
-type RoomVisibilityRow = {
-  slug: string;
-  is_public: boolean;
-};
-
 const MessageRequestSchema = z.object({
   body: z.string().min(1, "body must be non-empty"),
 });
@@ -182,10 +177,6 @@ const ForgotPasswordSchema = z.object({
 const ResetPasswordSchema = z.object({
   token: z.string().min(1, "token requis"),
   newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
-});
-
-const RoomVisibilitySchema = z.object({
-  isPublic: z.boolean(),
 });
 
 const RoleSchema = z.object({
