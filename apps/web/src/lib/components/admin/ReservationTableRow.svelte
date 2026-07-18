@@ -77,6 +77,10 @@
   }
 
   function onRowKeydown(e: KeyboardEvent) {
+    // Only act on keys pressed on the row ITSELF. Keydowns on the action
+    // buttons bubble up here; handling them would both open the wrong dialog
+    // and (via preventDefault) silently cancel the button's own activation.
+    if (e.target !== e.currentTarget) return;
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
       openDetail();

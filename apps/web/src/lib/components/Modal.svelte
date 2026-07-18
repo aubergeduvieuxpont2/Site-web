@@ -1,3 +1,11 @@
+<script module lang="ts">
+  // Stack of currently-OPEN Modal instances, shared across every Modal in the
+  // app (nested modals: e.g. the RoomAssignmentDrawer's Modal opens inside the
+  // ReservationDetailModal's). Escape and backdrop clicks only act on the
+  // topmost instance so each press/click closes exactly one layer.
+  const openStack: symbol[] = [];
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy, tick } from 'svelte';
   import type { Snippet } from 'svelte';
@@ -31,18 +39,39 @@
   // Captured just before we steal focus; restored when the dialog closes.
   let previouslyFocused: HTMLElement | null = null;
 
+  // ── Modal stack membership ───────────────────────────────────────────────
+  const stackToken = Symbol('modal');
+
+  function isTopmost(): boolean {
+    return openStack[openStack.length - 1] === stackToken;
+  }
+
+  function leaveStack(): void {
+    const i = openStack.indexOf(stackToken);
+    if (i !== -1) openStack.splice(i, 1);
+  }
+
   $effect(() => {
     if (open) {
+      openStack.push(stackToken);
       previouslyFocused = document.activeElement as HTMLElement | null;
       tick().then(() => panelEl?.focus());
     } else {
+      leaveStack();
       previouslyFocused?.focus();
       previouslyFocused = null;
     }
   });
 
+  function onBackdropClick(): void {
+    // Ignore clicks on a backdrop that sits under another open modal.
+    if (isTopmost()) onClose();
+  }
+
   function handleKeydown(e: KeyboardEvent): void {
-    if (!open) return;
+    // Only the topmost open modal handles keys — nested modals close (and
+    // trap focus) one layer at a time.
+    if (!open || !isTopmost()) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       onClose();
@@ -78,7 +107,12 @@
   }
 
   onMount(() => window.addEventListener('keydown', handleKeydown));
-  onDestroy(() => window.removeEventListener('keydown', handleKeydown));
+  onDestroy(() => {
+    window.removeEventListener('keydown', handleKeydown);
+    // A modal unmounted while open must free its stack slot, or the next
+    // modal underneath would never become topmost.
+    leaveStack();
+  });
 </script>
 
 <div use:portal class="modal-host" aria-hidden={!open}>
@@ -87,7 +121,7 @@
     class="modal-host__backdrop"
     aria-hidden="true"
     data-testid={backdropTestid}
-    onclick={onClose}
+    onclick={onBackdropClick}
   ></div>
 
   <!-- Panel — the actual dialog element; visual styles via panelClass + :global() in consumer -->

@@ -148,3 +148,101 @@ describe("Modal.svelte — behavior", () => {
     expect(getByTestId("rad-backdrop")).not.toBeNull();
   });
 });
+
+// ── Nested modals (modal stack) ──────────────────────────────────────────────
+// The detail modal hosts the RoomAssignmentDrawer, which owns its own Modal —
+// so two Modals can be open at once. Escape and backdrop clicks must only act
+// on the TOPMOST open modal: one Escape press closes one layer, not both.
+
+describe("Modal.svelte — nested modals close one layer at a time", () => {
+  it("Escape closes only the topmost modal, then the next Escape closes the outer one", async () => {
+    const outerClose = vi.fn();
+    const innerClose = vi.fn();
+
+    render(Modal, {
+      props: {
+        open: true,
+        onClose: outerClose,
+        backdropTestid: "outer-backdrop",
+        children: bodySnippet(),
+      },
+    });
+    // Mounted after the outer modal → topmost.
+    const inner = render(Modal, {
+      props: {
+        open: true,
+        onClose: innerClose,
+        backdropTestid: "inner-backdrop",
+        children: bodySnippet(),
+      },
+    });
+    await tick();
+
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(innerClose).toHaveBeenCalledTimes(1);
+    expect(outerClose).not.toHaveBeenCalled();
+
+    // The consumer reacts to onClose by flipping `open` — simulate that.
+    await inner.rerender({ open: false });
+    await tick();
+
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(outerClose).toHaveBeenCalledTimes(1);
+    expect(innerClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("backdrop clicks only close the topmost modal", async () => {
+    const outerClose = vi.fn();
+    const innerClose = vi.fn();
+
+    const outer = render(Modal, {
+      props: {
+        open: true,
+        onClose: outerClose,
+        backdropTestid: "outer-backdrop",
+        children: bodySnippet(),
+      },
+    });
+    render(Modal, {
+      props: {
+        open: true,
+        onClose: innerClose,
+        backdropTestid: "inner-backdrop",
+        children: bodySnippet(),
+      },
+    });
+    await tick();
+
+    // Clicking the OUTER backdrop while the inner modal is on top is a no-op.
+    await fireEvent.click(outer.getByTestId("outer-backdrop"));
+    expect(outerClose).not.toHaveBeenCalled();
+    expect(innerClose).not.toHaveBeenCalled();
+  });
+
+  it("a modal unmounted while open leaves the remaining modal responsive to Escape", async () => {
+    const outerClose = vi.fn();
+    const innerClose = vi.fn();
+
+    render(Modal, {
+      props: {
+        open: true,
+        onClose: outerClose,
+        children: bodySnippet(),
+      },
+    });
+    const inner = render(Modal, {
+      props: {
+        open: true,
+        onClose: innerClose,
+        backdropTestid: "inner-backdrop",
+        children: bodySnippet(),
+      },
+    });
+    await tick();
+
+    inner.unmount();
+    await fireEvent.keyDown(window, { key: "Escape" });
+    expect(outerClose).toHaveBeenCalledTimes(1);
+    expect(innerClose).not.toHaveBeenCalled();
+  });
+});

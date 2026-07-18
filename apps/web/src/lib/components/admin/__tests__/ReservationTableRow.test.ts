@@ -304,3 +304,52 @@ describe("ReservationTableRow — action button stopPropagation (WS-A)", () => {
     expect(onOpenDetail).toHaveBeenCalledWith(7);
   });
 });
+
+// ── Keyboard activation — row vs. action buttons ─────────────────────────────
+
+describe("ReservationTableRow — keyboard activation (WS-A)", () => {
+  it("Enter and Space on the row itself open the detail modal", async () => {
+    const onOpenDetail = vi.fn();
+    const { getByTestId } = render(ReservationTableRow, {
+      props: { ...props(), onOpenDetail },
+    });
+    const row = getByTestId("reservation-row");
+
+    await fireEvent.keyDown(row, { key: "Enter" });
+    expect(onOpenDetail).toHaveBeenCalledWith(7);
+
+    await fireEvent.keyDown(row, { key: " " });
+    expect(onOpenDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it("Enter on an action button neither opens the modal nor cancels the button's activation", async () => {
+    const onOpenDetail = vi.fn();
+    const { getByTestId } = render(ReservationTableRow, {
+      props: { ...props({ status: "pending" }), onOpenDetail },
+    });
+
+    // The keydown bubbles from the button up to the <tr>; the row handler must
+    // ignore it. fireEvent returns false when preventDefault was called — the
+    // row must NOT preventDefault, or the button's native Enter activation
+    // (the status change) would be silently dropped.
+    const notCancelled = await fireEvent.keyDown(
+      getByTestId("btn-status-confirm"),
+      { key: "Enter" },
+    );
+    expect(onOpenDetail).not.toHaveBeenCalled();
+    expect(notCancelled).toBe(true);
+  });
+
+  it("Space on an action button neither opens the modal nor cancels the button's activation", async () => {
+    const onOpenDetail = vi.fn();
+    const { getByTestId } = render(ReservationTableRow, {
+      props: { ...props({ status: "pending" }), onOpenDetail },
+    });
+    const notCancelled = await fireEvent.keyDown(
+      getByTestId("btn-status-cancel"),
+      { key: " " },
+    );
+    expect(onOpenDetail).not.toHaveBeenCalled();
+    expect(notCancelled).toBe(true);
+  });
+});
