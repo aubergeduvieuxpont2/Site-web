@@ -56,4 +56,32 @@ describe("availabilityForRange", () => {
     expect(result).toBeDefined();
     expect(result.nights).toBeDefined();
   });
+
+  it("coerces the Neon string `available` to a number and computes unavailability", async () => {
+    // The Neon HTTP driver serializes the computed `available` column as a
+    // string; the API contract requires numbers.
+    const stringRows = async () => [
+      { date: "2026-08-01", available: "12" },
+      { date: "2026-08-02", available: "0" },
+      { date: "2026-08-03", available: "2" },
+    ];
+
+    const result = await availabilityForRange(
+      stringRows as any,
+      "2026-08-01",
+      "2026-08-04",
+      2, // request 2 rooms
+      12
+    );
+
+    // Every night's `available` is a real number, not a string.
+    for (const n of result.nights) {
+      expect(typeof n.available).toBe("number");
+    }
+    expect(result.nights.map((n) => n.available)).toEqual([12, 0, 2]);
+
+    // Nights with fewer than the requested 2 rooms are unavailable: Aug 2 (0)
+    // and Aug 3 (2 is NOT < 2, so available). Only Aug 2 is blocked.
+    expect(result.unavailableNights).toEqual(["2026-08-02"]);
+  });
 });

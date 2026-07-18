@@ -16,6 +16,17 @@
   let mainEl: HTMLElement | undefined = $state();
   let prefersReducedMotion = false;
 
+  // The maintenance banner is a fixed bar pinned above the (also-fixed) Nav.
+  // We publish its measured height as `--maintenance-h` on :root so the Nav and
+  // the page content can be pushed down by exactly that much — otherwise the
+  // transparent fixed Nav paints on top of the banner. 0 when reservations are
+  // enabled (banner absent).
+  let bannerHeight = $state(0);
+  $effect(() => {
+    const px = settings.reservationsEnabled ? "0px" : `${bannerHeight}px`;
+    document.documentElement.style.setProperty("--maintenance-h", px);
+  });
+
   function triggerEnter() {
     if (prefersReducedMotion || !mainEl) return;
     // Remove first so the animation can re-run on every client navigation.
@@ -47,7 +58,9 @@
 <Nav />
 
 {#if !settings.reservationsEnabled}
-  <MaintenanceBanner />
+  <div class="layout-shell__maintenance" bind:clientHeight={bannerHeight}>
+    <MaintenanceBanner />
+  </div>
 {/if}
 
 <main
@@ -89,9 +102,21 @@
     outline-offset: 3px;
   }
 
+  /* Maintenance banner: a fixed bar at the very top, above the fixed Nav
+     (z-50). Its measured height flows into `--maintenance-h`, which offsets both
+     the Nav (top) and the main content (padding-top) so nothing is painted over
+     it. */
+  .layout-shell__maintenance {
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 55;
+  }
+
   .layout-shell__main {
     min-height: 100dvh;
-    /* No padding-top: the Nav is fixed and each page manages its own offset. */
+    /* Push page content below the fixed maintenance banner when present (0 when
+       reservations are enabled). The Nav itself is offset by the same var. */
+    padding-top: var(--maintenance-h, 0px);
   }
 
   @keyframes shell-enter {

@@ -44,11 +44,14 @@ export async function availabilityForRange(
     ORDER BY d;
   `;
 
-  const rows = (await query) as { date: string; available: number }[];
+  // Postgres returns the computed `available` expression as a string over the
+  // Neon HTTP driver (numeric-as-string, cf. toNumberOrNull); coerce it so the
+  // API contract (and the `< rooms` comparison below) uses real numbers.
+  const rows = (await query) as { date: string; available: string | number }[];
 
   const nights: AvailabilityNight[] = rows.map((r) => ({
     date: r.date,
-    available: r.available,
+    available: Number(r.available) || 0,
   }));
 
   const unavailableNights = nights
