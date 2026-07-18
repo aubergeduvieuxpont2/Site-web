@@ -1,28 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-
-  // ── Types ──────────────────────────────────────────────────────────────────
-  interface AvailabilityNight {
-    date: string;
-    available: number;
-  }
-
-  interface OccupancyRatios {
-    currentMonth: number | null;
-    previousMonth: number | null;
-    sameMonthLastYear: number | null;
-  }
-
-  interface DashboardData {
-    guestsThisWeek: number;
-    guestsLastWeek: number;
-    next7Days: AvailabilityNight[];
-    occupancy: OccupancyRatios;
-    returningCustomers: number;
-  }
+  import { adminGetDashboard, isError } from "$lib/api";
+  import type { DashboardResponse } from "$lib/api";
 
   // ── State ──────────────────────────────────────────────────────────────────
-  let data = $state<DashboardData | null>(null);
+  let data = $state<DashboardResponse | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -83,13 +65,12 @@
     loading = true;
     error = null;
     try {
-      const res = await fetch("/api/admin/dashboard", { credentials: "include" });
-      const json = await res.json();
-      if (!res.ok) {
-        error = json.error ?? `Erreur ${res.status}`;
+      const result = await adminGetDashboard();
+      if (isError(result)) {
+        error = result.error;
         return;
       }
-      data = json as DashboardData;
+      data = result;
     } catch {
       error = "Réseau indisponible";
     } finally {

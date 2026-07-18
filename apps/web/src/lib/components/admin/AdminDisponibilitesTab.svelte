@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { adminBlackouts, isError } from '$lib/api';
+  import { adminBlackouts, adminUpsertBlackoutRange, adminDeleteBlackoutRange, isError } from '$lib/api';
   import type { BlackoutRow } from '$lib/api';
 
   interface Props {
@@ -33,7 +33,8 @@
   // Range add/upsert form
   let formStartDate = $state('');
   let formEndDate = $state('');
-  let formRoomsBlocked = $state<number>(assignableRoomCount);
+  // svelte-ignore state_referenced_locally
+  let formRoomsBlocked: number = $state(assignableRoomCount);
   let formNote = $state('');
   let submitting = $state(false);
   let submitError = $state<string | null>(null);
@@ -107,53 +108,6 @@
     return ranges;
   }
 
-  // ── Range API helpers (new endpoints; inline until api.ts is updated) ─────
-  async function postBlackoutRange(body: {
-    startDate: string;
-    endDate: string;
-    roomsBlocked: number;
-    note: string | null;
-  }): Promise<{ count: number } | { error: string }> {
-    let res: Response;
-    try {
-      res = await fetch('/api/admin/blackouts/range', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch {
-      return { error: 'Réseau indisponible' };
-    }
-    try {
-      return (await res.json()) as { count: number } | { error: string };
-    } catch {
-      return { error: `Erreur ${res.status}` };
-    }
-  }
-
-  async function deleteBlackoutRange(
-    start: string,
-    end: string,
-  ): Promise<{ deleted: number } | { error: string }> {
-    let res: Response;
-    try {
-      const params = new URLSearchParams({ start, end });
-      res = await fetch(`/api/admin/blackouts/range?${params.toString()}`, {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      });
-    } catch {
-      return { error: 'Réseau indisponible' };
-    }
-    try {
-      return (await res.json()) as { deleted: number } | { error: string };
-    } catch {
-      return { error: `Erreur ${res.status}` };
-    }
-  }
-
   // ── Data loading ───────────────────────────────────────────────────────────
   async function load(): Promise<void> {
     loading = true;
@@ -186,7 +140,7 @@
 
     submitting = true;
     submitError = null;
-    const res = await postBlackoutRange({
+    const res = await adminUpsertBlackoutRange({
       startDate: formStartDate,
       endDate,
       roomsBlocked: rooms,
@@ -216,7 +170,7 @@
   async function handleDeleteRange(start: string, end: string): Promise<void> {
     confirmingRange = null;
     deletingRange = { start, end };
-    const res = await deleteBlackoutRange(start, end);
+    const res = await adminDeleteBlackoutRange(start, end);
     deletingRange = null;
 
     if (isError(res)) {
@@ -267,6 +221,7 @@
     </div>
   {:else}
     <!-- ── Range list ──────────────────────────────── -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class="admin-disponibilites-tab__table-scroll"
       role="region"

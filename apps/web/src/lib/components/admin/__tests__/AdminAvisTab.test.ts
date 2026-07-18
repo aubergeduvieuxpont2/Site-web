@@ -222,7 +222,7 @@ describe("AdminAvisTab — moderation", () => {
     let callCount = 0;
     vi.stubGlobal(
       "fetch",
-      vi.fn((url: string, opts?: RequestInit) => {
+      vi.fn((_url: string, opts?: RequestInit) => {
         callCount++;
         if (opts?.method === "PATCH") {
           return Promise.resolve({
@@ -246,11 +246,11 @@ describe("AdminAvisTab — moderation", () => {
     await waitFor(() => {
       const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
       const patchCall = calls.find(
-        ([u, o]: [string, RequestInit]) => o?.method === "PATCH",
+        (c: any[]) => c[1]?.method === "PATCH",
       );
       expect(patchCall).toBeTruthy();
-      expect(patchCall[0]).toContain("/api/admin/reviews/1");
-      expect(JSON.parse(patchCall[1].body as string)).toEqual({ status: "approved" });
+      expect(patchCall![0]).toContain("/api/admin/reviews/1");
+      expect(JSON.parse(patchCall![1].body as string)).toEqual({ status: "approved" });
     });
   });
 
@@ -258,7 +258,7 @@ describe("AdminAvisTab — moderation", () => {
     const updatedReview = { ...PENDING_REVIEW, status: "rejected" };
     vi.stubGlobal(
       "fetch",
-      vi.fn((url: string, opts?: RequestInit) => {
+      vi.fn((_url: string, opts?: RequestInit) => {
         if (opts?.method === "PATCH") {
           return Promise.resolve({
             ok: true,
@@ -282,10 +282,10 @@ describe("AdminAvisTab — moderation", () => {
     await waitFor(() => {
       const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
       const patchCall = calls.find(
-        ([_u, o]: [string, RequestInit]) => o?.method === "PATCH",
+        (c: any[]) => c[1]?.method === "PATCH",
       );
       expect(patchCall).toBeTruthy();
-      expect(JSON.parse(patchCall[1].body as string)).toEqual({ status: "rejected" });
+      expect(JSON.parse(patchCall![1].body as string)).toEqual({ status: "rejected" });
     });
   });
 
@@ -352,7 +352,7 @@ describe("AdminAvisTab — filter switching", () => {
     });
 
     const lastCall = fetchMock.mock.calls.at(-1);
-    expect(lastCall[0]).toContain("status=approved");
+    expect(lastCall![0]).toContain("status=approved");
     expect(getByTestId("filter-approved").getAttribute("aria-pressed")).toBe("true");
   });
 });

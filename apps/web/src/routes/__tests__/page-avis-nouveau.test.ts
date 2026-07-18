@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
+import { render, fireEvent, cleanup } from "@testing-library/svelte";
 
 // ── Stub the SvelteKit `page` store so the component can read searchParams ──
 // The `nouveau` page uses `$page.url.searchParams.get("code")` synchronously

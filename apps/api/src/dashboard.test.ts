@@ -453,4 +453,51 @@ describe("getDashboardData", () => {
     expect(result.returningCustomers).toBe(42);
     expect(typeof result.returningCustomers).toBe("number");
   });
+
+  // ── Month-boundary edge cases ───────────────────────────────────────────────
+
+  it("handles January (previous month wraps to December of previous year)", async () => {
+    // Jan 15, 2026: prev month = Dec 2025 (31 days), same day span = 15 days
+    const now = new Date("2026-01-15T12:00:00Z");
+    const sql = makeSql([
+      [{ this_week: "0", last_week: "0" }],
+      [{ room_nights: "90" }],  // 90 / (12×15) = 0.5
+      [{ room_nights: "45" }],  // 45 / (12×15) = 0.25
+      [{ room_nights: "180" }], // 180/ (12×15) = 1.0
+      [{ count: "1" }],
+    ]);
+    mockAvailability.mockResolvedValueOnce({
+      nights: Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-01-${String(15 + i).padStart(2, "0")}`,
+        available: 12,
+      })),
+      unavailableNights: [],
+    });
+
+    const result = await getDashboardData(sql, 12, now);
+    expect(result.occupancy.currentMonth).toBe(0.5);
+    expect(result.occupancy.previousMonth).toBe(0.25);
+    expect(result.occupancy.sameMonthLastYear).toBe(1);
+  });
+
+  it("caps previous-month day-span for February (March 31 → prevDayOfMonth=28)", async () => {
+    // March 31, 2026: prev month = Feb 2026, Feb has 28 days → prevDayOfMonth = min(31,28) = 28
+    const now = new Date("2026-03-31T12:00:00Z");
+    const sql = makeSql([
+      [{ this_week: "0", last_week: "0" }],
+      [{ room_nights: "186" }], // 186 / (12×31) = 186/372 = 0.5
+      [{ room_nights: "168" }], // 168 / (12×28) = 168/336 = 0.5
+      [{ room_nights: null }],
+      [{ count: "0" }],
+    ]);
+    mockAvailability.mockResolvedValueOnce({
+      nights: [{ date: "2026-03-31", available: 12 }],
+      unavailableNights: [],
+    });
+
+    const result = await getDashboardData(sql, 12, now);
+    expect(result.occupancy.currentMonth).toBe(0.5);   // 186/(12×31)
+    expect(result.occupancy.previousMonth).toBe(0.5);  // 168/(12×28) — not 12×31
+    expect(result.occupancy.sameMonthLastYear).toBe(0); // null room_nights → 0
+  });
 });

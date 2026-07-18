@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 
 // The /avis page uses raw fetch on mount — stub global.fetch before each test.
 
