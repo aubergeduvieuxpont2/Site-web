@@ -46,8 +46,12 @@
 
   // onMount covers the initial hard load; afterNavigate covers every
   // subsequent client-side route change. Together they cover all entries.
+  // Re-fetch settings on every navigation so configuration edits made in the
+  // admin take effect when the user navigates away and back — without a full
+  // page refresh. loadSettings swallows its own errors and merges in place.
   afterNavigate(() => {
     triggerEnter();
+    loadSettings();
   });
 </script>
 

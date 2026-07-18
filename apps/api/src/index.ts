@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { neon } from "@neondatabase/serverless";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
   createSession,
@@ -230,6 +230,24 @@ type SettingsRow = {
   value: string;
   updated_at: string;
 };
+
+// `assignable_room_count` is a cache derived from the number of public rooms.
+// Recompute it from the rooms table and persist it into the settings row so the
+// availability endpoint (which reads the row) and the admin UI stay in sync.
+// Called after every room mutation and on settings load/save. Returns the count.
+async function syncAssignableRoomCount(
+  sql: NeonQueryFunction<any, any>
+): Promise<number> {
+  const rows = (await sql`
+    SELECT count(*)::int AS count FROM rooms WHERE is_public = true
+  `) as { count: number }[];
+  const count = rows[0]?.count ?? 0;
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${String(count)})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+  `;
+  return count;
+}
 
 function getSessionToken(cookieHeader: string): string | null {
   for (const part of cookieHeader.split(";")) {
@@ -943,6 +961,9 @@ app.post(
         RETURNING slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
       `) as RoomRow[];
 
+      // Keep the derived public-room count (assignable_room_count) in sync.
+      await syncAssignableRoomCount(sql);
+
       return c.json({ room: rows[0] }, 201);
     } catch (error: any) {
       if (error.message?.includes("unique") || error.message?.includes("duplicate")) {
@@ -982,6 +1003,9 @@ app.put(
       return c.json({ error: "Room not found" }, 404);
     }
 
+    // is_public may have changed; refresh the derived public-room count.
+    await syncAssignableRoomCount(sql);
+
     return c.json({ room: rows[0] });
   }
 );
@@ -1011,6 +1035,9 @@ app.delete(
     if (rows.length === 0) {
       return c.json({ error: "Room not found" }, 404);
     }
+
+    // A public room may have been removed; refresh the derived count.
+    await syncAssignableRoomCount(sql);
 
     return c.json({ ok: true });
   }
@@ -1631,6 +1658,9 @@ app.get("/api/admin/settings", async (c) => {
   }
 
   const sql = neon(c.env.DB_CONN);
+  // Refresh the derived public-room count before reading so the read-only field
+  // always reflects the current rooms table (self-heals any drift).
+  await syncAssignableRoomCount(sql);
   const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
 
   const adminSettings = rowsToAdminSettings(rows);
@@ -1666,9 +1696,12 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('tps', ${data.tps.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('tvq', ${data.tvq.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('accommodation_tax', ${data.accommodationTax.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      sql`INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${data.assignableRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('reservations_enabled', ${data.reservationsEnabled ? 'true' : 'false'}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
+
+    // `assignable_room_count` is derived, never taken from the request body:
+    // recompute it from the rooms table so it always equals the public-room count.
+    await syncAssignableRoomCount(sql);
 
     const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
     const adminSettings = rowsToAdminSettings(rows);
