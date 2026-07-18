@@ -14,7 +14,7 @@ describe("Email routes", () => {
   };
 
   describe("GET /api/admin/emails/templates", () => {
-    it("returns 200 with 8 templates as admin", async () => {
+    it("returns 200 with 10 templates as admin", async () => {
       const router = createRouter(mockAdmin);
       const app = router;
 
@@ -23,7 +23,7 @@ describe("Email routes", () => {
 
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.templates).toHaveLength(8);
+      expect(data.templates).toHaveLength(10);
       expect(data.templates[0]).toHaveProperty("key");
       expect(data.templates[0]).toHaveProperty("name");
       expect(data.templates[0]).toHaveProperty("subject");

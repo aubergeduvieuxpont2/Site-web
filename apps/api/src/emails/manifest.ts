@@ -76,6 +76,18 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
     sampleFile: "ota-welcome.json",
     requiredFields: ["firstName", "confirmationCode", "checkIn", "checkOut", "setPasswordUrl"],
   },
+  "email-verification": {
+    name: { fr: "Confirmation d'adresse courriel", en: "Email Verification" },
+    subject: { fr: "Confirmez votre adresse courriel", en: "Confirm your email address" },
+    sampleFile: "email-verification.json",
+    requiredFields: ["firstName", "verifyUrl", "expiryHours"],
+  },
+  "email-change-alert": {
+    name: { fr: "Alerte de changement d'adresse", en: "Email Change Alert" },
+    subject: { fr: "Votre adresse courriel a été modifiée", en: "Your email address was changed" },
+    sampleFile: "email-change-alert.json",
+    requiredFields: ["firstName", "newEmail"],
+  },
 };
 
 export const TEMPLATE_KEYS: TemplateKey[] = [
@@ -87,6 +99,8 @@ export const TEMPLATE_KEYS: TemplateKey[] = [
   "review-request",
   "room-assigned",
   "ota-welcome",
+  "email-verification",
+  "email-change-alert",
 ];
 
 export function isTemplateKey(value: unknown): value is TemplateKey {

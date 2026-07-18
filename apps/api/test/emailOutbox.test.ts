@@ -160,6 +160,57 @@ describe("enqueueEmail", () => {
 
     expect(result.enqueued).toBe(false);
   });
+
+  // Security templates bypass the opt-in notification toggle entirely: they must
+  // send even if no settings row exists (or the operator turned notifications
+  // off), because they prove ownership of an email address.
+  for (const secure of ["email-verification", "email-change-alert"] as const) {
+    it(`always enqueues ${secure} without reading any settings toggle`, async () => {
+      let toggleRead = false;
+      let insertCalled = false;
+      const sql = (strings: TemplateStringsArray, ..._values: unknown[]) => {
+        const query = strings.join("");
+        if (query.includes("SELECT value")) {
+          toggleRead = true;
+          return Promise.resolve([{ value: "false" }]);
+        }
+        if (query.includes("INSERT INTO email_outbox")) {
+          insertCalled = true;
+        }
+        return Promise.resolve([]);
+      };
+
+      const result = await enqueueEmail(sql as any, {
+        template: secure,
+        to: "guest@example.com",
+        payload: { firstName: "Jean" },
+      });
+
+      expect(result.enqueued).toBe(true);
+      expect(insertCalled).toBe(true);
+      // No settings toggle is ever consulted for a security template.
+      expect(toggleRead).toBe(false);
+    });
+  }
+
+  it("still gates the four notification templates behind their toggle", async () => {
+    let insertCalled = false;
+    const sql = (strings: TemplateStringsArray, ..._values: unknown[]) => {
+      const query = strings.join("");
+      if (query.includes("SELECT value")) return Promise.resolve([{ value: "false" }]);
+      if (query.includes("INSERT INTO email_outbox")) insertCalled = true;
+      return Promise.resolve([]);
+    };
+
+    const result = await enqueueEmail(sql as any, {
+      template: "password-reset",
+      to: "guest@example.com",
+      payload: {},
+    });
+
+    expect(result.enqueued).toBe(false);
+    expect(insertCalled).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

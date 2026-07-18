@@ -4,21 +4,35 @@ import { contactContext } from "./emails/routes";
 
 export const EMAIL_FROM = "Auberge du Vieux Pont <no-reply@aubergeduvieuxpont.ca>";
 
-// The outbox only ever carries these four transactional templates; the other
-// TemplateKey values (welcome, reservation-cancellation, invoice-receipt,
-// review-request) are preview-only and never enqueued.
+// The outbox carries these four toggle-gated transactional templates plus two
+// security-critical templates (email-verification, email-change-alert). The
+// remaining TemplateKey values (welcome, reservation-cancellation,
+// invoice-receipt, review-request) are preview-only and never enqueued.
 export type EmailTemplate =
   | "reservation-confirmation"
   | "password-reset"
   | "room-assigned"
-  | "ota-welcome";
+  | "ota-welcome"
+  | "email-verification"
+  | "email-change-alert";
 
-export const EMAIL_TOGGLE_KEYS: Record<EmailTemplate, string> = {
+// Only the four notification templates are gated by an opt-in settings toggle.
+// The two security templates below are intentionally absent — they are always
+// sent (see ALWAYS_SEND).
+export const EMAIL_TOGGLE_KEYS: Partial<Record<EmailTemplate, string>> = {
   "reservation-confirmation": "email_confirmation_enabled",
   "password-reset": "email_password_reset_enabled",
   "room-assigned": "email_room_assignment_enabled",
   "ota-welcome": "email_welcome_enabled",
 };
+
+// Security-required emails that MUST bypass the opt-in notification toggle:
+// confirming ownership of an email address is not a marketing notification, so
+// the operator's notification switches never suppress them.
+export const ALWAYS_SEND: ReadonlySet<EmailTemplate> = new Set<EmailTemplate>([
+  "email-verification",
+  "email-change-alert",
+]);
 
 export function computeEmailBackoff(attempts: number): number {
   return Math.min(3600, 30 * Math.pow(2, attempts - 1));
@@ -42,12 +56,16 @@ export async function enqueueEmail(
   }
 ): Promise<{ enqueued: boolean }> {
   const { template, to, locale = "fr", payload } = input;
-  const toggleKey = EMAIL_TOGGLE_KEYS[template];
-  if (!toggleKey) return { enqueued: false };
 
-  const rows = await sql`SELECT value FROM settings WHERE key = ${toggleKey}`;
-  const enabled = rows[0]?.value === "true";
-  if (!enabled) return { enqueued: false };
+  // Security-critical templates always send; the other four are opt-in gated.
+  if (!ALWAYS_SEND.has(template)) {
+    const toggleKey = EMAIL_TOGGLE_KEYS[template];
+    if (!toggleKey) return { enqueued: false };
+
+    const rows = await sql`SELECT value FROM settings WHERE key = ${toggleKey}`;
+    const enabled = rows[0]?.value === "true";
+    if (!enabled) return { enqueued: false };
+  }
 
   await sql`
     INSERT INTO email_outbox (to_email, template, locale, payload)

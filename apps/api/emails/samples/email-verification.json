@@ -1,0 +1,5 @@
+{
+  "firstName": "Marie",
+  "verifyUrl": "https://www.aubergeduvieuxpont.ca/verification?token=abc123",
+  "expiryHours": 24
+}
