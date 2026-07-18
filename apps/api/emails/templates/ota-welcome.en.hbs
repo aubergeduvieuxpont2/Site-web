@@ -1,0 +1,25 @@
+<p>Hello {{firstName}},</p>
+
+<p>Your reservation <strong>#{{confirmationCode}}</strong> has been successfully recorded.</p>
+
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+  <tr>
+    <td style="padding: 8px 0; color: #45464d; font-size: 14px;">Check-in</td>
+    <td style="padding: 8px 0; font-weight: 600;">{{formatDate checkIn}}</td>
+  </tr>
+  <tr>
+    <td style="padding: 8px 0; color: #45464d; font-size: 14px;">Check-out</td>
+    <td style="padding: 8px 0; font-weight: 600;">{{formatDate checkOut}}</td>
+  </tr>
+</table>
+
+<p>Create your guest account to view your reservations and manage your profile.</p>
+
+<p style="text-align: center; margin: 24px 0;">
+  <a href="{{{setPasswordUrl}}}" style="display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">Set my password</a>
+</p>
+
+<p style="font-size: 13px; color: #45464d;">This link is valid for 30 days. If you were not expecting this email, you can safely ignore it.</p>
+
+<p>Warm regards,<br/>
+The Vieux Pont Team</p>

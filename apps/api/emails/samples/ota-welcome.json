@@ -1,0 +1,7 @@
+{
+  "firstName": "Sophie",
+  "confirmationCode": "EXP-2026-7890",
+  "checkIn": "2026-09-05",
+  "checkOut": "2026-09-08",
+  "setPasswordUrl": "https://www.aubergeduvieuxpont.ca/reinitialisation?token=abc123&welcome=1"
+}

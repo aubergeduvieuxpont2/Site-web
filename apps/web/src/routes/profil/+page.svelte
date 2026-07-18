@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { getMe, getProfile, logout, changePassword, isError } from "$lib/api";
+  import { getMe, getProfile, logout, changePassword, changeProfileEmail, isError } from "$lib/api";
   import type { User, ReservationRow } from "$lib/api";
   import ProfilReservationTable from "$lib/components/ProfilReservationTable.svelte";
   import { settings } from "$lib/settings.svelte";
@@ -63,6 +63,38 @@
     pwdSuccess = true;
     currentPassword = "";
     newPassword = "";
+  }
+
+  // ── Change email state ────────────────────────────────────────────────
+  let emailNew = $state("");
+  let emailPassword = $state("");
+  let emailSubmitting = $state(false);
+  let emailError = $state<string | null>(null);
+  let emailSuccess = $state(false);
+
+  async function handleEmailChange(e: SubmitEvent): Promise<void> {
+    e.preventDefault();
+    if (emailSubmitting) return;
+
+    emailError = null;
+    emailSuccess = false;
+    emailSubmitting = true;
+
+    const result = await changeProfileEmail(emailNew, emailPassword);
+    emailSubmitting = false;
+
+    if (isError(result)) {
+      emailError = result.error; // text binding — never innerHTML
+      return;
+    }
+
+    // Mutate user.email for instant display update.
+    if (user) {
+      user = { ...user, email: result.user.email };
+    }
+    emailSuccess = true;
+    emailNew = "";
+    emailPassword = "";
   }
 
   // ── Mount: auth gate → profile fetch ─────────────────────────────────
@@ -317,6 +349,101 @@
           </div>
         </form>
       </section>
+
+      <div class="profil__hairline" role="separator" aria-hidden="true"></div>
+
+      <!-- ── Change email ── -->
+      <section
+        class="profil__section profil__section--pwd"
+        aria-labelledby="profil-email-heading"
+      >
+        <h2
+          id="profil-email-heading"
+          class="profil__section-heading"
+          data-testid="profil-email-heading"
+        >
+          Changer l'adresse courriel
+        </h2>
+
+        <p
+          class="profil__email-current profil__pwd-hint"
+          data-testid="profil-email-current"
+        >
+          Adresse actuelle : {user.email}
+        </p>
+
+        <form
+          class="profil__pwd-form"
+          data-testid="profil-email-form"
+          aria-label="Changer l'adresse courriel"
+          onsubmit={handleEmailChange}
+          novalidate
+        >
+          <div class="profil__pwd-field">
+            <label class="profil__pwd-label" for="profil-email-new">
+              Nouvelle adresse courriel
+            </label>
+            <input
+              id="profil-email-new"
+              class="profil__pwd-input"
+              type="email"
+              autocomplete="email"
+              required
+              disabled={emailSubmitting}
+              bind:value={emailNew}
+              data-testid="profil-email-new-input"
+            />
+          </div>
+
+          <div class="profil__pwd-field">
+            <label class="profil__pwd-label" for="profil-email-password">
+              Mot de passe actuel
+            </label>
+            <input
+              id="profil-email-password"
+              class="profil__pwd-input"
+              type="password"
+              autocomplete="current-password"
+              required
+              disabled={emailSubmitting}
+              bind:value={emailPassword}
+              data-testid="profil-email-password-input"
+            />
+          </div>
+
+          {#if emailError}
+            <div
+              class="profil__pwd-feedback profil__pwd-feedback--error"
+              role="alert"
+              data-testid="profil-email-error"
+            >
+              {emailError}
+            </div>
+          {/if}
+
+          {#if emailSuccess}
+            <div
+              class="profil__pwd-feedback profil__pwd-feedback--success"
+              role="status"
+              data-testid="profil-email-success"
+            >
+              Adresse courriel modifiée avec succès.
+            </div>
+          {/if}
+
+          <div class="profil__pwd-actions">
+            <button
+              class="button button--action"
+              type="submit"
+              disabled={emailSubmitting}
+              aria-label="Modifier l'adresse courriel"
+              data-testid="profil-email-submit"
+            >
+              {emailSubmitting ? "Modification…" : "Modifier l'adresse courriel"}
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
     <!-- /.profil__content -->
   {/if}
@@ -505,6 +632,14 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-lg, 24px);
+  }
+
+  /* Current-email hint — reuses .profil__pwd-hint type/colour tokens;
+     block display + margin anchor it between heading and form. */
+  .profil__email-current {
+    display: block;
+    margin-top: calc(-1 * var(--space-sm, 8px));
+    margin-bottom: var(--space-lg, 24px);
   }
 
   .profil__pwd-field {

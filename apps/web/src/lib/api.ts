@@ -104,6 +104,12 @@ export interface PublicSettings {
 // settings body — so it is excluded from the admin shape.
 export interface AdminSettings extends Omit<PublicSettings, "publicRoomCount"> {
   assignableRoomCount: number;
+  // Per-email-type automation toggles (default false). Admin-only: these keys are
+  // NOT part of PublicSettings and are never returned by GET /api/settings.
+  emailConfirmationEnabled: boolean;
+  emailPasswordResetEnabled: boolean;
+  emailRoomAssignmentEnabled: boolean;
+  emailWelcomeEnabled: boolean;
 }
 
 /**
@@ -322,6 +328,21 @@ export async function changePassword(
   return fetchJson<{ ok: true }>("/auth/password", {
     method: "POST",
     body: JSON.stringify({ currentPassword, newPassword }),
+  });
+}
+
+/**
+ * Change the authenticated guest's email address. Requires the current password
+ * for re-authentication. On success returns the updated user for instant
+ * display refresh; conflicts (email already taken) surface as `{ error }`.
+ */
+export async function changeProfileEmail(
+  newEmail: string,
+  currentPassword: string,
+): Promise<{ user: User } | ApiError> {
+  return fetchJson<{ user: User }>("/profile/email", {
+    method: "POST",
+    body: JSON.stringify({ newEmail, currentPassword }),
   });
 }
 

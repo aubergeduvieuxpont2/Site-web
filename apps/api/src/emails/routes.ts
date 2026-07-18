@@ -5,7 +5,7 @@ import { renderEmail, EMAIL_DEFAULTS } from "./render";
 import { MANIFEST, isTemplateKey, isLocale } from "./manifest";
 import { SAMPLES } from "./templates";
 
-type Bindings = { DB_CONN: string; HUBSPOT: Fetcher; ADMIN_EMAIL: string };
+type Bindings = { DB_CONN: string; HUBSPOT: Fetcher; ADMIN_EMAIL: string; RESEND_API_KEY: string };
 
 // Build the footer contact context from the live `settings` values, falling
 // back to EMAIL_DEFAULTS if the query fails so a preview never 500s.
@@ -15,7 +15,7 @@ function telHref(phone: string): string {
   return digits.length === 10 ? `tel:+1${digits}` : `tel:+${digits}`;
 }
 
-async function contactContext(dbConn: string | undefined) {
+export async function contactContext(dbConn: string | undefined) {
   if (!dbConn) return { ...EMAIL_DEFAULTS };
   try {
     const sql = neon(dbConn);

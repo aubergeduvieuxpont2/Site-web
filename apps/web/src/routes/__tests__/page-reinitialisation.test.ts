@@ -113,6 +113,63 @@ describe("page-reinitialisation", () => {
     });
   });
 
+  describe("welcome variant (?welcome=1)", () => {
+    it("renders default reset copy when welcome is absent", () => {
+      const { getByTestId } = render(Page);
+      const section = getByTestId("reset-form-section");
+      expect(section.getAttribute("data-welcome")).toBe("false");
+      expect(getByTestId("reset-card-tag").textContent).toContain("PASS-RESET");
+      expect(getByTestId("reset-heading").textContent).toContain("Nouveau mot de passe");
+      expect(getByTestId("reset-subhead").textContent).toContain("8 caractères");
+      expect(document.title).toContain("Réinitialisation du mot de passe");
+    });
+
+    it("swaps tag, heading and subhead copy when welcome=1", () => {
+      mockUrl = new URL("http://localhost/reinitialisation?token=tok-123&welcome=1");
+      const { getByTestId } = render(Page);
+      const section = getByTestId("reset-form-section");
+      expect(section.getAttribute("data-welcome")).toBe("true");
+      expect(getByTestId("reset-card-tag").textContent).toContain("BIENVENUE");
+      expect(getByTestId("reset-heading").textContent).toContain("Bienvenue !");
+      expect(getByTestId("reset-subhead").textContent).toContain("espace client");
+    });
+
+    it("updates the document title in welcome mode", () => {
+      mockUrl = new URL("http://localhost/reinitialisation?token=tok-123&welcome=1");
+      render(Page);
+      expect(document.title).toContain("Créez votre espace client");
+    });
+
+    it("keeps the heading id + aria-labelledby wiring intact in welcome mode", () => {
+      mockUrl = new URL("http://localhost/reinitialisation?token=tok-123&welcome=1");
+      const { getByTestId } = render(Page);
+      expect(getByTestId("reset-heading").getAttribute("id")).toBe("reset-heading");
+      expect(getByTestId("reset-form-section").getAttribute("aria-labelledby")).toBe("reset-heading");
+      // The tag remains hidden from assistive tech; the h1 is the sole heading.
+      expect(getByTestId("reset-card-tag").getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("does not treat other welcome values as active", () => {
+      mockUrl = new URL("http://localhost/reinitialisation?token=tok-123&welcome=true");
+      const { getByTestId } = render(Page);
+      expect(getByTestId("reset-form-section").getAttribute("data-welcome")).toBe("false");
+      expect(getByTestId("reset-heading").textContent).toContain("Nouveau mot de passe");
+    });
+
+    it("leaves the submit flow unchanged in welcome mode", async () => {
+      mockUrl = new URL("http://localhost/reinitialisation?token=tok-123&welcome=1");
+      resetPassword.mockResolvedValue({ ok: true });
+      const { getByTestId } = render(Page);
+
+      await fillPasswords(getByTestId, "longenough");
+      await fireEvent.submit(getByTestId("reset-form"));
+      await tick();
+
+      expect(resetPassword).toHaveBeenCalledWith("tok-123", "longenough");
+      expect(getByTestId("reset-success-state")).toBeTruthy();
+    });
+  });
+
   describe("submit flow", () => {
     it("calls resetPassword() with the token and new password, then shows success", async () => {
       resetPassword.mockResolvedValue({ ok: true });

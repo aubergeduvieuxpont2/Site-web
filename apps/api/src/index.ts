@@ -1,8 +1,12 @@
 import { Hono, type Context } from "hono";
+import type { ExportedHandler, ScheduledController, ExecutionContext } from "@cloudflare/workers-types";
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { neon } from "@neondatabase/serverless";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
+import { buildReservationConfirmationData } from "./emailPayloads";
+import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { hashPassword, verifyPassword } from "./auth/password";
 import {
   createSession,
@@ -63,6 +67,7 @@ type Bindings = {
   GATEWAY_AUTH_SECRET?: string;
   // Shared secret required from the email-ingest Worker on /internal/ota-bookings.
   INTERNAL_OTA_SECRET?: string;
+  RESEND_API_KEY: string;
 };
 
 type MessageRow = {
@@ -102,11 +107,6 @@ export interface AdminUserRow {
   role: "guest" | "admin";
   created_at: string;
 }
-
-type RoomVisibilityRow = {
-  slug: string;
-  is_public: boolean;
-};
 
 const MessageRequestSchema = z.object({
   body: z.string().min(1, "body must be non-empty"),
@@ -189,10 +189,6 @@ const ResetPasswordSchema = z.object({
   newPassword: z.string().min(8, "le mot de passe doit contenir au moins 8 caractères"),
 });
 
-const RoomVisibilitySchema = z.object({
-  isPublic: z.boolean(),
-});
-
 const RoleSchema = z.object({
   role: z.enum(["guest", "admin"]),
 });
@@ -204,6 +200,11 @@ const ReservationStatusSchema = z.object({
 const BlackoutUpsertSchema = z.object({
   roomsBlocked: z.coerce.number().int().min(0),
   note: z.string().trim().nullable().optional(),
+});
+
+export const ProfileEmailSchema = z.object({
+  newEmail: z.string().trim().email("email invalide"),
+  currentPassword: z.string().min(1, "mot de passe requis"),
 });
 
 const authHook = (result: any, c: any) =>
@@ -235,6 +236,24 @@ type SettingsRow = {
   value: string;
   updated_at: string;
 };
+
+// `assignable_room_count` is a cache derived from the number of public rooms.
+// Recompute it from the rooms table and persist it into the settings row so the
+// availability endpoint (which reads the row) and the admin UI stay in sync.
+// Called after every room mutation and on settings load/save. Returns the count.
+async function syncAssignableRoomCount(
+  sql: NeonQueryFunction<any, any>
+): Promise<number> {
+  const rows = (await sql`
+    SELECT count(*)::int AS count FROM rooms WHERE is_public = true
+  `) as { count: number }[];
+  const count = rows[0]?.count ?? 0;
+  await sql`
+    INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${String(count)})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+  `;
+  return count;
+}
 
 function getSessionToken(cookieHeader: string): string | null {
   for (const part of cookieHeader.split(";")) {
@@ -387,6 +406,36 @@ app.post(
     }
 
     c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          if (!created.arrive || !created.depart) return;
+          const confirmSettingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+          const confirmSettings = rowsToAdminSettings(confirmSettingsRows);
+          const invoice = computeInvoice({
+            nights: nightsBetween(created.arrive, created.depart),
+            roomCount: created.room_count ?? 1,
+            effectiveNightly: confirmSettings.nightlyPrice,
+            weeklyRate: confirmSettings.weeklyPrice,
+            tps: confirmSettings.tps,
+            tvq: confirmSettings.tvq,
+            accommodationTax: confirmSettings.accommodationTax,
+            type: "full",
+          });
+          const data = buildReservationConfirmationData(created, invoice);
+          if (data) {
+            await enqueueEmail(sql, {
+              template: "reservation-confirmation",
+              to: created.email,
+              payload: data as unknown as Record<string, unknown>,
+            });
+          }
+        } catch (err) {
+          console.error("confirmation email enqueue failed", err);
+        }
+      })()
+    );
+
+    c.executionCtx.waitUntil(
       enqueueHubspotOps(
         c.env.HUBSPOT,
         buildReservationHubspotOps({
@@ -524,10 +573,42 @@ app.post("/internal/ota-bookings", async (c) => {
     )
   );
 
+  if (d.guestEmail) {
+    c.executionCtx.waitUntil(
+      provisionOtaGuest(sql, {
+        reservationId: created.id,
+        guestEmail: d.guestEmail,
+        firstName: d.firstName,
+        lastName: d.lastName,
+        externalRef: d.externalRef,
+        checkIn: d.checkIn,
+        checkOut: d.checkOut,
+      })
+    );
+  }
+
   return c.json({ reservationId: created.id }, 201);
 });
 
 // Auth routes
+// Durably link a user's guest reservations to their account by matching the
+// account email. Only claims UNCLAIMED rows (user_id IS NULL), so it can never
+// reassign a reservation already owned by another account. Called at the trusted
+// moments where the email is the account's own — registration, login, and (with
+// the pre-change address) an email change. Profile reads then key strictly off
+// user_id, which closes the email-reassignment IDOR: changing your email can no
+// longer surface another person's bookings.
+export async function linkGuestReservations(
+  sql: NeonQueryFunction<any, any>,
+  userId: number,
+  email: string
+): Promise<void> {
+  await sql`
+    UPDATE reservations SET user_id = ${userId}
+    WHERE user_id IS NULL AND lower(email) = lower(${email})
+  `;
+}
+
 app.post(
   "/api/auth/register",
   authRateLimiter,
@@ -554,6 +635,9 @@ app.post(
       if (!user) {
         return c.json({ error: "Failed to create user" }, 500);
       }
+
+      // Claim any guest reservations made under this email before the account existed.
+      await linkGuestReservations(sql, user.id, data.email);
 
       const token = await createSession(sql, user.id);
 
@@ -616,6 +700,10 @@ app.post(
     if (!user || !(await verifyPassword(data.password, user.password_hash))) {
       return c.json({ error: "Identifiants invalides" }, 401);
     }
+
+    // Link any unclaimed guest reservations under this account's email so the
+    // profile (which reads strictly by user_id) shows them without an email match.
+    await linkGuestReservations(sql, user.id, user.email);
 
     const token = await createSession(sql, user.id);
     const { password_hash, ...safeUser } = user;
@@ -711,18 +799,33 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id FROM users WHERE lower(email) = lower(${data.email})
-    `) as { id: number }[];
+      SELECT id, email, first_name, name FROM users WHERE lower(email) = lower(${data.email})
+    `) as { id: number; email: string; first_name: string | null; name: string | null }[];
 
-    if (rows[0]) {
+    const user = rows[0];
+    if (user) {
       const rawToken = generateToken();
       const tokenHash = await sha256hex(rawToken);
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
       await sql`
         INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
-        VALUES (${tokenHash}, ${rows[0].id}, ${expiresAt})
+        VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
+
+      try {
+        await enqueueEmail(sql, {
+          template: "password-reset",
+          to: user.email,
+          payload: {
+            firstName: user.first_name ?? user.name ?? "client",
+            resetUrl: `${SITE_ORIGIN}/reinitialisation?token=${rawToken}`,
+            expiryHours: 1,
+          },
+        });
+      } catch (err) {
+        console.error("password-reset email enqueue failed", err);
+      }
     }
 
     return c.json({ ok: true });
@@ -773,7 +876,7 @@ app.get("/api/profile", async (c) => {
   const reservations = (await sql`
     SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
-    WHERE lower(email) = lower(${user.email})
+    WHERE user_id = ${user.id}
     ORDER BY created_at DESC
   `) as ReservationRow[];
 
@@ -787,6 +890,89 @@ app.get("/api/profile", async (c) => {
 
   return c.json({ user: userResponse, reservations });
 });
+
+app.post(
+  "/api/profile/email",
+  authRateLimiter,
+  zValidator("json", ProfileEmailSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    const { newEmail, currentPassword } = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    // Verify password
+    const userRow = (await sql`
+      SELECT password_hash FROM users WHERE id = ${user.id}
+    `) as { password_hash: string }[];
+
+    if (userRow.length === 0) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    const passwordValid = await verifyPassword(currentPassword, userRow[0].password_hash);
+    if (!passwordValid) {
+      return c.json({ error: "Invalid password" }, 401);
+    }
+
+    // Check if email is already taken by another user
+    const existing = (await sql`
+      SELECT id FROM users WHERE lower(email) = lower(${newEmail}) AND id != ${user.id}
+    `) as { id: number }[];
+
+    if (existing.length > 0) {
+      return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+    }
+
+    // Claim reservations under the CURRENT (pre-change, password-verified)
+    // address before reassigning the email. Combined with the user_id-only
+    // profile read, this prevents takeover of another person's reservations via
+    // email reassignment and survives OTA relay expiry.
+    await linkGuestReservations(sql, user.id, user.email);
+
+    // Update the user's email
+    await sql`
+      UPDATE users SET email = ${newEmail}
+      WHERE id = ${user.id}
+    `;
+
+    // Fire-and-forget HubSpot update if hubspot_contact_id is set
+    if (user.hubspot_contact_id) {
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            await c.env.HUBSPOT.fetch(
+              new Request("http://hubspot/ops/enqueue", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  kind: "contact.updateById",
+                  payload: { contactId: user.hubspot_contact_id, properties: { email: newEmail } },
+                  dedupeKey: `user-${user.id}-email-${newEmail.toLowerCase()}`,
+                }),
+              })
+            );
+          } catch (err) {
+            console.error("HubSpot contact update error:", err);
+          }
+        })()
+      );
+    }
+
+    const updatedUserResponse = {
+      id: user.id,
+      email: newEmail,
+      name: user.name,
+      role: user.role,
+      hubspotContactId: user.hubspot_contact_id || null,
+    };
+
+    return c.json({ user: updatedUserResponse }, 200);
+  }
+);
 
 // Public rooms endpoint
 app.get("/api/rooms", async (c) => {
@@ -958,6 +1144,9 @@ app.post(
         RETURNING slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
       `) as RoomRow[];
 
+      // Keep the derived public-room count (assignable_room_count) in sync.
+      await syncAssignableRoomCount(sql);
+
       return c.json({ room: rows[0] }, 201);
     } catch (error: any) {
       if (error.message?.includes("unique") || error.message?.includes("duplicate")) {
@@ -997,6 +1186,9 @@ app.put(
       return c.json({ error: "Room not found" }, 404);
     }
 
+    // is_public may have changed; refresh the derived public-room count.
+    await syncAssignableRoomCount(sql);
+
     return c.json({ room: rows[0] });
   }
 );
@@ -1026,6 +1218,9 @@ app.delete(
     if (rows.length === 0) {
       return c.json({ error: "Room not found" }, 404);
     }
+
+    // A public room may have been removed; refresh the derived count.
+    await syncAssignableRoomCount(sql);
 
     return c.json({ ok: true });
   }
@@ -1226,6 +1421,39 @@ app.post(
         VALUES (${reservationId}, ${data.roomSlug})
         RETURNING id, reservation_id, room_slug, created_at
       `) as { id: number; reservation_id: number; room_slug: string; created_at: string }[];
+
+      c.executionCtx.waitUntil(
+        (async () => {
+          try {
+            const resRows = (await sql`
+              SELECT name, email, to_char(arrive, 'YYYY-MM-DD') AS arrive, to_char(depart, 'YYYY-MM-DD') AS depart
+              FROM reservations WHERE id = ${reservationId}
+            `) as { name: string; email: string; arrive: string | null; depart: string | null }[];
+            const roomRows = (await sql`
+              SELECT name, passkey_enabled, passkey FROM rooms WHERE slug = ${data.roomSlug}
+            `) as { name: string; passkey_enabled: boolean; passkey: string | null }[];
+            const r = resRows[0];
+            const room = roomRows[0];
+            // Airbnb-sourced reservations have an empty email — nothing to send to.
+            if (!r || !room || !r.email) return;
+            await enqueueEmail(sql, {
+              template: "room-assigned",
+              to: r.email,
+              payload: {
+                name: r.name,
+                roomLabel: room.name,
+                checkIn: r.arrive ?? "",
+                checkOut: r.depart ?? "",
+                passkeyEnabled: room.passkey_enabled && !!room.passkey,
+                passkey: room.passkey ?? undefined,
+                confirmationCode: `#${reservationId}`,
+              },
+            });
+          } catch (err) {
+            console.error("room-assigned email enqueue failed", err);
+          }
+        })()
+      );
 
       return c.json({ assignment: assignment[0] }, 201);
     } catch {
@@ -1652,6 +1880,9 @@ app.get("/api/admin/settings", async (c) => {
   }
 
   const sql = neon(c.env.DB_CONN);
+  // Refresh the derived public-room count before reading so the read-only field
+  // always reflects the current rooms table (self-heals any drift).
+  await syncAssignableRoomCount(sql);
   const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
 
   const adminSettings = rowsToAdminSettings(rows);
@@ -1687,9 +1918,16 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('tps', ${data.tps.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('tvq', ${data.tvq.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('accommodation_tax', ${data.accommodationTax.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
-      sql`INSERT INTO settings (key, value) VALUES ('assignable_room_count', ${data.assignableRoomCount.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('reservations_enabled', ${data.reservationsEnabled ? 'true' : 'false'}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_confirmation_enabled', ${data.emailConfirmationEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_password_reset_enabled', ${data.emailPasswordResetEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
+
+    // `assignable_room_count` is derived, never taken from the request body:
+    // recompute it from the rooms table so it always equals the public-room count.
+    await syncAssignableRoomCount(sql);
 
     const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
     const adminSettings = rowsToAdminSettings(rows);
@@ -1706,4 +1944,9 @@ app.notFound((c) => {
   return c.json({ error: "Not Found" }, 404);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
+    ctx.waitUntil(drainEmailOutbox(env));
+  },
+} satisfies ExportedHandler<Bindings>;

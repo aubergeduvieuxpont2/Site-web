@@ -71,6 +71,10 @@
     tvq: 9.975,
     accommodationTax: 3.5,
     reservationsEnabled: true,
+    emailConfirmationEnabled: false,
+    emailPasswordResetEnabled: false,
+    emailRoomAssignmentEnabled: false,
+    emailWelcomeEnabled: false,
   });
   let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
 
@@ -181,10 +185,8 @@
     if (!Number.isInteger(weeklyPrice) || weeklyPrice <= 0) {
       errors.weeklyPrice = "Prix doit être un entier positif";
     }
-    const assignableCount = settings.assignableRoomCount ?? 0;
-    if (!Number.isInteger(assignableCount) || assignableCount <= 0) {
-      errors.assignableRoomCount = "Nombre de chambres doit être un entier positif";
-    }
+    // assignableRoomCount is server-derived (read-only in the UI): not validated
+    // or authored here — the API recomputes it from the count of public rooms.
     if (!settings.contactEmail || !settings.contactEmail.includes("@")) {
       errors.contactEmail = "Courriel invalide";
     }
@@ -908,33 +910,25 @@
                   {/if}
                 </div>
 
-                <!-- Assignable room count (int > 0) -->
+                <!-- Assignable room count — read-only, derived from the number
+                     of public rooms. Managed in the Chambres tab, not here. -->
                 <div class="page-admin__field">
                   <label class="page-admin__field-label" for="input-assignable-rooms">
                     Chambres disponibles à l'attribution
-                    <span class="page-admin__field-hint">(pour le calcul de disponibilité)</span>
+                    <span class="page-admin__field-hint"
+                      >(calculé automatiquement — nombre de chambres publiques)</span
+                    >
                   </label>
                   <input
                     id="input-assignable-rooms"
                     type="number"
-                    min="1"
-                    bind:value={settings.assignableRoomCount}
-                    class="page-admin__search-input page-admin__tax-input"
+                    value={settings.assignableRoomCount}
+                    readonly
+                    aria-readonly="true"
+                    tabindex="-1"
+                    class="page-admin__search-input page-admin__tax-input page-admin__input--readonly"
                     data-testid="input-assignable-rooms"
-                    aria-describedby={settingsErrors.assignableRoomCount
-                      ? "err-assignable-rooms"
-                      : undefined}
-                    aria-invalid={!!settingsErrors.assignableRoomCount}
                   />
-                  {#if settingsErrors.assignableRoomCount}
-                    <span
-                      class="page-admin__field-error"
-                      id="err-assignable-rooms"
-                      role="alert"
-                      data-testid="error-assignable-rooms"
-                      >{settingsErrors.assignableRoomCount}</span
-                    >
-                  {/if}
                 </div>
 
                 <!-- Reservations enabled toggle -->
@@ -955,6 +949,67 @@
                       {settings.reservationsEnabled ? "Activées" : "En pause (maintenance)"}
                     </span>
                   </div>
+                </div>
+
+                <!-- Automated email toggles (default off, admin-only) -->
+                <h3 class="page-admin__settings-heading" id="email-toggles-heading">
+                  Courriels automatiques
+                </h3>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-confirmation"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailConfirmationEnabled}
+                    aria-label="Envoyer une confirmation de réservation par courriel"
+                    data-testid="toggle-email-confirmation"
+                  />
+                  <label for="toggle-email-confirmation" class="page-admin__toggle-label">
+                    Confirmation de réservation
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-password-reset"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailPasswordResetEnabled}
+                    aria-label="Envoyer un lien de réinitialisation de mot de passe par courriel"
+                    data-testid="toggle-email-password-reset"
+                  />
+                  <label for="toggle-email-password-reset" class="page-admin__toggle-label">
+                    Réinitialisation de mot de passe
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-room-assignment"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailRoomAssignmentEnabled}
+                    aria-label="Envoyer une notification d'assignation de chambre par courriel"
+                    data-testid="toggle-email-room-assignment"
+                  />
+                  <label for="toggle-email-room-assignment" class="page-admin__toggle-label">
+                    Assignation de chambre
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-welcome"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailWelcomeEnabled}
+                    aria-label="Envoyer un courriel de bienvenue aux nouveaux clients OTA"
+                    data-testid="toggle-email-welcome"
+                  />
+                  <label for="toggle-email-welcome" class="page-admin__toggle-label">
+                    Bienvenue (OTA)
+                  </label>
                 </div>
 
                 {#if settingsSaved}
@@ -1243,12 +1298,17 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    flex-wrap: wrap;
+    /* Keep every tab on one row; scroll horizontally on narrow screens
+       rather than wrapping the Courriels link onto a second line. */
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .page-admin__tablist {
     display: flex;
     gap: 0;
+    flex-shrink: 0;
   }
 
   /* ─── Courriels nav link (sibling of the tablist, not part of it) ─── */
@@ -1268,6 +1328,8 @@
     text-transform: uppercase;
     text-decoration: none;
     color: var(--color-ink-variant);
+    white-space: nowrap;
+    flex-shrink: 0;
 
     border: 1px solid transparent;
     border-radius: 4px;
@@ -1302,7 +1364,9 @@
 
   .page-admin__tab {
     position: relative;
-    padding: var(--space-md) var(--space-lg);
+    /* Horizontal padding kept at --space-md (not --space-lg) so all tabs plus
+       the Courriels link fit on one row at the 1280px max container width. */
+    padding: var(--space-md) var(--space-md);
     font-family: var(--font-sans);
     font-size: 13px;
     font-weight: 600;
@@ -1313,6 +1377,7 @@
     border: none;
     cursor: pointer;
     min-height: 44px;
+    white-space: nowrap;
     transition: color 160ms ease;
   }
 
@@ -1733,6 +1798,13 @@
   .page-admin__tax-input[type="number"] {
     -moz-appearance: textfield;
     appearance: textfield;
+  }
+
+  /* Read-only derived field (e.g. assignable room count): visibly inert. */
+  .page-admin__input--readonly {
+    background-color: var(--color-surface-container-low);
+    color: var(--color-ink-variant);
+    cursor: default;
   }
 
   @media (max-width: 640px) {

@@ -52,10 +52,14 @@ describe("admin page — settings fields", () => {
     expect(src).toContain('data-testid="error-weekly-price"');
   });
 
-  it("renders the assignable-rooms input and its error hook", () => {
+  it("renders the assignable-rooms field read-only (derived from public rooms)", () => {
     expect(src).toContain('data-testid="input-assignable-rooms"');
-    expect(src).toContain("bind:value={settings.assignableRoomCount}");
-    expect(src).toContain('data-testid="error-assignable-rooms"');
+    // Derived value: displayed via value=, never two-way bound or editable.
+    expect(src).toContain("value={settings.assignableRoomCount}");
+    expect(src).toContain("readonly");
+    expect(src).not.toContain("bind:value={settings.assignableRoomCount}");
+    // No validation/error hook — the field can't be authored by the user.
+    expect(src).not.toContain('data-testid="error-assignable-rooms"');
   });
 
   it("renders the reservations-enabled toggle bound to state", () => {
@@ -64,11 +68,11 @@ describe("admin page — settings fields", () => {
     expect(src).toContain('type="checkbox"');
   });
 
-  it("validates weeklyPrice and assignableRoomCount as positive integers", () => {
+  it("validates weeklyPrice as a positive integer and does not validate the derived room count", () => {
     expect(src).toContain("errors.weeklyPrice");
-    expect(src).toContain("errors.assignableRoomCount");
     expect(src).toContain("Number.isInteger(weeklyPrice)");
-    expect(src).toContain("Number.isInteger(assignableCount)");
+    // assignableRoomCount is server-derived: no client-side validation.
+    expect(src).not.toContain("errors.assignableRoomCount");
   });
 });
 

@@ -26,15 +26,16 @@ describe("Admin Settings Page — Paramètres tab", () => {
     expect(content).toContain('data-testid="input-contact-email"');
   });
 
-  it("removes the marketing room-count field but keeps assignable as the availability ceiling", () => {
+  it("removes the marketing room-count field and shows assignable as a read-only derived value", () => {
     const content = read();
     // The marketing/display room count stays removed — the public count is derived
     // from the Rooms tab, not a manual field.
     expect(content).not.toContain('data-testid="input-marketing-rooms"');
     expect(content).not.toContain("Chambres affichées");
-    // Assignable room count is (re)introduced as the admin-set inventory ceiling the
-    // availability calculation uses.
+    // Assignable room count is shown but read-only: it equals the number of public
+    // rooms and is recomputed server-side, never authored here.
     expect(content).toContain('data-testid="input-assignable-rooms"');
+    expect(content).toContain("readonly");
   });
 
   it("renders save button with correct testid", () => {
