@@ -444,4 +444,43 @@ export const TEMPLATES: Record<TemplateKey, Record<Locale, HandlebarsTemplateDel
     + ((stack1 = lookupProperty(helpers,"if").call(alias1,(depth0 != null ? lookupProperty(depth0,"passkeyEnabled") : depth0),{"name":"if","hash":{},"fn":container.program(0, data, 0),"inverse":container.program(1, data, 0),"data":data,"loc":{"start":{"line":12,"column":0},"end":{"line":20,"column":7}}})) != null ? stack1 : "")
     + "\n<p>We look forward to welcoming you!</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
 },"useData":true}) },
+  "ota-welcome": { fr: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Bonjour "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":11},"end":{"line":1,"column":24}}}) : helper)))
+    + ",</p>\n\n<p>Votre réservation <strong>#"
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmationCode") || (depth0 != null ? lookupProperty(depth0,"confirmationCode") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmationCode","hash":{},"data":data,"loc":{"start":{"line":3,"column":30},"end":{"line":3,"column":50}}}) : helper)))
+    + "</strong> a été enregistrée avec succès.</p>\n\n<table style=\"width: 100%; border-collapse: collapse; margin: 16px 0;\">\n  <tr>\n    <td style=\"padding: 8px 0; color: #45464d; font-size: 14px;\">Arrivée</td>\n    <td style=\"padding: 8px 0; font-weight: 600;\">"
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":50},"end":{"line":8,"column":72}}}))
+    + "</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 8px 0; color: #45464d; font-size: 14px;\">Départ</td>\n    <td style=\"padding: 8px 0; font-weight: 600;\">"
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":12,"column":50},"end":{"line":12,"column":73}}}))
+    + "</td>\n  </tr>\n</table>\n\n<p>Créez votre espace client pour consulter vos réservations et gérer votre compte.</p>\n\n<p style=\"text-align: center; margin: 24px 0;\">\n  <a href=\""
+    + ((stack1 = ((helper = (helper = lookupProperty(helpers,"setPasswordUrl") || (depth0 != null ? lookupProperty(depth0,"setPasswordUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"setPasswordUrl","hash":{},"data":data,"loc":{"start":{"line":19,"column":11},"end":{"line":19,"column":31}}}) : helper))) != null ? stack1 : "")
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Créer mon mot de passe</a>\n</p>\n\n<p style=\"font-size: 13px; color: #45464d;\">Ce lien est valide pendant 30 jours. Si vous n'attendiez pas ce courriel, vous pouvez l'ignorer.</p>\n\n<p>Cordialement,<br/>\nL'équipe du Vieux Pont</p>\n";
+},"useData":true}), en: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var stack1, helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Hello "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":9},"end":{"line":1,"column":22}}}) : helper)))
+    + ",</p>\n\n<p>Your reservation <strong>#"
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmationCode") || (depth0 != null ? lookupProperty(depth0,"confirmationCode") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmationCode","hash":{},"data":data,"loc":{"start":{"line":3,"column":29},"end":{"line":3,"column":49}}}) : helper)))
+    + "</strong> has been successfully recorded.</p>\n\n<table style=\"width: 100%; border-collapse: collapse; margin: 16px 0;\">\n  <tr>\n    <td style=\"padding: 8px 0; color: #45464d; font-size: 14px;\">Check-in</td>\n    <td style=\"padding: 8px 0; font-weight: 600;\">"
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":50},"end":{"line":8,"column":72}}}))
+    + "</td>\n  </tr>\n  <tr>\n    <td style=\"padding: 8px 0; color: #45464d; font-size: 14px;\">Check-out</td>\n    <td style=\"padding: 8px 0; font-weight: 600;\">"
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":12,"column":50},"end":{"line":12,"column":73}}}))
+    + "</td>\n  </tr>\n</table>\n\n<p>Create your guest account to view your reservations and manage your profile.</p>\n\n<p style=\"text-align: center; margin: 24px 0;\">\n  <a href=\""
+    + ((stack1 = ((helper = (helper = lookupProperty(helpers,"setPasswordUrl") || (depth0 != null ? lookupProperty(depth0,"setPasswordUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"setPasswordUrl","hash":{},"data":data,"loc":{"start":{"line":19,"column":11},"end":{"line":19,"column":31}}}) : helper))) != null ? stack1 : "")
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Set my password</a>\n</p>\n\n<p style=\"font-size: 13px; color: #45464d;\">This link is valid for 30 days. If you were not expecting this email, you can safely ignore it.</p>\n\n<p>Warm regards,<br/>\nThe Vieux Pont Team</p>\n";
+},"useData":true}) },
 };

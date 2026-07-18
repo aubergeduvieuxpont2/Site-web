@@ -17,11 +17,13 @@ const getMe = vi.fn();
 const getProfile = vi.fn();
 const logout = vi.fn();
 const changePassword = vi.fn();
+const changeProfileEmail = vi.fn();
 vi.mock("$lib/api", () => ({
   getMe: (...a: unknown[]) => getMe(...a),
   getProfile: (...a: unknown[]) => getProfile(...a),
   logout: (...a: unknown[]) => logout(...a),
   changePassword: (...a: unknown[]) => changePassword(...a),
+  changeProfileEmail: (...a: unknown[]) => changeProfileEmail(...a),
   isError: (r: unknown): r is ApiError =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
 }));
@@ -66,11 +68,13 @@ beforeEach(() => {
   getProfile.mockReset();
   logout.mockReset();
   changePassword.mockReset();
+  changeProfileEmail.mockReset();
   // Sensible defaults; individual tests override.
   getMe.mockResolvedValue({ user: GUEST });
   getProfile.mockResolvedValue(profile());
   logout.mockResolvedValue({ ok: true });
   changePassword.mockResolvedValue({ ok: true });
+  changeProfileEmail.mockResolvedValue({ user: { ...GUEST, email: "new@example.com" } });
 });
 
 afterEach(() => {
@@ -302,6 +306,81 @@ describe("page-profil change password", () => {
     const utils = render(Page);
     await fillAndSubmit(utils.findByTestId, "current-pass", "brand-new-pass");
     const err = await utils.findByTestId("profil-pwd-error");
+    expect(err.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(err.querySelector("img")).toBeNull();
+  });
+});
+
+describe("page-profil change email", () => {
+  async function fillAndSubmit(
+    findByTestId: (id: string) => Promise<HTMLElement>,
+    newEmail: string,
+    password: string,
+  ): Promise<void> {
+    const em = (await findByTestId("profil-email-new-input")) as HTMLInputElement;
+    const pw = (await findByTestId("profil-email-password-input")) as HTMLInputElement;
+    await fireEvent.input(em, { target: { value: newEmail } });
+    await fireEvent.input(pw, { target: { value: password } });
+    await fireEvent.submit(await findByTestId("profil-email-form"));
+  }
+
+  it("renders the change-email form with both fields and current address", async () => {
+    const utils = render(Page);
+    expect(await utils.findByTestId("profil-email-heading")).toBeTruthy();
+    expect(await utils.findByTestId("profil-email-new-input")).toBeTruthy();
+    expect(await utils.findByTestId("profil-email-password-input")).toBeTruthy();
+    expect((await utils.findByTestId("profil-email-current")).textContent).toContain(
+      "guest@example.com",
+    );
+  });
+
+  it("submits valid input, shows success, updates displayed email, and clears fields", async () => {
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "new@example.com", "current-pass");
+    await waitFor(() =>
+      expect(changeProfileEmail).toHaveBeenCalledWith("new@example.com", "current-pass"),
+    );
+    const ok = await utils.findByTestId("profil-email-success");
+    expect(ok.getAttribute("role")).toBe("status");
+    expect(ok.textContent).toContain("Adresse courriel modifiée avec succès");
+    // Displayed email + current-address hint reflect the new address.
+    expect((await utils.findByTestId("profil-user-email")).textContent).toContain(
+      "new@example.com",
+    );
+    expect((await utils.findByTestId("profil-email-current")).textContent).toContain(
+      "new@example.com",
+    );
+    const em = (await utils.findByTestId("profil-email-new-input")) as HTMLInputElement;
+    const pw = (await utils.findByTestId("profil-email-password-input")) as HTMLInputElement;
+    expect(em.value).toBe("");
+    expect(pw.value).toBe("");
+  });
+
+  it("surfaces a 401 password error and does not show success", async () => {
+    changeProfileEmail.mockResolvedValue({ error: "Mot de passe actuel incorrect." });
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "new@example.com", "wrong-pass");
+    const err = await utils.findByTestId("profil-email-error");
+    expect(err.getAttribute("role")).toBe("alert");
+    expect(err.textContent).toContain("Mot de passe actuel incorrect.");
+    expect(utils.queryByTestId("profil-email-success")).toBeNull();
+  });
+
+  it("surfaces a 409 conflict message", async () => {
+    changeProfileEmail.mockResolvedValue({
+      error: "Cette adresse courriel est déjà utilisée.",
+    });
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "taken@example.com", "current-pass");
+    const err = await utils.findByTestId("profil-email-error");
+    expect(err.textContent).toContain("Cette adresse courriel est déjà utilisée.");
+  });
+
+  it("renders the API error as text, never as HTML", async () => {
+    changeProfileEmail.mockResolvedValue({ error: "<img src=x onerror=alert(1)>" });
+    const utils = render(Page);
+    await fillAndSubmit(utils.findByTestId, "new@example.com", "current-pass");
+    const err = await utils.findByTestId("profil-email-error");
     expect(err.textContent).toContain("<img src=x onerror=alert(1)>");
     expect(err.querySelector("img")).toBeNull();
   });

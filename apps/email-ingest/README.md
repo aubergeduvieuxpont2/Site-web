@@ -43,3 +43,7 @@ senders are rejected (spam protection).
   `duplicate` and change nothing.
 - Parse failures are logged `parse_failed` and visible in the admin; OTA
   emails are additionally in the backup mailbox.
+- Expedia bookings also auto-provision a guest portal account (find-or-create
+  by email, linked to the reservation via `user_id`); a bilingual welcome
+  email with a set-password link is sent when the `email_welcome_enabled`
+  admin toggle is on (fr sent by default).

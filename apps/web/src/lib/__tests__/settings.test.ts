@@ -234,6 +234,10 @@ describe("Settings", () => {
         tps: 5,
         tvq: 9.975,
         accommodationTax: 3.5,
+        emailConfirmationEnabled: false,
+        emailPasswordResetEnabled: false,
+        emailRoomAssignmentEnabled: false,
+        emailWelcomeEnabled: false,
       };
 
       const result = await adminUpdateSettings(settings);
@@ -262,6 +266,10 @@ describe("Settings", () => {
         tps: -1,
         tvq: 9.975,
         accommodationTax: 3.5,
+        emailConfirmationEnabled: false,
+        emailPasswordResetEnabled: false,
+        emailRoomAssignmentEnabled: false,
+        emailWelcomeEnabled: false,
       };
 
       const result = await adminUpdateSettings(settings);

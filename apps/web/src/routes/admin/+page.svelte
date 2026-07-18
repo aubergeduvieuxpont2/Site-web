@@ -71,6 +71,10 @@
     tvq: 9.975,
     accommodationTax: 3.5,
     reservationsEnabled: true,
+    emailConfirmationEnabled: false,
+    emailPasswordResetEnabled: false,
+    emailRoomAssignmentEnabled: false,
+    emailWelcomeEnabled: false,
   });
   let settingsErrors = $state<Partial<Record<keyof AdminSettings, string>>>({});
 
@@ -945,6 +949,67 @@
                       {settings.reservationsEnabled ? "Activées" : "En pause (maintenance)"}
                     </span>
                   </div>
+                </div>
+
+                <!-- Automated email toggles (default off, admin-only) -->
+                <h3 class="page-admin__settings-heading" id="email-toggles-heading">
+                  Courriels automatiques
+                </h3>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-confirmation"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailConfirmationEnabled}
+                    aria-label="Envoyer une confirmation de réservation par courriel"
+                    data-testid="toggle-email-confirmation"
+                  />
+                  <label for="toggle-email-confirmation" class="page-admin__toggle-label">
+                    Confirmation de réservation
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-password-reset"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailPasswordResetEnabled}
+                    aria-label="Envoyer un lien de réinitialisation de mot de passe par courriel"
+                    data-testid="toggle-email-password-reset"
+                  />
+                  <label for="toggle-email-password-reset" class="page-admin__toggle-label">
+                    Réinitialisation de mot de passe
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-room-assignment"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailRoomAssignmentEnabled}
+                    aria-label="Envoyer une notification d'assignation de chambre par courriel"
+                    data-testid="toggle-email-room-assignment"
+                  />
+                  <label for="toggle-email-room-assignment" class="page-admin__toggle-label">
+                    Assignation de chambre
+                  </label>
+                </div>
+
+                <div class="page-admin__toggle-wrap">
+                  <input
+                    type="checkbox"
+                    id="toggle-email-welcome"
+                    class="page-admin__toggle"
+                    bind:checked={settings.emailWelcomeEnabled}
+                    aria-label="Envoyer un courriel de bienvenue aux nouveaux clients OTA"
+                    data-testid="toggle-email-welcome"
+                  />
+                  <label for="toggle-email-welcome" class="page-admin__toggle-label">
+                    Bienvenue (OTA)
+                  </label>
                 </div>
 
                 {#if settingsSaved}

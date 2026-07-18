@@ -214,6 +214,32 @@ describe("renderEmail", () => {
     expect(result.html).toContain("clé qui se trouve dans la porte");
   });
 
+  // ota-welcome template
+  it("ota-welcome FR renders with guest name, confirmation code, and set-password URL", () => {
+    const sample = SAMPLES["ota-welcome"] as Record<string, unknown>;
+    const result = renderEmail("ota-welcome", "fr", sample);
+    expect(result.html).toContain("Sophie");
+    expect(result.html).toContain("EXP-2026-7890");
+    expect(result.html).toContain("reinitialisation?token=abc123&welcome=1");
+  });
+
+  it("ota-welcome EN renders and contains 'Set my password'", () => {
+    const sample = SAMPLES["ota-welcome"] as Record<string, unknown>;
+    const result = renderEmail("ota-welcome", "en", sample);
+    expect(result.html).toContain("Set my password");
+  });
+
+  it("ota-welcome FR throws when a required field is missing", () => {
+    expect(() => {
+      renderEmail("ota-welcome", "fr", {
+        firstName: "Jean",
+        confirmationCode: "EXP-001",
+        checkIn: "2026-09-05",
+        // checkOut and setPasswordUrl missing
+      });
+    }).toThrow(/Missing required field/);
+  });
+
   // Configurable phone reaches the footer via injected data, else the default.
   it("footer uses the injected contact phone, or the default when absent", () => {
     const sample = SAMPLES["welcome"] as Record<string, unknown>;

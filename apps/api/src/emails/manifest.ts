@@ -67,6 +67,15 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
     // {{#if passkeyEnabled}}, so a room with no pass-key still renders.
     requiredFields: ["name", "roomLabel", "checkIn", "checkOut", "passkeyEnabled"],
   },
+  "ota-welcome": {
+    name: { fr: "Bienvenue OTA", en: "OTA Welcome" },
+    subject: {
+      fr: "Votre réservation #{{confirmationCode}} — créez votre espace client",
+      en: "Your reservation #{{confirmationCode}} — set up your guest account",
+    },
+    sampleFile: "ota-welcome.json",
+    requiredFields: ["firstName", "confirmationCode", "checkIn", "checkOut", "setPasswordUrl"],
+  },
 };
 
 export const TEMPLATE_KEYS: TemplateKey[] = [
@@ -77,6 +86,7 @@ export const TEMPLATE_KEYS: TemplateKey[] = [
   "invoice-receipt",
   "review-request",
   "room-assigned",
+  "ota-welcome",
 ];
 
 export function isTemplateKey(value: unknown): value is TemplateKey {

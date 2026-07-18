@@ -10,6 +10,10 @@ export const SETTINGS_DEFAULTS = {
   accommodation_tax: 3.5,
   assignable_room_count: 12,
   reservations_enabled: true,
+  email_confirmation_enabled: false,
+  email_password_reset_enabled: false,
+  email_room_assignment_enabled: false,
+  email_welcome_enabled: false,
 } as const;
 
 export const PUBLIC_SETTING_KEYS = [
@@ -60,6 +64,10 @@ export const SettingsUpdateSchema = z.object({
   // and allowed to be 0 when no rooms are public.
   assignableRoomCount: z.coerce.number().int().nonnegative(),
   reservationsEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailConfirmationEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailPasswordResetEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailRoomAssignmentEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  emailWelcomeEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
 });
 
 export const settingsHook = (result: any, c: any) =>
@@ -83,6 +91,10 @@ export interface AdminSettings {
   accommodationTax: number;
   assignableRoomCount: number;
   reservationsEnabled: boolean;
+  emailConfirmationEnabled: boolean;
+  emailPasswordResetEnabled: boolean;
+  emailRoomAssignmentEnabled: boolean;
+  emailWelcomeEnabled: boolean;
 }
 
 export interface PublicSettings {
@@ -133,6 +145,18 @@ export function rowsToAdminSettings(
     ),
     reservationsEnabled: parseBool(
       rowMap.get("reservations_enabled") ?? String(SETTINGS_DEFAULTS.reservations_enabled)
+    ),
+    emailConfirmationEnabled: parseBool(
+      rowMap.get("email_confirmation_enabled") ?? "false"
+    ),
+    emailPasswordResetEnabled: parseBool(
+      rowMap.get("email_password_reset_enabled") ?? "false"
+    ),
+    emailRoomAssignmentEnabled: parseBool(
+      rowMap.get("email_room_assignment_enabled") ?? "false"
+    ),
+    emailWelcomeEnabled: parseBool(
+      rowMap.get("email_welcome_enabled") ?? "false"
     ),
   };
 }
