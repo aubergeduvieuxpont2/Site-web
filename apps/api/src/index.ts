@@ -979,6 +979,7 @@ app.post("/api/auth/logout", async (c) => {
 // Password change (session-authed)
 app.post(
   "/api/auth/password",
+  authRateLimiter,
   zValidator("json", PasswordChangeSchema, authHook),
   async (c) => {
     const user = await getAuthUser(c);
