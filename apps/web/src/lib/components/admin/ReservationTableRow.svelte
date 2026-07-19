@@ -154,7 +154,9 @@
           aria-label="Confirmer la réservation"
           onclick={(e) => setStatus(e, "confirmed")}
         >
-          Confirmer
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="2,8 6,12 14,4"/>
+          </svg>
         </button>
       {/if}
 
@@ -166,7 +168,10 @@
           aria-label="Annuler la réservation"
           onclick={(e) => setStatus(e, "cancelled")}
         >
-          Annuler
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <line x1="4" y1="4" x2="12" y2="12"/>
+            <line x1="12" y1="4" x2="4" y2="12"/>
+          </svg>
         </button>
       {/if}
     </div>
@@ -249,12 +254,12 @@
   }
 
   .reservation-table-row__btn {
-    font-family: var(--font-ui);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     border-radius: 2px;
     border: 1.5px solid transparent;
     cursor: pointer;
@@ -262,7 +267,6 @@
       background-color 100ms ease,
       border-color 100ms ease,
       color 100ms ease;
-    white-space: nowrap;
   }
 
   .reservation-table-row__btn:focus-visible {

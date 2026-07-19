@@ -337,3 +337,69 @@ describe("ReservationTableRow — keyboard activation (WS-A)", () => {
     expect(notCancelled).toBe(true);
   });
 });
+
+// ── Icon buttons — SVG presence and a11y ─────────────────────────────────────
+
+describe("ReservationTableRow — icon buttons (SVG)", () => {
+  it("confirm button contains an <svg> with aria-hidden", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    const btn = getByTestId("btn-status-confirm");
+    const svg = btn.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("cancel button contains an <svg> with aria-hidden", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    const btn = getByTestId("btn-status-cancel");
+    const svg = btn.querySelector("svg");
+    expect(svg).not.toBeNull();
+    expect(svg!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("confirm button keeps its accessible aria-label", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    expect(getByTestId("btn-status-confirm").getAttribute("aria-label")).toBe(
+      "Confirmer la réservation",
+    );
+  });
+
+  it("cancel button keeps its accessible aria-label", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    expect(getByTestId("btn-status-cancel").getAttribute("aria-label")).toBe(
+      "Annuler la réservation",
+    );
+  });
+
+  it("per-status visibility: pending shows both icon buttons", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "pending" }),
+    });
+    expect(getByTestId("btn-status-confirm").querySelector("svg")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel").querySelector("svg")).not.toBeNull();
+  });
+
+  it("per-status visibility: confirmed hides confirm icon, shows cancel icon", () => {
+    const { getByTestId, queryByTestId } = render(ReservationTableRow, {
+      props: props({ status: "confirmed" }),
+    });
+    expect(queryByTestId("btn-status-confirm")).toBeNull();
+    expect(getByTestId("btn-status-cancel").querySelector("svg")).not.toBeNull();
+  });
+
+  it("per-status visibility: cancelled shows confirm icon, hides cancel icon", () => {
+    const { getByTestId, queryByTestId } = render(ReservationTableRow, {
+      props: props({ status: "cancelled" }),
+    });
+    expect(getByTestId("btn-status-confirm").querySelector("svg")).not.toBeNull();
+    expect(queryByTestId("btn-status-cancel")).toBeNull();
+  });
+});

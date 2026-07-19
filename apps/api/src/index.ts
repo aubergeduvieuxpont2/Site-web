@@ -103,6 +103,9 @@ type ReservationRow = {
   message: string | null;
   created_at: string;
   status?: "pending" | "confirmed" | "cancelled";
+  source?: string | null;
+  external_ref?: string | null;
+  user_id?: number | null;
 };
 
 type BlackoutRow = {
@@ -648,10 +651,13 @@ app.post("/internal/ota-bookings", async (c) => {
   const providerLabel = d.source === "airbnb" ? "Airbnb" : "Expedia";
   const message = `Réservation ${providerLabel} #${d.externalRef}`;
 
+  // OTA bookings from known platforms are auto-confirmed; direct website bookings stay pending.
+  const otaStatus = (d.source === "airbnb" || d.source === "expedia") ? "confirmed" : "pending";
+
   // ON CONFLICT against the partial unique index dedupes resent confirmations.
   const rows = (await sql`
-    INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref)
-    VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef})
+    INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref, status)
+    VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef}, ${otaStatus})
     ON CONFLICT (source, external_ref) WHERE external_ref IS NOT NULL DO NOTHING
     RETURNING id, code
   `) as { id: number; code: string | null }[];
@@ -1337,7 +1343,7 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
+    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, created_at
     FROM reservations
     WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
     ORDER BY created_at DESC
