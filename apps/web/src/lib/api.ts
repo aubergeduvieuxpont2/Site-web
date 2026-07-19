@@ -50,6 +50,9 @@ export interface ReservationRow {
   source?: string | null;
   external_ref?: string | null;
   user_id?: number | null;
+  stripe_invoice_id?: string | null;
+  invoice_status?: string | null;
+  paid_at?: string | null;
 }
 
 export interface OutboxRow {
@@ -827,10 +830,10 @@ export async function adminCreateInvoice(
   reservationId: number,
   type: "deposit" | "full",
   depositPercent?: number,
-): Promise<{ ok: true; breakdown: InvoiceBreakdown } | ApiError> {
+): Promise<{ ok: true; breakdown: InvoiceBreakdown; stripeInvoiceId?: string | null; hostedInvoiceUrl?: string | null } | ApiError> {
   const safe = safeReservationId(reservationId);
   if (safe === null) return { error: "Identifiant invalide" };
-  return fetchJson<{ ok: true; breakdown: InvoiceBreakdown }>(
+  return fetchJson<{ ok: true; breakdown: InvoiceBreakdown; stripeInvoiceId?: string | null; hostedInvoiceUrl?: string | null }>(
     `/admin/reservations/${encodeURIComponent(String(safe))}/invoice`,
     { method: "POST", body: JSON.stringify({ type, depositPercent }) },
   );

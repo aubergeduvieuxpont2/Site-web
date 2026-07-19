@@ -64,6 +64,12 @@ import {
   type InvoiceBreakdown,
 } from "./pricing";
 import {
+  createStripeClient,
+  findOrCreateCustomer,
+  createAndFinalizeInvoice,
+  constructStripeEvent,
+} from "./stripe";
+import {
   AssignRoomSchema,
   reservationDatesValid,
   freeRoomsForRange,
@@ -79,6 +85,8 @@ type Bindings = {
   // Shared secret required from the email-ingest Worker on /internal/ota-bookings.
   INTERNAL_OTA_SECRET?: string;
   RESEND_API_KEY: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 };
 
 type MessageRow = {
@@ -106,6 +114,9 @@ type ReservationRow = {
   source?: string | null;
   external_ref?: string | null;
   user_id?: number | null;
+  stripe_invoice_id?: string | null;
+  invoice_status?: string | null;
+  paid_at?: string | null;
 };
 
 type BlackoutRow = {
@@ -1344,7 +1355,7 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, created_at
+    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
     FROM reservations
     WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
     ORDER BY created_at DESC
@@ -1874,12 +1885,16 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const res = (await sql`
-      SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count
+      SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count, invoice_status
       FROM reservations WHERE id = ${reservationId}
-    `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null }[];
+    `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null; invoice_status: string | null }[];
 
     if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
       return c.json({ error: "Réservation incomplète : dates ou nombre de chambres manquants." }, 422);
+    }
+
+    if (res[0].invoice_status === "paid") {
+      return c.json({ error: "Réservation déjà payée." }, 409);
     }
 
     const userRows = (await sql`
@@ -1939,7 +1954,33 @@ app.post(
       })
     );
 
-    return c.json({ ok: true, breakdown });
+    let stripeInvoiceId: string | null = null;
+    let hostedInvoiceUrl: string | null = null;
+    const stripeKey = c.env.STRIPE_SECRET_KEY;
+    if (stripeKey) {
+      try {
+        const stripe = createStripeClient(stripeKey);
+        const customerId = await findOrCreateCustomer(stripe, res[0].email);
+        const result = await createAndFinalizeInvoice(stripe, {
+          customerId,
+          amountCad: breakdown.amount,
+          description: `Facture - Réservation #${reservationId}`,
+        });
+        stripeInvoiceId = result.invoiceId;
+        hostedInvoiceUrl = result.hostedInvoiceUrl;
+      } catch (err) {
+        console.error("stripe_invoice_create_failed", err instanceof Error ? err.message : "unknown");
+        return c.json({ error: "Erreur lors de la création de la facture Stripe." }, 502);
+      }
+
+      await sql`
+        UPDATE reservations
+        SET stripe_invoice_id = ${stripeInvoiceId}, invoice_status = 'open'
+        WHERE id = ${reservationId}
+      `;
+    }
+
+    return c.json({ ok: true, breakdown, stripeInvoiceId, hostedInvoiceUrl });
   }
 );
 
@@ -2376,6 +2417,88 @@ app.route("/", createDashboardRouter({ authenticate: getAuthUser as any }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.route("/", createReviewsRouter({ authenticate: getAuthUser as any }));
 app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
+
+// Public Stripe webhook — no session auth; trust derives from signature only.
+// INV-webhook-signed: no side effect occurs before constructEventAsync succeeds.
+app.post("/webhooks/stripe", async (c) => {
+  const webhookSecret = c.env.STRIPE_WEBHOOK_SECRET;
+  const stripeKey = c.env.STRIPE_SECRET_KEY;
+
+  if (!webhookSecret || !stripeKey) {
+    return c.json({ error: "Stripe not configured" }, 400);
+  }
+
+  const signature = c.req.header("stripe-signature");
+  if (!signature) {
+    return c.json({ error: "Missing stripe-signature header" }, 400);
+  }
+
+  const rawBody = await c.req.text();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: any;
+  try {
+    const stripe = createStripeClient(stripeKey);
+    event = await constructStripeEvent(stripe, rawBody, signature, webhookSecret);
+  } catch {
+    return c.json({ error: "Invalid signature" }, 400);
+  }
+
+  const PAID_EVENT_TYPES = new Set([
+    "checkout.session.completed",
+    "invoice.paid",
+    "invoice.payment_succeeded",
+  ]);
+
+  if (!PAID_EVENT_TYPES.has(event.type)) {
+    return c.json({ received: true });
+  }
+
+  const obj = event.data.object as Record<string, unknown>;
+  let stripeInvoiceId: string | null = null;
+
+  if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
+    stripeInvoiceId = (obj["id"] as string) ?? null;
+  } else if (event.type === "checkout.session.completed") {
+    stripeInvoiceId = (obj["invoice"] as string) ?? null;
+  }
+
+  if (!stripeInvoiceId) {
+    return c.json({ received: true });
+  }
+
+  const sql = neon(c.env.DB_CONN);
+
+  // INV-idempotent-paid: WHERE invoice_status != 'paid' prevents double-apply.
+  const updated = (await sql`
+    UPDATE reservations
+    SET status = 'confirmed', invoice_status = 'paid', paid_at = now()
+    WHERE stripe_invoice_id = ${stripeInvoiceId} AND (invoice_status IS NULL OR invoice_status != 'paid')
+    RETURNING id, name, email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room, room_count
+  `) as { id: number; name: string; email: string; arrive: string | null; depart: string | null; people: number; room: string | null; room_count: number | null }[];
+
+  if (updated.length > 0) {
+    const reservation = updated[0];
+    try {
+      await enqueueEmail(sql, {
+        template: "reservation-confirmation",
+        to: reservation.email,
+        payload: {
+          confirmationCode: `RES-${reservation.id}`,
+          name: reservation.name,
+          checkIn: reservation.arrive ?? "",
+          checkOut: reservation.depart ?? "",
+          guests: reservation.people,
+          roomLabel: reservation.room ?? "À déterminer",
+        } as Record<string, unknown>,
+      });
+    } catch (err) {
+      console.error("webhook_confirmation_email_failed", err instanceof Error ? err.message : "unknown");
+    }
+  }
+
+  return c.json({ received: true });
+});
 
 // JSON 404 for unmatched routes.
 app.notFound((c) => {

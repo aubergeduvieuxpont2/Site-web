@@ -24,7 +24,7 @@
   // shape (mirrors api.ts's discriminated-union convention). No fetch happens
   // inside this component — the parent wires the actual API client.
   export type InvoiceResult =
-    | { ok: true; breakdown: InvoiceBreakdown }
+    | { ok: true; breakdown: InvoiceBreakdown; stripeInvoiceId?: string | null; hostedInvoiceUrl?: string | null }
     | { error: string };
 
   // Pure eligibility guard — exported for unit testing. A reservation can be
@@ -69,6 +69,8 @@
   let apiError = $state<string | null>(null);
   let breakdown = $state<InvoiceBreakdown | null>(null);
   let breakdownExpanded = $state(true);
+  let hostedInvoiceUrl = $state<string | null>(null);
+  let stripeInvoiceId = $state<string | null>(null);
 
   // ─── Formatters (fr-CA, CAD) — all values pass through Intl, never string
   //     interpolation, so nothing user/server-controlled reaches the DOM raw. ───
@@ -138,6 +140,8 @@
       }
       breakdown = res.breakdown;
       breakdownExpanded = true;
+      hostedInvoiceUrl = res.hostedInvoiceUrl ?? null;
+      stripeInvoiceId = res.stripeInvoiceId ?? null;
     } catch {
       apiError = "Erreur de réseau. Vérifiez votre connexion et réessayez.";
     } finally {
@@ -279,6 +283,25 @@
         </button>
       </div>
     </div>
+
+    <!-- Stripe hosted invoice link — shown after creation -->
+    {#if hostedInvoiceUrl}
+      <div class="invoice-creator__stripe-link-row" data-testid="invoice-stripe-link-row">
+        <a
+          class="invoice-creator__stripe-link"
+          href={hostedInvoiceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="invoice-stripe-link"
+        >
+          Voir la facture Stripe
+          <span class="invoice-creator__stripe-link-icon" aria-hidden="true">↗</span>
+        </a>
+        {#if stripeInvoiceId}
+          <span class="invoice-creator__stripe-id" data-testid="invoice-stripe-id">{stripeInvoiceId}</span>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Breakdown — revealed after a successful call -->
     {#if breakdown}
@@ -678,6 +701,51 @@
       animation: none;
       opacity: 0.6;
     }
+  }
+
+  /* ── Stripe hosted link row ── */
+  .invoice-creator__stripe-link-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 16px;
+    background: var(--ic-surface-sunken);
+    border-top: 1px solid var(--ic-border);
+  }
+
+  .invoice-creator__stripe-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ic-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    word-break: break-all;
+  }
+
+  .invoice-creator__stripe-link:hover {
+    color: var(--ic-accent-hover);
+  }
+
+  .invoice-creator__stripe-link:focus-visible {
+    outline: 2px solid var(--ic-accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .invoice-creator__stripe-link-icon {
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .invoice-creator__stripe-id {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 10px;
+    color: var(--ic-text-faint);
+    letter-spacing: 0.04em;
+    word-break: break-all;
   }
 
   /* ── Breakdown section ── */

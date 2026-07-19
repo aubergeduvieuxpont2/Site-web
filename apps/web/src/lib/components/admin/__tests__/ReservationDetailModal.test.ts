@@ -122,4 +122,65 @@ describe("ReservationDetailModal", () => {
     await fireEvent.click(screen.getByTestId("rdm-close"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // ── Stripe / invoice status fields (Stream 3) ──
+
+  it("shows the invoice status badge with 'Ouverte' when invoice_status is open", () => {
+    render(ReservationDetailModal, { props: props({ invoice_status: "open" }) });
+    const badge = screen.getByTestId("rdm-invoice-badge");
+    expect(badge.textContent?.trim()).toBe("Ouverte");
+    expect(badge.className).toContain("rdm__invoice-badge--open");
+  });
+
+  it("shows the invoice status badge with 'Payée' when invoice_status is paid", () => {
+    render(ReservationDetailModal, { props: props({ invoice_status: "paid" }) });
+    const badge = screen.getByTestId("rdm-invoice-badge");
+    expect(badge.textContent?.trim()).toBe("Payée");
+    expect(badge.className).toContain("rdm__invoice-badge--paid");
+  });
+
+  it("omits the invoice status section when invoice_status is null or absent", () => {
+    render(ReservationDetailModal, { props: props({ invoice_status: null }) });
+    expect(screen.queryByTestId("rdm-invoice-status")).toBeNull();
+    expect(screen.queryByTestId("rdm-invoice-badge")).toBeNull();
+  });
+
+  it("shows the paid_at timestamp when present", () => {
+    render(ReservationDetailModal, {
+      props: props({ paid_at: "2026-08-15T14:30:00.000Z" }),
+    });
+    expect(screen.getByTestId("rdm-paid-at")).toBeTruthy();
+    // The formatted date must contain at least the year
+    expect(screen.getByTestId("rdm-paid-at").textContent).toContain("2026");
+  });
+
+  it("omits the paid_at row when paid_at is null", () => {
+    render(ReservationDetailModal, { props: props({ paid_at: null }) });
+    expect(screen.queryByTestId("rdm-paid-at")).toBeNull();
+  });
+
+  it("shows the stripe_invoice_id when present", () => {
+    render(ReservationDetailModal, {
+      props: props({ stripe_invoice_id: "in_test_abc123" }),
+    });
+    expect(screen.getByTestId("rdm-stripe-invoice-id").textContent).toContain(
+      "in_test_abc123",
+    );
+  });
+
+  it("omits the stripe_invoice_id row when absent", () => {
+    render(ReservationDetailModal, {
+      props: props({ stripe_invoice_id: null }),
+    });
+    expect(screen.queryByTestId("rdm-stripe-invoice-id")).toBeNull();
+  });
+
+  it("a confirmed + paid row shows both the confirmed status and paid invoice badge", () => {
+    render(ReservationDetailModal, {
+      props: props({ status: "confirmed", invoice_status: "paid", paid_at: "2026-08-15T14:30:00.000Z" }),
+    });
+    expect(screen.getByTestId("rdm-status").textContent?.trim()).toBe("Confirmé");
+    expect(screen.getByTestId("rdm-invoice-badge").textContent?.trim()).toBe("Payée");
+    expect(screen.getByTestId("rdm-paid-at")).toBeTruthy();
+  });
 });

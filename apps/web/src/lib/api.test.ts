@@ -17,6 +17,7 @@ import {
   adminOutbox,
   requeueOutbox,
   createReservation,
+  adminCreateInvoice,
 } from "./api";
 
 type FetchCall = { url: string; init: RequestInit };
@@ -491,6 +492,102 @@ describe("createReservation", () => {
     });
     expect(isError(res)).toBe(true);
     expect(res).toEqual({ error: "email invalide" });
+  });
+});
+
+describe("adminCreateInvoice", () => {
+  const breakdown = {
+    nights: 3,
+    roomCount: 2,
+    effectiveNightly: 89,
+    base: 534,
+    accommodationTax: 21.36,
+    tps: 27.77,
+    tvq: 52.13,
+    total: 635.26,
+    amount: 190.58,
+  };
+
+  it("POSTs to /api/admin/reservations/:id/invoice and returns ok + breakdown + stripe fields", async () => {
+    const { calls } = stubFetch({
+      ok: true,
+      breakdown,
+      stripeInvoiceId: "in_test_abc123",
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_test/test_abc123",
+    });
+    const res = await adminCreateInvoice(42, "deposit", 30);
+    const { url, init } = lastCall(calls);
+    expect(url).toBe("/api/admin/reservations/42/invoice");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("include");
+    expect(JSON.parse(init.body as string)).toEqual({
+      type: "deposit",
+      depositPercent: 30,
+    });
+    expect(res).toEqual({
+      ok: true,
+      breakdown,
+      stripeInvoiceId: "in_test_abc123",
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_test/test_abc123",
+    });
+  });
+
+  it("sends a full invoice body with no depositPercent", async () => {
+    const { calls } = stubFetch({ ok: true, breakdown, stripeInvoiceId: "in_full", hostedInvoiceUrl: null });
+    await adminCreateInvoice(7, "full");
+    expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({ type: "full", depositPercent: undefined });
+  });
+
+  it("returns stripe fields as null when Stripe invoice was not created", async () => {
+    stubFetch({ ok: true, breakdown, stripeInvoiceId: null, hostedInvoiceUrl: null });
+    const res = await adminCreateInvoice(5, "full");
+    if (!isError(res)) {
+      expect(res.stripeInvoiceId).toBeNull();
+      expect(res.hostedInvoiceUrl).toBeNull();
+    } else {
+      throw new Error("expected success");
+    }
+  });
+
+  it("maps a 409 ERR-ALREADY-PAID to an error body", async () => {
+    stubFetch({ error: "Réservation déjà payée" }, 409);
+    const res = await adminCreateInvoice(3, "deposit", 30);
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Réservation déjà payée" });
+  });
+
+  it("maps a 422 ERR-INCOMPLETE to an error body", async () => {
+    stubFetch({ error: "Dates manquantes" }, 422);
+    const res = await adminCreateInvoice(3, "deposit", 30);
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Dates manquantes" });
+  });
+
+  it("maps a 502 ERR-STRIPE-FAILURE to an error body", async () => {
+    stubFetch({ error: "Stripe unavailable" }, 502);
+    const res = await adminCreateInvoice(3, "deposit", 30);
+    expect(isError(res)).toBe(true);
+    expect(res).toEqual({ error: "Stripe unavailable" });
+  });
+
+  it("rejects a non-positive id without calling fetch", async () => {
+    const { calls } = stubFetch({ ok: true, breakdown });
+    const res = await adminCreateInvoice(0, "deposit");
+    expect(res).toEqual({ error: "Identifiant invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("rejects NaN/Infinity ids without calling fetch", async () => {
+    const { calls } = stubFetch({ ok: true, breakdown });
+    expect(await adminCreateInvoice(Number.NaN, "deposit")).toEqual({ error: "Identifiant invalide" });
+    expect(await adminCreateInvoice(Number.POSITIVE_INFINITY, "full")).toEqual({ error: "Identifiant invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("truncates a non-integer id before use", async () => {
+    const { calls } = stubFetch({ ok: true, breakdown, stripeInvoiceId: null, hostedInvoiceUrl: null });
+    await adminCreateInvoice(4.9, "full");
+    expect(lastCall(calls).url).toBe("/api/admin/reservations/4/invoice");
   });
 });
 
