@@ -2,42 +2,45 @@ REQ:
   R-RESV-001:
     actor: Admin user
     capability: view reservations list with true per-row status
-    constraints: GET /api/admin/reservations must project status, source, code, external_ref, user_id and return them on each row
+    constraints: GET /api/admin/reservations must project status, source, code, external_ref,
+      user_id and return them on each row
     priority: MUST
     tests:
-      - T-RESV-001a
-      - T-RESV-001b
+    - T-RESV-001a
+    - T-RESV-001b
   R-RESV-002:
     actor: API developer
     capability: extend the shared ReservationRow DTO additively
-    constraints: source, external_ref, user_id added as optional/nullable so the three non-projecting SELECTs still type-check
+    constraints: source, external_ref, user_id added as optional/nullable so the three
+      non-projecting SELECTs still type-check
     priority: MUST
     tests:
-      - T-RESV-002a
+    - T-RESV-002a
   R-OTA-001:
     actor: email-ingest Worker
     capability: persist OTA bookings as confirmed
-    constraints: source in ('airbnb','expedia') inserts status='confirmed' via explicit conditional computed before the INSERT
+    constraints: source in ('airbnb','expedia') inserts status='confirmed' via explicit
+      conditional computed before the INSERT
     priority: MUST
     tests:
-      - T-OTA-001a
-      - T-OTA-001b
+    - T-OTA-001a
+    - T-OTA-001b
   R-OTA-002:
     actor: Website guest
     capability: direct bookings remain pending
     constraints: POST /reservations INSERT keeps status='pending' unchanged
     priority: MUST
     tests:
-      - T-OTA-002a
+    - T-OTA-002a
   R-UI-001:
     actor: Admin user
     capability: confirm/cancel a reservation via icon buttons
-    constraints: inline SVG icons replace text labels; aria-label, data-testid, per-status visibility guards, and setStatus handlers preserved
+    constraints: inline SVG icons replace text labels; aria-label, data-testid, per-status
+      visibility guards, and setStatus handlers preserved
     priority: MUST
     tests:
-      - T-UI-001a
-      - T-UI-001b
-
+    - T-UI-001a
+    - T-UI-001b
 E:
   E-Reservation:
     fields:
@@ -61,36 +64,46 @@ E:
       user_id: number | null
     tenancy: single-tenant
     invariants:
-      - INV-status-domain
-      - INV-dto-additive-optional
-
+    - INV-status-domain
+    - INV-dto-additive-optional
 OP:
   OP-Reservation.listAdmin:
-    input: { q: string, limit: number }
-    auth: [admin-read-reservations]
+    input:
+      q: string
+      limit: number
+    auth:
+    - admin-read-reservations
     pre:
-      - authenticated admin session
+    - authenticated admin session
     err:
-      - ERR-UNAUTHORIZED
-      - ERR-FORBIDDEN
-    out: { reservations: array of E-Reservation }
+    - ERR-UNAUTHORIZED
+    - ERR-FORBIDDEN
+    out:
+      reservations: array of E-Reservation
   OP-Reservation.otaCreate:
-    input: { OtaParsedSchema body }
-    auth: [internal-shared-secret]
+    input:
+      OtaParsedSchema body: null
+    auth:
+    - internal-shared-secret
     pre:
-      - valid X-Internal-Auth header
-      - body parses as OtaParsedSchema
+    - valid X-Internal-Auth header
+    - body parses as OtaParsedSchema
     err:
-      - ERR-UNAUTHORIZED
-      - ERR-BADREQUEST
-    out: { ok: boolean, duplicate: boolean }
+    - ERR-UNAUTHORIZED
+    - ERR-BADREQUEST
+    out:
+      ok: boolean
+      duplicate: boolean
   OP-Reservation.setStatusIcon:
-    input: { id: number, status: pending | confirmed | cancelled }
-    auth: [admin-read-reservations]
+    input:
+      id: number
+      status: pending | confirmed | cancelled
+    auth:
+    - admin-read-reservations
     pre: []
     err: []
-    out: { void }
-
+    out:
+      void: null
 ERR:
   ERR-UNAUTHORIZED:
     code: 401
@@ -101,174 +114,210 @@ ERR:
   ERR-BADREQUEST:
     code: 400
     meaning: invalid JSON or body fails OtaParsedSchema
-
 AUTH:
-  admin-read-reservations: only an authenticated admin session may read the reservations list
-  internal-shared-secret: /internal/ota-bookings requires a matching X-Internal-Auth shared secret and is unreachable from /api/*
-
+  admin-read-reservations: only an authenticated admin session may read the reservations
+    list
+  internal-shared-secret: /internal/ota-bookings requires a matching X-Internal-Auth
+    shared secret and is unreachable from /api/*
 INV:
-  INV-status-domain: reservation status is always one of pending, confirmed, cancelled — this change adds no new value
-  INV-dto-additive-optional: additions to the shared ReservationRow type are optional/nullable so all four SELECTs remain type-compatible
-  INV-no-raw-markup: ReservationTableRow never uses innerHTML or {@html}; icons are static inline SVG template markup
-  INV-a11y-accessible-name: icon buttons keep aria-label as accessible name; the SVG is aria-hidden
-
+  INV-status-domain: "reservation status is always one of pending, confirmed, cancelled\
+    \ \u2014 this change adds no new value"
+  INV-dto-additive-optional: additions to the shared ReservationRow type are optional/nullable
+    so all four SELECTs remain type-compatible
+  INV-no-raw-markup: ReservationTableRow never uses innerHTML or {@html}; icons are
+    static inline SVG template markup
+  INV-a11y-accessible-name: icon buttons keep aria-label as accessible name; the SVG
+    is aria-hidden
 API:
   GET /api/admin/reservations:
-    input: { q, limit }
-    output: { reservations: array of E-Reservation }
-    errors: [ERR-UNAUTHORIZED, ERR-FORBIDDEN]
+    input:
+      q: null
+      limit: null
+    output:
+      reservations: array of E-Reservation
+    errors:
+    - ERR-UNAUTHORIZED
+    - ERR-FORBIDDEN
     auth: admin-read-reservations
   POST /internal/ota-bookings:
     input: OtaParsedSchema body
-    output: { ok, duplicate }
-    errors: [ERR-UNAUTHORIZED, ERR-BADREQUEST]
+    output:
+      ok: null
+      duplicate: null
+    errors:
+    - ERR-UNAUTHORIZED
+    - ERR-BADREQUEST
     auth: internal-shared-secret
-
 UI:
   screen-admin-reservation-row:
-    actions: [openDetail, confirm, cancel]
-    state: { pending, confirmed, cancelled }
-
+    actions:
+    - openDetail
+    - confirm
+    - cancel
+    state:
+      pending: null
+      confirmed: null
+      cancelled: null
 DATA:
-  reservations table: existing columns id, code, name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, created_at, status, source, external_ref, user_id — no migration; only SELECT projection and one INSERT status value change
-
+  reservations table: "existing columns id, code, name, first_name, last_name, email,\
+    \ phone, room, arrive, depart, people, room_count, message, created_at, status,\
+    \ source, external_ref, user_id \u2014 no migration; only SELECT projection and\
+    \ one INSERT status value change"
 TEST:
   T-RESV-001a:
     verifies: R-RESV-001
-    behaviour: "GET /api/admin/reservations as admin projects status and source and returns them per row"
+    behaviour: GET /api/admin/reservations as admin projects status and source and
+      returns them per row
     steps:
-      - mock neon capturing (strings, values); stub admin session lookup
-      - GET /api/admin/reservations with session cookie
-      - assert 200; assert the FROM reservations SELECT template contains status and source
-      - assert returned reservations[0] carries status and source from the mock
+    - mock neon capturing (strings, values); stub admin session lookup
+    - GET /api/admin/reservations with session cookie
+    - assert 200; assert the FROM reservations SELECT template contains status and
+      source
+    - assert returned reservations[0] carries status and source from the mock
   T-RESV-001b:
     verifies: R-RESV-001
-    behaviour: "list route is mounted and gated"
+    behaviour: list route is mounted and gated
     steps:
-      - GET without session cookie -> assert 401
-      - GET with non-admin session -> assert 403
+    - GET without session cookie -> assert 401
+    - GET with non-admin session -> assert 403
   T-RESV-002a:
     verifies: R-RESV-002
-    behaviour: "typecheck passes with source/external_ref/user_id as optional ReservationRow fields"
+    behaviour: typecheck passes with source/external_ref/user_id as optional ReservationRow
+      fields
     steps:
-      - run npm run typecheck -> exit 0
-      - assert other reservation SELECTs (index.ts ~502, ~1217, ~2105) still compile
+    - run npm run typecheck -> exit 0
+    - assert other reservation SELECTs (index.ts ~502, ~1217, ~2105) still compile
   T-OTA-001a:
     verifies: R-OTA-001
-    behaviour: "airbnb parsed booking inserts status='confirmed'"
+    behaviour: airbnb parsed booking inserts status='confirmed'
     steps:
-      - mock neon capturing template + values; env has INTERNAL_OTA_SECRET
-      - POST /internal/ota-bookings with X-Internal-Auth and a valid airbnb OtaParsedSchema body
-      - find the INSERT INTO reservations call; assert its column list contains status and its values include "confirmed"
+    - mock neon capturing template + values; env has INTERNAL_OTA_SECRET
+    - POST /internal/ota-bookings with X-Internal-Auth and a valid airbnb OtaParsedSchema
+      body
+    - find the INSERT INTO reservations call; assert its column list contains status
+      and its values include "confirmed"
   T-OTA-001b:
     verifies: R-OTA-001
-    behaviour: "expedia parsed booking inserts status='confirmed'"
+    behaviour: expedia parsed booking inserts status='confirmed'
     steps:
-      - POST /internal/ota-bookings with a valid expedia OtaParsedSchema body
-      - assert the reservations INSERT values include "confirmed"
+    - POST /internal/ota-bookings with a valid expedia OtaParsedSchema body
+    - assert the reservations INSERT values include "confirmed"
   T-OTA-002a:
     verifies: R-OTA-002
-    behaviour: "direct website POST /reservations still inserts 'pending'"
+    behaviour: direct website POST /reservations still inserts 'pending'
     steps:
-      - inspect the INSERT at index.ts:500 -> VALUES tuple contains the literal 'pending' (unchanged)
+    - inspect the INSERT at index.ts:500 -> VALUES tuple contains the literal 'pending'
+      (unchanged)
   T-UI-001a:
     verifies: R-UI-001
-    behaviour: "confirm and cancel buttons render an <svg> and no visible text label"
+    behaviour: confirm and cancel buttons render an <svg> and no visible text label
     steps:
-      - render ReservationTableRow with status pending
-      - assert getByTestId('btn-status-confirm').querySelector('svg') is non-null
-      - assert getByTestId('btn-status-cancel').querySelector('svg') is non-null
-      - assert neither button shows visible 'Confirmer'/'Annuler' text; aria-label preserved
+    - render ReservationTableRow with status pending
+    - assert getByTestId('btn-status-confirm').querySelector('svg') is non-null
+    - assert getByTestId('btn-status-cancel').querySelector('svg') is non-null
+    - assert neither button shows visible 'Confirmer'/'Annuler' text; aria-label preserved
   T-UI-001b:
     verifies: R-UI-001
-    behaviour: "per-status visibility matrix preserved after icon swap"
+    behaviour: per-status visibility matrix preserved after icon swap
     steps:
-      - status pending -> both buttons present
-      - status confirmed -> only btn-status-cancel present
-      - status cancelled -> only btn-status-confirm present
-      - status null -> treated as pending (both present)
-
+    - status pending -> both buttons present
+    - status confirmed -> only btn-status-cancel present
+    - status cancelled -> only btn-status-confirm present
+    - status null -> treated as pending (both present)
 NFR:
   typecheck: npm run typecheck exits 0 across workspaces
   tests: apps/api and apps/web Vitest suites pass including new cases
-  accessibility: icon buttons keyboard-focusable; aria-label is accessible name; SVG aria-hidden
-  security: no frontend secrets; API auth model unchanged; no new dependency; no DB migration
-
+  accessibility: icon buttons keyboard-focusable; aria-label is accessible name; SVG
+    aria-hidden
+  security: no frontend secrets; API auth model unchanged; no new dependency; no DB
+    migration
 FILE:
   apps/api/src/index.ts: TASK-api
   apps/api/test/ota-insert.test.ts: TASK-api-tests
   apps/api/test/admin-reservations-list.test.ts: TASK-api-tests
   apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-web
   apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts: TASK-web
-
 TASK:
   TASK-api:
     scope:
-      - R-RESV-001
-      - R-RESV-002
-      - R-OTA-001
-      - R-OTA-002
-      - OP-Reservation.listAdmin
-      - OP-Reservation.otaCreate
-      - ERR-UNAUTHORIZED
-      - ERR-FORBIDDEN
-      - ERR-BADREQUEST
-      - AUTH
-      - DATA
+    - R-RESV-001
+    - R-RESV-002
+    - R-OTA-001
+    - R-OTA-002
+    - OP-Reservation.listAdmin
+    - OP-Reservation.otaCreate
+    - ERR-UNAUTHORIZED
+    - ERR-FORBIDDEN
+    - ERR-BADREQUEST
     files:
-      - apps/api/src/index.ts
+    - apps/api/src/index.ts
     must_preserve:
-      - INV-status-domain
-      - INV-dto-additive-optional
-    produce: [code]
-    verifies: [R-RESV-001, R-RESV-002, R-OTA-001, R-OTA-002]
+    - INV-status-domain
+    - INV-dto-additive-optional
+    produce:
+    - code
+    verifies:
+    - R-RESV-001
+    - R-RESV-002
+    - R-OTA-001
+    - R-OTA-002
   TASK-api-tests:
     scope:
-      - T-RESV-001a
-      - T-RESV-001b
-      - T-OTA-001a
-      - T-OTA-001b
+    - T-RESV-001a
+    - T-RESV-001b
+    - T-OTA-001a
+    - T-OTA-001b
     files:
-      - apps/api/test/ota-insert.test.ts
-      - apps/api/test/admin-reservations-list.test.ts
+    - apps/api/test/ota-insert.test.ts
+    - apps/api/test/admin-reservations-list.test.ts
     must_preserve:
-      - INV-status-domain
-    produce: [code]
-    verifies: [R-RESV-001, R-OTA-001]
+    - INV-status-domain
+    produce:
+    - code
+    verifies:
+    - R-RESV-001
+    - R-OTA-001
   TASK-web:
     scope:
-      - R-UI-001
-      - OP-Reservation.setStatusIcon
-      - UI
-      - T-UI-001a
-      - T-UI-001b
+    - R-UI-001
+    - OP-Reservation.setStatusIcon
+    - T-UI-001a
+    - T-UI-001b
     files:
-      - apps/web/src/lib/components/admin/ReservationTableRow.svelte
-      - apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts
+    - apps/web/src/lib/components/admin/ReservationTableRow.svelte
+    - apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts
     must_preserve:
-      - INV-no-raw-markup
-      - INV-a11y-accessible-name
-    produce: [code]
-    verifies: [R-UI-001]
-
+    - INV-no-raw-markup
+    - INV-a11y-accessible-name
+    produce:
+    - code
+    verifies:
+    - R-UI-001
 STATE:
   ST-01:
     status: locked
     decision: New ReservationRow fields (source, external_ref, user_id) are optional/nullable
-    rationale: "the type is shared by four SELECTs; only the admin-list SELECT projects them, so additive fields must be optional to keep the others type-compatible"
+    rationale: the type is shared by four SELECTs; only the admin-list SELECT projects
+      them, so additive fields must be optional to keep the others type-compatible
   ST-02:
     status: locked
-    decision: OTA status is computed via an explicit conditional local, not a bare 'confirmed' literal
-    rationale: "documents intent and stays correct if OtaParsedSchema.source ever widens beyond airbnb/expedia"
+    decision: OTA status is computed via an explicit conditional local, not a bare
+      'confirmed' literal
+    rationale: documents intent and stays correct if OtaParsedSchema.source ever widens
+      beyond airbnb/expedia
   ST-03:
     status: locked
-    decision: Icon buttons use inline SVG with aria-hidden, reusing existing --color-forest/--color-error tokens and focus ring
-    rationale: "keeps the existing data-testid/aria-label test contract green and avoids raw markup or new colours"
+    decision: Icon buttons use inline SVG with aria-hidden, reusing existing --color-forest/--color-error
+      tokens and focus ring
+    rationale: keeps the existing data-testid/aria-label test contract green and avoids
+      raw markup or new colours
   ST-04:
     status: locked
     decision: No DB migration is added for Stream 2
-    rationale: "status, source, code, external_ref, user_id columns already exist; only projection and one INSERT status value change"
+    rationale: status, source, code, external_ref, user_id columns already exist;
+      only projection and one INSERT status value change
   ST-05:
     status: locked
     decision: The frontend apps/web/src/lib/api.ts ReservationRow type is left unchanged
-    rationale: "it already declares code, status, source, external_ref, user_id as optional/nullable — verify, do not duplicate"
+    rationale: "it already declares code, status, source, external_ref, user_id as\
+      \ optional/nullable \u2014 verify, do not duplicate"
