@@ -1,292 +1,274 @@
 REQ:
-  R-TAX-001:
-    actor: Pricing engine (api + web)
-    capability: round a dollar amount to the cent with true half-up, FP-robust across magnitudes
-    constraints: exact x.xx5 rounds UP at any magnitude; non-finite returns 0; no bare Number.EPSILON
+  R-RESV-001:
+    actor: Admin user
+    capability: view reservations list with true per-row status
+    constraints: GET /api/admin/reservations must project status, source, code, external_ref, user_id and return them on each row
     priority: MUST
-    tests: [T-TAX-002a, T-TAX-002b]
-  R-TAX-002:
-    actor: Pricing engine (api + web)
-    capability: compute the compounding QC tax cascade (rates in percent -> amounts) with per-line cent rounding
-    constraints: fully compounding base x1.035 x1.05 x1.09975; TVQ=9.975%; round-then-compound
+    tests:
+      - T-RESV-001a
+      - T-RESV-001b
+  R-RESV-002:
+    actor: API developer
+    capability: extend the shared ReservationRow DTO additively
+    constraints: source, external_ref, user_id added as optional/nullable so the three non-projecting SELECTs still type-check
     priority: MUST
-    tests: [T-TAX-001a, T-TAX-001b]
-  R-TAX-003:
-    actor: Both workspaces
-    capability: mirrored tax.ts in api and web with identical behaviour, pinned by a shared table
-    constraints: no cross-workspace import; identical cross-checked test table in each suite
+    tests:
+      - T-RESV-002a
+  R-OTA-001:
+    actor: email-ingest Worker
+    capability: persist OTA bookings as confirmed
+    constraints: source in ('airbnb','expedia') inserts status='confirmed' via explicit conditional computed before the INSERT
     priority: MUST
-    tests: [T-TAX-001a, T-TAX-001b]
-  R-TAX-004:
-    actor: API invoice path
-    capability: computeInvoice derives base then delegates cascade, InvoiceBreakdown shape preserved
-    constraints: deposit amount routed through roundCents; field names unchanged
+    tests:
+      - T-OTA-001a
+      - T-OTA-001b
+  R-OTA-002:
+    actor: Website guest
+    capability: direct bookings remain pending
+    constraints: POST /reservations INSERT keeps status='pending' unchanged
     priority: MUST
-    tests: [T-TAX-003a]
-  R-TAX-005:
-    actor: Web quote path
-    capability: estimateStay derives base then delegates cascade, mapping accommodationTax->hebergementTax
-    constraints: StayEstimate output shape preserved
+    tests:
+      - T-OTA-002a
+  R-UI-001:
+    actor: Admin user
+    capability: confirm/cancel a reservation via icon buttons
+    constraints: inline SVG icons replace text labels; aria-label, data-testid, per-status visibility guards, and setStatus handlers preserved
     priority: MUST
-    tests: [T-TAX-003a]
-  R-TAX-006:
-    actor: Quote vs invoice
-    capability: estimateStay and computeInvoice agree to the cent for identical inputs
-    constraints: base 89 -> hebergement 3.12 / total 106.38 in both
-    priority: MUST
-    tests: [T-TAX-003a]
-  R-EMAIL-001:
-    actor: Confirmation/invoice email templates
-    capability: render tax-rate labels from live settings values instead of hardcoded percents
-    constraints: raw settings number printed; precompiled.ts regenerated via build step, never runtime compile
-    priority: MUST
-    tests: [T-EMAIL-001a, T-EMAIL-001b]
+    tests:
+      - T-UI-001a
+      - T-UI-001b
 
 E:
-  E-TaxBreakdownInput:
+  E-Reservation:
     fields:
-      base: number (dollars, cents-rounded subtotal)
-      accommodationTax: number (RATE percent e.g. 3.5)
-      tps: number (RATE percent e.g. 5)
-      tvq: number (RATE percent e.g. 9.975)
-    tenancy: none
-    invariants: [INV-input-rates-output-amounts]
-  E-TaxBreakdown:
-    fields:
-      base: number (AMOUNT)
-      accommodationTax: number (AMOUNT = roundCents(base*rate/100))
-      tps: number (AMOUNT = roundCents((base+accommodationTax)*rate/100))
-      tvq: number (AMOUNT = roundCents((base+accommodationTax+tps)*rate/100))
-      total: number (AMOUNT = roundCents(base+accommodationTax+tps+tvq))
-    tenancy: none
-    invariants: [INV-cascade-compounding, INV-half-up]
-  E-ReservationConfirmationPayload:
-    fields:
-      accommodationTaxRate: number (raw settings percent)
-      tpsRate: number (raw settings percent)
-      tvqRate: number (raw settings percent)
-    tenancy: none
-    invariants: [INV-shape-preserved]
+      id: number
+      code: string | null
+      name: string
+      first_name: string | null
+      last_name: string | null
+      email: string
+      phone: string | null
+      room: string | null
+      arrive: string | null
+      depart: string | null
+      people: number
+      room_count: number | null
+      message: string | null
+      created_at: string
+      status: pending | confirmed | cancelled
+      source: string | null
+      external_ref: string | null
+      user_id: number | null
+    tenancy: single-tenant
+    invariants:
+      - INV-status-domain
+      - INV-dto-additive-optional
 
 OP:
-  OP-Tax.roundCents:
-    input: { x: number }
-    auth: [internal-pure]
-    pre: []
-    err: [ERR-NONFINITE]
-    out: { cents: number }
-  OP-Tax.computeTaxBreakdown:
-    input: E-TaxBreakdownInput
-    auth: [internal-pure]
-    pre: []
-    err: []
-    out: E-TaxBreakdown
-  OP-Invoice.compute:
-    input: { effectiveNightly: number, nights: number, roomCount: number, weeklyRate: number, tps: number, tvq: number, accommodationTax: number, type: string, depositPercent: number }
-    auth: [internal-pure]
-    pre: []
-    err: []
-    out: { InvoiceBreakdown: object }
-  OP-Estimate.stay:
-    input: { nights: number, rooms: number, nightlyRate: number, rates: object, weeklyRate: number }
-    auth: [internal-pure]
-    pre: []
-    err: []
-    out: { StayEstimate: object }
-  OP-Email.buildConfirmation:
-    input: { reservation: object, invoice: object, rates: object }
-    auth: [internal-pure]
+  OP-Reservation.listAdmin:
+    input: { q: string, limit: number }
+    auth: [admin-read-reservations]
+    pre:
+      - authenticated admin session
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+    out: { reservations: array of E-Reservation }
+  OP-Reservation.otaCreate:
+    input: { OtaParsedSchema body }
+    auth: [internal-shared-secret]
+    pre:
+      - valid X-Internal-Auth header
+      - body parses as OtaParsedSchema
+    err:
+      - ERR-UNAUTHORIZED
+      - ERR-BADREQUEST
+    out: { ok: boolean, duplicate: boolean }
+  OP-Reservation.setStatusIcon:
+    input: { id: number, status: pending | confirmed | cancelled }
+    auth: [admin-read-reservations]
     pre: []
     err: []
-    out: E-ReservationConfirmationPayload
-
-AUTH:
-  internal-pure: internal pure functions; no HTTP auth boundary, no roles, no tenancy
-
-INV:
-  INV-cascade-compounding: each tax line is computed on the running compounding subtotal of all prior lines
-  INV-half-up: an exact x.xx5 amount rounds up at any magnitude
-  INV-input-rates-output-amounts: computeTaxBreakdown input keys are rates in percent; output keys are amounts in dollars
-  INV-shape-preserved: computeInvoice keeps InvoiceBreakdown and estimateStay keeps StayEstimate (hebergementTax) field names
-  INV-mirror-parity: apps/api/src/tax.ts and apps/web/src/lib/tax.ts stay behaviourally identical
-  INV-no-runtime-codegen: email templates are precompiled at build time; the Worker never calls Handlebars.compile
+    out: { void }
 
 ERR:
-  ERR-NONFINITE:
-    code: 0
-    meaning: roundCents returns 0 for NaN/Infinity/non-finite input
+  ERR-UNAUTHORIZED:
+    code: 401
+    meaning: missing or invalid credentials (no admin session, or bad X-Internal-Auth)
+  ERR-FORBIDDEN:
+    code: 403
+    meaning: authenticated but not an admin
+  ERR-BADREQUEST:
+    code: 400
+    meaning: invalid JSON or body fails OtaParsedSchema
+
+AUTH:
+  admin-read-reservations: only an authenticated admin session may read the reservations list
+  internal-shared-secret: /internal/ota-bookings requires a matching X-Internal-Auth shared secret and is unreachable from /api/*
+
+INV:
+  INV-status-domain: reservation status is always one of pending, confirmed, cancelled — this change adds no new value
+  INV-dto-additive-optional: additions to the shared ReservationRow type are optional/nullable so all four SELECTs remain type-compatible
+  INV-no-raw-markup: ReservationTableRow never uses innerHTML or {@html}; icons are static inline SVG template markup
+  INV-a11y-accessible-name: icon buttons keep aria-label as accessible name; the SVG is aria-hidden
 
 API:
-  internal-no-http-change:
-    input: none
-    output: none
-    errors: []
-    auth: internal-pure
+  GET /api/admin/reservations:
+    input: { q, limit }
+    output: { reservations: array of E-Reservation }
+    errors: [ERR-UNAUTHORIZED, ERR-FORBIDDEN]
+    auth: admin-read-reservations
+  POST /internal/ota-bookings:
+    input: OtaParsedSchema body
+    output: { ok, duplicate }
+    errors: [ERR-UNAUTHORIZED, ERR-BADREQUEST]
+    auth: internal-shared-secret
 
 UI:
-  no-ui-surface:
-    actions: []
-    state: { none }
+  screen-admin-reservation-row:
+    actions: [openDetail, confirm, cancel]
+    state: { pending, confirmed, cancelled }
 
 DATA:
-  no-schema-change: no migration, table, column, or index is added or modified by this stream
+  reservations table: existing columns id, code, name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, created_at, status, source, external_ref, user_id — no migration; only SELECT projection and one INSERT status value change
 
 TEST:
-  T-TAX-001a:
-    verifies: R-TAX-002
-    behaviour: "computeTaxBreakdown base 89 default rates -> accommodationTax 3.12, tps 4.61, tvq 9.65, total 106.38 (both workspaces)"
+  T-RESV-001a:
+    verifies: R-RESV-001
+    behaviour: "GET /api/admin/reservations as admin projects status and source and returns them per row"
     steps:
-      - "call computeTaxBreakdown({base:89, accommodationTax:3.5, tps:5, tvq:9.975})"
-      - "assert accommodationTax===3.12 && tps===4.61 && tvq===9.65 && total===106.38"
-  T-TAX-001b:
-    verifies: R-TAX-002
-    behaviour: "computeTaxBreakdown base 100 default rates -> accommodationTax 3.50, total 119.52 (both workspaces)"
+      - mock neon capturing (strings, values); stub admin session lookup
+      - GET /api/admin/reservations with session cookie
+      - assert 200; assert the FROM reservations SELECT template contains status and source
+      - assert returned reservations[0] carries status and source from the mock
+  T-RESV-001b:
+    verifies: R-RESV-001
+    behaviour: "list route is mounted and gated"
     steps:
-      - "call computeTaxBreakdown({base:100, accommodationTax:3.5, tps:5, tvq:9.975})"
-      - "assert accommodationTax===3.50 && total===119.52"
-  T-TAX-002a:
-    verifies: R-TAX-001
-    behaviour: "roundCents(3.115)===3.12 — small-magnitude half-cent rounds up"
+      - GET without session cookie -> assert 401
+      - GET with non-admin session -> assert 403
+  T-RESV-002a:
+    verifies: R-RESV-002
+    behaviour: "typecheck passes with source/external_ref/user_id as optional ReservationRow fields"
     steps:
-      - "assert roundCents(3.115)===3.12"
-  T-TAX-002b:
-    verifies: R-TAX-001
-    behaviour: "roundCents(12345.005)===12345.01 — large-magnitude half-cent rounds up (FP robustness)"
+      - run npm run typecheck -> exit 0
+      - assert other reservation SELECTs (index.ts ~502, ~1217, ~2105) still compile
+  T-OTA-001a:
+    verifies: R-OTA-001
+    behaviour: "airbnb parsed booking inserts status='confirmed'"
     steps:
-      - "assert roundCents(12345.005)===12345.01"
-      - "assert roundCents non-finite input returns 0"
-  T-TAX-003a:
-    verifies: R-TAX-006
-    behaviour: "estimateStay and computeInvoice agree to the cent for base 89"
+      - mock neon capturing template + values; env has INTERNAL_OTA_SECRET
+      - POST /internal/ota-bookings with X-Internal-Auth and a valid airbnb OtaParsedSchema body
+      - find the INSERT INTO reservations call; assert its column list contains status and its values include "confirmed"
+  T-OTA-001b:
+    verifies: R-OTA-001
+    behaviour: "expedia parsed booking inserts status='confirmed'"
     steps:
-      - "estimateStay(1,1,89,{accommodationTax:3.5,tps:5,tvq:9.975}) -> hebergementTax 3.12, total 106.38"
-      - "computeInvoice({effectiveNightly:89,nights:1,roomCount:1,tps:5,tvq:9.975,accommodationTax:3.5,type:'full'}) -> accommodationTax 3.12, total 106.38"
-  T-EMAIL-001a:
-    verifies: R-EMAIL-001
-    behaviour: "reservation-confirmation FR renders rate labels from sample rate fields"
+      - POST /internal/ota-bookings with a valid expedia OtaParsedSchema body
+      - assert the reservations INSERT values include "confirmed"
+  T-OTA-002a:
+    verifies: R-OTA-002
+    behaviour: "direct website POST /reservations still inserts 'pending'"
     steps:
-      - "renderEmail('reservation-confirmation','fr',sample) html contains 'Taxe d''hébergement (3.5%)' and 'TVQ (9.975%)'"
-      - "changing sample.accommodationTaxRate changes the rendered label"
-  T-EMAIL-001b:
-    verifies: R-EMAIL-001
-    behaviour: "buildReservationConfirmationData populates rate fields from the rates argument"
+      - inspect the INSERT at index.ts:500 -> VALUES tuple contains the literal 'pending' (unchanged)
+  T-UI-001a:
+    verifies: R-UI-001
+    behaviour: "confirm and cancel buttons render an <svg> and no visible text label"
     steps:
-      - "buildReservationConfirmationData(reservation, invoice, {accommodationTax:3.5,tps:5,tvq:9.975})"
-      - "assert payload.accommodationTaxRate===3.5 && payload.tpsRate===5 && payload.tvqRate===9.975"
+      - render ReservationTableRow with status pending
+      - assert getByTestId('btn-status-confirm').querySelector('svg') is non-null
+      - assert getByTestId('btn-status-cancel').querySelector('svg') is non-null
+      - assert neither button shows visible 'Confirmer'/'Annuler' text; aria-label preserved
+  T-UI-001b:
+    verifies: R-UI-001
+    behaviour: "per-status visibility matrix preserved after icon swap"
+    steps:
+      - status pending -> both buttons present
+      - status confirmed -> only btn-status-cancel present
+      - status cancelled -> only btn-status-confirm present
+      - status null -> treated as pending (both present)
 
 NFR:
-  correctness: TVQ 9.975%; fully compounding; per-line cent rounding
-  purity: tax.ts pure, dependency-free, isolate- and browser-safe
-  codegen: email rendering stays on precompiled templates; no runtime Handlebars.compile
-  green_gate: npm run typecheck passes; all apps/api and apps/web Vitest suites green
-  anti_drift: identical cross-checked table asserted in both tax.test.ts files
+  typecheck: npm run typecheck exits 0 across workspaces
+  tests: apps/api and apps/web Vitest suites pass including new cases
+  accessibility: icon buttons keyboard-focusable; aria-label is accessible name; SVG aria-hidden
+  security: no frontend secrets; API auth model unchanged; no new dependency; no DB migration
 
 FILE:
-  apps/api/src/tax.ts: TASK-tax-module
-  apps/web/src/lib/tax.ts: TASK-tax-module
-  apps/api/src/__tests__/tax.test.ts: TASK-tax-module
-  apps/web/src/lib/__tests__/tax.test.ts: TASK-tax-module
-  apps/api/src/pricing.ts: TASK-rewire-callers
-  apps/web/src/lib/utils.ts: TASK-rewire-callers
-  apps/api/src/emailPayloads.ts: TASK-email-labels
-  apps/api/src/index.ts: TASK-email-labels
-  apps/api/emails/templates/reservation-confirmation.fr.hbs: TASK-email-labels
-  apps/api/emails/templates/reservation-confirmation.en.hbs: TASK-email-labels
-  apps/api/emails/templates/invoice-receipt.fr.hbs: TASK-email-labels
-  apps/api/emails/templates/invoice-receipt.en.hbs: TASK-email-labels
-  apps/api/src/emails/manifest.ts: TASK-email-labels
-  apps/api/emails/samples/reservation-confirmation.json: TASK-email-labels
-  apps/api/emails/samples/invoice-receipt.json: TASK-email-labels
-  apps/api/src/emails/precompiled.ts: TASK-email-labels
-  apps/api/test/emailPayloads.test.ts: TASK-email-labels
+  apps/api/src/index.ts: TASK-api
+  apps/api/test/ota-insert.test.ts: TASK-api-tests
+  apps/api/test/admin-reservations-list.test.ts: TASK-api-tests
+  apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-web
+  apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts: TASK-web
 
 TASK:
-  TASK-tax-module:
+  TASK-api:
     scope:
-      - R-TAX-001
-      - R-TAX-002
-      - R-TAX-003
-      - OP-Tax.roundCents
-      - OP-Tax.computeTaxBreakdown
-      - E-TaxBreakdownInput
-      - E-TaxBreakdown
-      - ERR-NONFINITE
-      - T-TAX-001a
-      - T-TAX-001b
-      - T-TAX-002a
-      - T-TAX-002b
+      - R-RESV-001
+      - R-RESV-002
+      - R-OTA-001
+      - R-OTA-002
+      - OP-Reservation.listAdmin
+      - OP-Reservation.otaCreate
+      - ERR-UNAUTHORIZED
+      - ERR-FORBIDDEN
+      - ERR-BADREQUEST
+      - AUTH
+      - DATA
     files:
-      - apps/api/src/tax.ts
-      - apps/web/src/lib/tax.ts
-      - apps/api/src/__tests__/tax.test.ts
-      - apps/web/src/lib/__tests__/tax.test.ts
-    must_preserve:
-      - INV-cascade-compounding
-      - INV-half-up
-      - INV-input-rates-output-amounts
-      - INV-mirror-parity
-    produce: [code, tests]
-    verifies: [R-TAX-001, R-TAX-002, R-TAX-003]
-  TASK-rewire-callers:
-    scope:
-      - R-TAX-004
-      - R-TAX-005
-      - R-TAX-006
-      - OP-Invoice.compute
-      - OP-Estimate.stay
-      - T-TAX-003a
-    files:
-      - apps/api/src/pricing.ts
-      - apps/web/src/lib/utils.ts
-    must_preserve:
-      - INV-shape-preserved
-      - INV-cascade-compounding
-      - INV-half-up
-    produce: [code]
-    verifies: [R-TAX-004, R-TAX-005, R-TAX-006]
-  TASK-email-labels:
-    scope:
-      - R-EMAIL-001
-      - OP-Email.buildConfirmation
-      - E-ReservationConfirmationPayload
-      - T-EMAIL-001a
-      - T-EMAIL-001b
-    files:
-      - apps/api/src/emailPayloads.ts
       - apps/api/src/index.ts
-      - apps/api/emails/templates/reservation-confirmation.fr.hbs
-      - apps/api/emails/templates/reservation-confirmation.en.hbs
-      - apps/api/emails/templates/invoice-receipt.fr.hbs
-      - apps/api/emails/templates/invoice-receipt.en.hbs
-      - apps/api/src/emails/manifest.ts
-      - apps/api/emails/samples/reservation-confirmation.json
-      - apps/api/emails/samples/invoice-receipt.json
-      - apps/api/src/emails/precompiled.ts
-      - apps/api/test/emailPayloads.test.ts
     must_preserve:
-      - INV-no-runtime-codegen
-      - INV-shape-preserved
-    produce: [code, templates, tests]
-    verifies: [R-EMAIL-001]
+      - INV-status-domain
+      - INV-dto-additive-optional
+    produce: [code]
+    verifies: [R-RESV-001, R-RESV-002, R-OTA-001, R-OTA-002]
+  TASK-api-tests:
+    scope:
+      - T-RESV-001a
+      - T-RESV-001b
+      - T-OTA-001a
+      - T-OTA-001b
+    files:
+      - apps/api/test/ota-insert.test.ts
+      - apps/api/test/admin-reservations-list.test.ts
+    must_preserve:
+      - INV-status-domain
+    produce: [code]
+    verifies: [R-RESV-001, R-OTA-001]
+  TASK-web:
+    scope:
+      - R-UI-001
+      - OP-Reservation.setStatusIcon
+      - UI
+      - T-UI-001a
+      - T-UI-001b
+    files:
+      - apps/web/src/lib/components/admin/ReservationTableRow.svelte
+      - apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts
+    must_preserve:
+      - INV-no-raw-markup
+      - INV-a11y-accessible-name
+    produce: [code]
+    verifies: [R-UI-001]
 
 STATE:
   ST-01:
     status: locked
-    decision: Two mirrored tax.ts files (api authoritative, web verbatim) instead of one shared cross-workspace package
-    rationale: "no ergonomic cross-import between the Vite SPA and the Worker; drift prevented by an identical cross-checked test table in both suites"
+    decision: New ReservationRow fields (source, external_ref, user_id) are optional/nullable
+    rationale: "the type is shared by four SELECTs; only the admin-list SELECT projects them, so additive fields must be optional to keep the others type-compatible"
   ST-02:
     status: locked
-    decision: roundCents uses a relative/scale-aware epsilon (or integer-cents), never a bare absolute Number.EPSILON
-    rationale: "absolute EPSILON is too small at large magnitudes; a large-magnitude half-cent test guards the choice"
+    decision: OTA status is computed via an explicit conditional local, not a bare 'confirmed' literal
+    rationale: "documents intent and stays correct if OtaParsedSchema.source ever widens beyond airbnb/expedia"
   ST-03:
     status: locked
-    decision: Cascade structure frozen (fully compounding, round-then-compound); only rounding corrected and impls unified
-    rationale: "operator-confirmed; base 89 must total 106.38 with hebergement 3.12"
+    decision: Icon buttons use inline SVG with aria-hidden, reusing existing --color-forest/--color-error tokens and focus ring
+    rationale: "keeps the existing data-testid/aria-label test contract green and avoids raw markup or new colours"
   ST-04:
     status: locked
-    decision: Live rate labels threaded as three new payload fields via a rates argument; InvoiceBreakdown not widened
-    rationale: "InvoiceBreakdown carries amounts not rates; rates already read via rowsToAdminSettings at the send site; invoice-receipt is preview-only and driven by its sample JSON"
+    decision: No DB migration is added for Stream 2
+    rationale: "status, source, code, external_ref, user_id columns already exist; only projection and one INSERT status value change"
   ST-05:
     status: locked
-    decision: precompiled.ts regenerated only by scripts/precompile-emails.mjs, never hand-edited or runtime-compiled
-    rationale: "Cloudflare Workers forbid runtime code generation"
+    decision: The frontend apps/web/src/lib/api.ts ReservationRow type is left unchanged
+    rationale: "it already declares code, status, source, external_ref, user_id as optional/nullable — verify, do not duplicate"

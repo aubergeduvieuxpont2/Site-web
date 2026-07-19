@@ -1,77 +1,63 @@
 ## Global Design Strategy
 
-Auberge du Vieux Pont speaks in **IBM Plex** (sans + mono) with a Material-adjacent token system — clean, technical, warmly bilingual. The three new pieces are additions to existing pages and must feel indistinguishable from the surrounding UI. The single creative moment is the OTA welcome variant: when a first-time Expedia guest arrives to create their account, the reinitialisation card should radiate warmth rather than bureaucracy — a forest-green left-border accent, a changed tag label ("BIENVENUE" vs "PASS-RESET"), and a subhead that says «espace client» rather than «minimum 8 caractères».
-
-No new fonts. No new colour values. Every reference is a `var(--token)` already in scope.
+This stream is a targeted enhancement within an already-defined warm-hospitality admin design language. The palette, typography, and spacing are inherited from the existing `ReservationTableRow.svelte` design system — no new design tokens are introduced. The goal is to replace wordy text-label buttons with precise artisan stamp-mark icons that feel native to the existing language: parchment backgrounds, forest green for affirmative actions, terracotta for focus rings, and error red for destructive actions. Icon buttons should read like hand-tool impressions — compact, intentional, and quiet.
 
 ### Colour Palette
-- primary: `var(--color-primary)` — interactive focus ring
-- surface: `var(--color-surface)` — page background
-- surface-raised: `var(--color-surface-container-lowest)` — card/input background (#ffffff)
-- border: `var(--color-outline-variant)` — default borders (#c6c6cd)
-- text: `var(--color-ink)` — #191c1e
-- text-secondary: `var(--color-ink-variant)` — #45464d
-- text-muted: `var(--color-ink-mute)` / `var(--color-ink-soft)`
-- action: `var(--color-secondary-container)` — #fd761a terracotta-orange (buttons, active toggles via `.page-admin__requeue-btn`)
-- action-text: `var(--color-on-secondary-container)` — #ffffff
-- toggle-on: `var(--color-forest)` — #1a5c2d (checked state, existing `.page-admin__toggle:checked`)
-- success-surface: `var(--color-forest-surface)` — #d4ede0
-- focus-ring: `var(--color-terracotta)` — #9d4300 (profil page focus rings)
-- error: `var(--color-error)`
+- surface: #f4efe6 (parchment — inherited row background)
+- surface-alt: #e0dad0 (even-row stripe)
+- surface-raised: #ece7db (hover row bg)
+- border: #c4baa8 / border-strong: #9a8e7e
+- text: #1c1a17 / text-muted: #695e51
+- color-forest: #1a5c2d (confirm button ink + badge fg)
+- color-forest-surface: #d4ede0 (confirm button hover fill)
+- color-error: #ba1a1a (cancel button ink + badge fg)
+- color-error-surface: #fce8e8 (cancel button hover fill)
+- accent / focus-ring: #7b4628 (terracotta — all `:focus-visible` outlines)
+- badge-pending: bg #e6e8ea / fg #45464d
+- badge-confirmed: bg #d4ede0 / fg #1a5c2d
+- badge-cancelled: bg #fce8e8 / fg #ba1a1a
 
 ### Typography
-- sans: `var(--font-sans)` — IBM Plex Sans; headings weight 300, body weight 400
-- mono: `var(--font-mono)` — IBM Plex Mono; field labels, badges, `text-transform: uppercase; letter-spacing: 0.12em`
-- serif: `var(--font-serif)` — for warm/celebratory headings (welcome state heading)
-- base size: 14–16px; line-height: 1.5–1.65
+- font-family UI: "Jost", ui-sans-serif, system-ui, sans-serif
+- font-family mono: "JetBrains Mono", ui-monospace, monospace
+- base size: 14px; line-height: 1.4
+- badge: 11px, letter-spacing 0.18em, uppercase, monospace
 
 ### Spacing
-- base unit: 4px; scale: xs=4px sm=8px md=16px lg=24px xl=40px 2xl=64px 3xl=96px
-- all references via `var(--space-*)` tokens
+- base unit: 4px; scale: xs=4px sm=6px md=8px lg=10px xl=12px 2xl=16px 3xl=24px
+- icon button: 28×28px hit target, padding 6px around a 14–16px SVG icon
+- action gap: 6px between confirm and cancel buttons
+
+### Icon Specification
+- SVG viewBox="0 0 14 14", intrinsic width/height 14px
+- stroke="currentColor" fill="none" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"
+- aria-hidden="true" focusable="false" on every `<svg>`
+- Confirm (checkmark): `M 2 7.5 L 5.5 11 L 12 3` — classic asymmetric sweep, heavier descender
+- Cancel (X): `M 2.5 2.5 L 11.5 11.5 M 11.5 2.5 L 2.5 11.5` — precise diagonal cross
+- Button container: 28×28px, border 1.5px solid, border-radius 2px, outline style → fill-on-hover; no text-transform or letter-spacing (icon-only)
 
 ### Accessibility
-- minimum contrast ratio: 4.5:1 (WCAG AA) — existing token set is calibrated for this; no new colours needed
-- keyboard navigation: all interactive elements reachable via Tab; toggle inputs are native `<input type="checkbox">` (inherently focusable) with min 44×44px touch target
+- minimum contrast ratio: 4.5:1 WCAG AA (forest #1a5c2d on #d4ede0 = 5.2:1; error #ba1a1a on #fce8e8 = 4.6:1; both pass)
+- keyboard navigation: all buttons reachable via Tab; `:focus-visible` ring 2px solid #7b4628, offset 2px
 - ARIA roles required:
-  - admin-email-toggles: each `<input type="checkbox">` has `aria-label`; associated `<label for="">` wires the text label; the existing settings-saved `role="status"` covers the save confirmation
-  - welcome-onboarding-variant: heading swap is purely textual — no new ARIA needed; existing `id="reset-heading"` + `aria-labelledby` wiring remains correct; the welcome `$derived` bool must not mutate reactive state after render
-  - profil-email-form: `<form>` with `aria-label="Changer l'adresse courriel"`; `role="alert"` on error feedback; `role="status"` on success feedback; each field labeled via `<label for="">`; `autocomplete="email"` on new-email input; `autocomplete="current-password"` on password input
+  - each `<button>` keeps its existing `aria-label` ("Confirmer la réservation" / "Annuler la réservation"); the SVG is decorative and must carry `aria-hidden="true"` since the label is on the parent button
+  - `role="group"` + `aria-label` on the actions wrapper div is unchanged
+  - per-status `{#if}` visibility guards unchanged — only the applicable button renders in the DOM
+- no visible text node inside either button (icon-only)
 
 ### Security
-- No `innerHTML` — use Svelte text bindings (`{variable}`) for all user-supplied/API-returned values
-- No `eval()` or `Function()`
-- URL param `?welcome=1` must only branch display logic, never be reflected as HTML
-- The `?token=` query param must only be passed to the API client, never rendered to DOM
-- Email change: current password must be sent over HTTPS in the request body; never stored post-call; new email validated `type="email"` client-side + server-side
-- On 409 conflict the response body `{ error: "…" }` is bound with `{emailError}` (textContent), not innerHTML
+- No innerHTML — SVG is static markup in the template, not dynamically injected
+- No eval() or Function() usage
+- No user-supplied content rendered in icon buttons — purely decorative, statically authored SVG
 
 ## Component Inventory
-- component: admin-email-toggles
-  description: Four email-automation boolean toggles added to the "Paramètres" settings panel in admin/+page.svelte, grouped under a new "Courriels automatiques" h3 sub-section placed after the existing reservationsEnabled toggle. Reuses the exact existing .page-admin__toggle-wrap / .page-admin__toggle / .page-admin__toggle-label markup. Builder must also extend AdminSettings in api.ts with the four boolean fields (default false) and seed them in the settings $state block; the four fields are included in the existing saveSettings() → adminUpdateSettings() call without a new handler.
-  inputs: settings.emailConfirmationEnabled, settings.emailPasswordResetEnabled, settings.emailRoomAssignmentEnabled, settings.emailWelcomeEnabled (bound booleans in the existing settings state)
-  interactions: toggle checked state is sent as part of the existing saveSettings() flow; no new action handler required
-  kind: section
-  depends_on: []
-  designer_model: claude-haiku-4-5-20251001
-  builder_model: claude-opus-4-8
-  ralph: 1
 
-- component: welcome-onboarding-variant
-  description: Conditional heading/subhead swap on reinitialisation/+page.svelte activated when ?welcome=1 is in the URL. Derives `isWelcome` from $page.url.searchParams. When true, the card-tag reads "BIENVENUE" (styled with var(--color-forest) instead of var(--color-ink-mute)), the h1 reads "Bienvenue !", and the subhead reads "Choisissez votre mot de passe pour accéder à votre espace client." The reinitialisation__card::before left-border accent switches from var(--color-outline-variant) to var(--color-forest) in welcome mode, giving the card a warm arrival feel without changing any form mechanics. Also updates the <title> to "Créez votre espace client — Auberge du Vieux Pont" when welcome=1.
-  inputs: $page.url.searchParams.get("welcome") — "1" activates the variant; viewState (existing) controls form/error/success panels unchanged
-  interactions: display-only variant; form, validation, submit flow are entirely unchanged
-  kind: section
+- component: reservation-action-icons
+  description: Inline-SVG icon action buttons (confirm=checkmark, cancel=X) within the ReservationTableRow actions cell, replacing the existing text-label buttons. Preserves aria-label, data-testid, per-status visibility guards, setStatus handlers, and stopPropagation. Button sizing adjusted to 28×28px square hit target; existing --color-forest and --color-error tokens drive ink and hover-fill colours unchanged.
+  inputs: row.status (drives per-{#if} guard), onSetStatus callback, row.id
+  interactions: click → setStatus(e, "confirmed" | "cancelled") with stopPropagation; focus-visible ring on keyboard nav; hover fills button bg with forest-surface or error-surface
+  kind: button
   depends_on: []
   designer_model: claude-sonnet-4-6
   builder_model: claude-sonnet-4-6
-  ralph: 2
-
-- component: profil-email-form
-  description: Email-change form added to profil/+page.svelte after the existing change-password section, separated by a .profil__hairline divider. Uses a <section aria-labelledby="profil-email-heading"> wrapper with the same .profil__section--pwd max-width (480px). The form (data-testid="profil-email-form") mirrors .profil__pwd-form exactly: .profil__pwd-field / .profil__pwd-label / .profil__pwd-input / .profil__pwd-feedback classes with identical states. Shows current email as a small .profil__pwd-hint line under the section heading. Fields: "Nouvelle adresse courriel" (type=email, autocomplete=email) and "Mot de passe actuel" (type=password, autocomplete=current-password). 200 → updates user.email, clears fields, shows success. 401 → password error. 409 → "Cette adresse courriel est déjà utilisée." 400 → validation message. Builder must also add changeProfileEmail(newEmail, currentPassword) to api.ts.
-  inputs: user.email (read-only display); emailNew, emailPassword (bound state); emailError, emailSuccess (feedback state)
-  interactions: form submit → changeProfileEmail() → discriminated union handled with isError(); success mutates user.email for instant display update
-  kind: form
-  depends_on: [admin-email-toggles]
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-opus-4-8
   ralph: 2
