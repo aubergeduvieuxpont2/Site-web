@@ -1,323 +1,275 @@
 REQ:
-  R-RESV-001:
-    actor: Admin user
-    capability: view reservations list with true per-row status
-    constraints: GET /api/admin/reservations must project status, source, code, external_ref,
-      user_id and return them on each row
+  R-STRIPE-001:
+    actor: "Admin user"
+    capability: "generate a Stripe hosted invoice for a reservation and persist its id and open status"
+    constraints: "reuse computeInvoice deposit-aware amount; keep HubSpot invoice.create enqueue; allow only while unpaid"
     priority: MUST
     tests:
-    - T-RESV-001a
-    - T-RESV-001b
-  R-RESV-002:
-    actor: API developer
-    capability: extend the shared ReservationRow DTO additively
-    constraints: source, external_ref, user_id added as optional/nullable so the three
-      non-projecting SELECTs still type-check
+      - T-STRIPE-001a
+      - T-STRIPE-001b
+  R-STRIPE-002:
+    actor: "Stripe webhook sender"
+    capability: "flip a direct reservation to confirmed when its invoice is paid"
+    constraints: "signature-verified; idempotent; sets status confirmed, paid_at now, invoice_status paid"
     priority: MUST
     tests:
-    - T-RESV-002a
-  R-OTA-001:
-    actor: email-ingest Worker
-    capability: persist OTA bookings as confirmed
-    constraints: source in ('airbnb','expedia') inserts status='confirmed' via explicit
-      conditional computed before the INSERT
+      - T-STRIPE-002a
+      - T-STRIPE-002d
+  R-STRIPE-003:
+    actor: "System"
+    capability: "enqueue the confirmation email on paid only when email_confirmation_enabled is on"
+    constraints: "gating delegated to enqueueEmail self-gating"
     priority: MUST
     tests:
-    - T-OTA-001a
-    - T-OTA-001b
-  R-OTA-002:
-    actor: Website guest
-    capability: direct bookings remain pending
-    constraints: POST /reservations INSERT keeps status='pending' unchanged
+      - T-STRIPE-002a
+      - T-STRIPE-002b
+  R-STRIPE-004:
+    actor: "Stripe webhook sender"
+    capability: "reject unverified webhooks and ignore unrelated events without side effects"
+    constraints: "missing or invalid signature returns 400; unrelated event returns 200 no-op"
     priority: MUST
     tests:
-    - T-OTA-002a
-  R-UI-001:
-    actor: Admin user
-    capability: confirm/cancel a reservation via icon buttons
-    constraints: inline SVG icons replace text labels; aria-label, data-testid, per-status
-      visibility guards, and setStatus handlers preserved
-    priority: MUST
+      - T-STRIPE-002c
+      - T-STRIPE-002e
+  R-STRIPE-005:
+    actor: "Admin user"
+    capability: "see paid state and the Stripe hosted invoice link in the admin UI"
+    constraints: "invoice_status and paid_at are optional nullable DTO fields; URL from invoice response"
+    priority: SHOULD
     tests:
-    - T-UI-001a
-    - T-UI-001b
+      - T-STRIPE-003a
+
 E:
   E-Reservation:
     fields:
-      id: number
-      code: string | null
-      name: string
-      first_name: string | null
-      last_name: string | null
-      email: string
-      phone: string | null
-      room: string | null
-      arrive: string | null
-      depart: string | null
-      people: number
-      room_count: number | null
-      message: string | null
-      created_at: string
-      status: pending | confirmed | cancelled
-      source: string | null
-      external_ref: string | null
-      user_id: number | null
-    tenancy: single-tenant
+      id: "integer"
+      status: "text pending confirmed cancelled"
+      source: "text website airbnb expedia"
+      email: "string"
+      stripe_invoice_id: "text nullable"
+      invoice_status: "text nullable open paid"
+      paid_at: "timestamptz nullable"
+    keys: "id"
+    tenancy: "single-tenant"
     invariants:
-    - INV-status-domain
-    - INV-dto-additive-optional
+      - INV-webhook-signed
+      - INV-idempotent-paid
+      - INV-secrets-server-only
+
 OP:
-  OP-Reservation.listAdmin:
-    input:
-      q: string
-      limit: number
-    auth:
-    - admin-read-reservations
+  OP-Reservation.generateInvoice:
+    input: "reservationId integer, type deposit or full, optional depositPercent number"
+    auth: [admin]
     pre:
-    - authenticated admin session
+      - "reservation exists with valid dates and room_count"
+      - "invoice_status is not paid"
     err:
-    - ERR-UNAUTHORIZED
-    - ERR-FORBIDDEN
-    out:
-      reservations: array of E-Reservation
-  OP-Reservation.otaCreate:
-    input:
-      OtaParsedSchema body: null
-    auth:
-    - internal-shared-secret
+      - ERR-ALREADY-PAID
+      - ERR-INCOMPLETE
+      - ERR-STRIPE-FAILURE
+    out: "ok true, breakdown object, stripeInvoiceId string, hostedInvoiceUrl string or null"
+  OP-Reservation.webhookPaid:
+    input: "rawBody string, stripeSignatureHeader string"
+    auth: [public-signature-verified]
     pre:
-    - valid X-Internal-Auth header
-    - body parses as OtaParsedSchema
+      - "stripe-signature header present"
+      - "STRIPE_WEBHOOK_SECRET configured"
+      - "signature verifies via constructEventAsync"
     err:
-    - ERR-UNAUTHORIZED
-    - ERR-BADREQUEST
-    out:
-      ok: boolean
-      duplicate: boolean
-  OP-Reservation.setStatusIcon:
-    input:
-      id: number
-      status: pending | confirmed | cancelled
-    auth:
-    - admin-read-reservations
-    pre: []
-    err: []
-    out:
-      void: null
-ERR:
-  ERR-UNAUTHORIZED:
-    code: 401
-    meaning: missing or invalid credentials (no admin session, or bad X-Internal-Auth)
-  ERR-FORBIDDEN:
-    code: 403
-    meaning: authenticated but not an admin
-  ERR-BADREQUEST:
-    code: 400
-    meaning: invalid JSON or body fails OtaParsedSchema
+      - ERR-BAD-SIGNATURE
+    out: "received true"
+
 AUTH:
-  admin-read-reservations: only an authenticated admin session may read the reservations
-    list
-  internal-shared-secret: /internal/ota-bookings requires a matching X-Internal-Auth
-    shared secret and is unreachable from /api/*
+  admin: "user role must equal admin"
+  public-signature-verified: "no session auth; trust derives only from a verified Stripe signature"
+
 INV:
-  INV-status-domain: "reservation status is always one of pending, confirmed, cancelled\
-    \ \u2014 this change adds no new value"
-  INV-dto-additive-optional: additions to the shared ReservationRow type are optional/nullable
-    so all four SELECTs remain type-compatible
-  INV-no-raw-markup: ReservationTableRow never uses innerHTML or {@html}; icons are
-    static inline SVG template markup
-  INV-a11y-accessible-name: icon buttons keep aria-label as accessible name; the SVG
-    is aria-hidden
+  INV-webhook-signed: "no webhook side effect occurs before constructEventAsync succeeds"
+  INV-idempotent-paid: "a redelivered paid event never double-applies or enqueues a second email"
+  INV-secrets-server-only: "STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET exist only in apps/api env"
+
+ERR:
+  ERR-ALREADY-PAID:
+    code: 409
+    meaning: "reservation already paid; bill regeneration refused"
+  ERR-INCOMPLETE:
+    code: 422
+    meaning: "reservation missing dates or room count"
+  ERR-BAD-SIGNATURE:
+    code: 400
+    meaning: "missing or invalid Stripe signature or missing webhook secret"
+  ERR-STRIPE-FAILURE:
+    code: 502
+    meaning: "Stripe API call failed during invoice creation"
+
 API:
-  GET /api/admin/reservations:
-    input:
-      q: null
-      limit: null
-    output:
-      reservations: array of E-Reservation
-    errors:
-    - ERR-UNAUTHORIZED
-    - ERR-FORBIDDEN
-    auth: admin-read-reservations
-  POST /internal/ota-bookings:
-    input: OtaParsedSchema body
-    output:
-      ok: null
-      duplicate: null
-    errors:
-    - ERR-UNAUTHORIZED
-    - ERR-BADREQUEST
-    auth: internal-shared-secret
+  "POST /api/admin/reservations/:id/invoice":
+    input: "reservationId path param plus type and optional depositPercent json"
+    output: "OP-Reservation.generateInvoice out"
+    errors: [ERR-ALREADY-PAID, ERR-INCOMPLETE, ERR-STRIPE-FAILURE]
+    auth: admin
+  "POST /webhooks/stripe":
+    input: "raw body plus stripe-signature header"
+    output: "received true"
+    errors: [ERR-BAD-SIGNATURE]
+    auth: public-signature-verified
+
 UI:
-  screen-admin-reservation-row:
-    actions:
-    - openDetail
-    - confirm
-    - cancel
-    state:
-      pending: null
-      confirmed: null
-      cancelled: null
+  screen-invoice-creator:
+    actions: [createInvoice, openHostedInvoiceLink]
+    state: "idle, creating, created, error"
+  screen-reservation-detail:
+    actions: [viewPaidState]
+    state: "unbilled, billed_open, paid"
+
 DATA:
-  reservations table: "existing columns id, code, name, first_name, last_name, email,\
-    \ phone, room, arrive, depart, people, room_count, message, created_at, status,\
-    \ source, external_ref, user_id \u2014 no migration; only SELECT projection and\
-    \ one INSERT status value change"
+  migration-0041: "apps/api/migrations/0041_reservations_stripe.sql adds stripe_invoice_id text, invoice_status text, paid_at timestamptz via ADD COLUMN IF NOT EXISTS"
+  admin-list-select: "GET /api/admin/reservations SELECT adds invoice_status and paid_at"
+
 TEST:
-  T-RESV-001a:
-    verifies: R-RESV-001
-    behaviour: GET /api/admin/reservations as admin projects status and source and
-      returns them per row
+  T-STRIPE-001a:
+    verifies: R-STRIPE-001
+    behaviour: "admin invoice endpoint persists stripe_invoice_id and invoice_status open and keeps HubSpot enqueue"
     steps:
-    - mock neon capturing (strings, values); stub admin session lookup
-    - GET /api/admin/reservations with session cookie
-    - assert 200; assert the FROM reservations SELECT template contains status and
-      source
-    - assert returned reservations[0] carries status and source from the mock
-  T-RESV-001b:
-    verifies: R-RESV-001
-    behaviour: list route is mounted and gated
+      - "mock stripe createHostedInvoice returns id in_1 and a hosted url"
+      - "POST /api/admin/reservations/1/invoice with type full"
+      - "assert captured UPDATE sets stripe_invoice_id and invoice_status open and response includes stripeInvoiceId and hostedInvoiceUrl"
+  T-STRIPE-001b:
+    verifies: R-STRIPE-001
+    behaviour: "admin invoice endpoint returns 409 when reservation already paid"
     steps:
-    - GET without session cookie -> assert 401
-    - GET with non-admin session -> assert 403
-  T-RESV-002a:
-    verifies: R-RESV-002
-    behaviour: typecheck passes with source/external_ref/user_id as optional ReservationRow
-      fields
+      - "mock reservation SELECT returns invoice_status paid"
+      - "POST /api/admin/reservations/1/invoice"
+      - "assert status 409 and no stripe call made"
+  T-STRIPE-002a:
+    verifies: R-STRIPE-002
+    behaviour: "valid signature invoice.paid flips reservation to confirmed with paid_at and enqueues email when toggle on"
     steps:
-    - run npm run typecheck -> exit 0
-    - assert other reservation SELECTs (index.ts ~502, ~1217, ~2105) still compile
-  T-OTA-001a:
-    verifies: R-OTA-001
-    behaviour: airbnb parsed booking inserts status='confirmed'
+      - "mock constructStripeEvent to return an invoice.paid event with invoice id in_1"
+      - "settings SELECT for email_confirmation_enabled returns true"
+      - "POST /webhooks/stripe with a stripe-signature header"
+      - "assert captured UPDATE contains status paid_at invoice_status and an email_outbox INSERT captured and status 200"
+  T-STRIPE-002b:
+    verifies: R-STRIPE-003
+    behaviour: "same paid flow enqueues no email when toggle off"
     steps:
-    - mock neon capturing template + values; env has INTERNAL_OTA_SECRET
-    - POST /internal/ota-bookings with X-Internal-Auth and a valid airbnb OtaParsedSchema
-      body
-    - find the INSERT INTO reservations call; assert its column list contains status
-      and its values include "confirmed"
-  T-OTA-001b:
-    verifies: R-OTA-001
-    behaviour: expedia parsed booking inserts status='confirmed'
+      - "settings SELECT for email_confirmation_enabled returns false"
+      - "POST /webhooks/stripe invoice.paid"
+      - "assert reservation UPDATE captured but no email_outbox INSERT captured and status 200"
+  T-STRIPE-002c:
+    verifies: R-STRIPE-004
+    behaviour: "invalid or missing signature returns 400 and changes nothing"
     steps:
-    - POST /internal/ota-bookings with a valid expedia OtaParsedSchema body
-    - assert the reservations INSERT values include "confirmed"
-  T-OTA-002a:
-    verifies: R-OTA-002
-    behaviour: direct website POST /reservations still inserts 'pending'
+      - "mock constructStripeEvent to throw"
+      - "POST /webhooks/stripe"
+      - "assert status 400 and no reservation UPDATE captured"
+  T-STRIPE-002d:
+    verifies: R-STRIPE-002
+    behaviour: "redelivered event is idempotent"
     steps:
-    - inspect the INSERT at index.ts:500 -> VALUES tuple contains the literal 'pending'
-      (unchanged)
-  T-UI-001a:
-    verifies: R-UI-001
-    behaviour: confirm and cancel buttons render an <svg> and no visible text label
+      - "guarded UPDATE returns empty array because row already paid"
+      - "POST /webhooks/stripe invoice.paid again"
+      - "assert status 200 and no second email_outbox INSERT captured and no error"
+  T-STRIPE-002e:
+    verifies: R-STRIPE-004
+    behaviour: "unrelated event type returns 200 no-op"
     steps:
-    - render ReservationTableRow with status pending
-    - assert getByTestId('btn-status-confirm').querySelector('svg') is non-null
-    - assert getByTestId('btn-status-cancel').querySelector('svg') is non-null
-    - assert neither button shows visible 'Confirmer'/'Annuler' text; aria-label preserved
-  T-UI-001b:
-    verifies: R-UI-001
-    behaviour: per-status visibility matrix preserved after icon swap
+      - "mock constructStripeEvent to return a customer.created event"
+      - "POST /webhooks/stripe"
+      - "assert status 200 and no reservation UPDATE captured"
+  T-STRIPE-003a:
+    verifies: R-STRIPE-005
+    behaviour: "admin DTO exposes invoice_status and paid_at and UI shows paid state"
     steps:
-    - status pending -> both buttons present
-    - status confirmed -> only btn-status-cancel present
-    - status cancelled -> only btn-status-confirm present
-    - status null -> treated as pending (both present)
+      - "GET /api/admin/reservations returns rows carrying invoice_status and paid_at"
+      - "ReservationDetailModal renders a paid badge when invoice_status is paid"
+
 NFR:
-  typecheck: npm run typecheck exits 0 across workspaces
-  tests: apps/api and apps/web Vitest suites pass including new cases
-  accessibility: icon buttons keyboard-focusable; aria-label is accessible name; SVG
-    aria-hidden
-  security: no frontend secrets; API auth model unchanged; no new dependency; no DB
-    migration
+  security: "Stripe secrets only in apps/api env; webhook trust from signature only; no secret in apps/web"
+  runtime: "Cloudflare Workers compatible fetch HTTP client and SubtleCrypto provider; no Node crypto; no synchronous constructEvent"
+  reliability: "idempotent guarded UPDATE; Stripe failure does not corrupt reservation state"
+  quality: "npm run typecheck green; apps/api and apps/web Vitest green"
+
 FILE:
-  apps/api/src/index.ts: TASK-api
-  apps/api/test/ota-insert.test.ts: TASK-api-tests
-  apps/api/test/admin-reservations-list.test.ts: TASK-api-tests
-  apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-web
-  apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts: TASK-web
+  "apps/api/migrations/0041_reservations_stripe.sql": TASK-backend
+  "apps/api/src/stripe.ts": TASK-backend
+  "apps/api/src/index.ts": TASK-backend
+  "apps/api/package.json": TASK-config
+  ".dev.env.example": TASK-config
+  "apps/api/test/stripe-webhook.test.ts": TASK-backend
+  "apps/web/src/lib/api.ts": TASK-frontend
+  "apps/web/src/lib/components/admin/InvoiceCreator.svelte": TASK-frontend
+  "apps/web/src/lib/components/admin/ReservationDetailModal.svelte": TASK-frontend
+
 TASK:
-  TASK-api:
+  TASK-backend:
     scope:
-    - R-RESV-001
-    - R-RESV-002
-    - R-OTA-001
-    - R-OTA-002
-    - OP-Reservation.listAdmin
-    - OP-Reservation.otaCreate
-    - ERR-UNAUTHORIZED
-    - ERR-FORBIDDEN
-    - ERR-BADREQUEST
+      - R-STRIPE-001
+      - R-STRIPE-002
+      - R-STRIPE-003
+      - R-STRIPE-004
+      - OP-Reservation.generateInvoice
+      - OP-Reservation.webhookPaid
+      - ERR-ALREADY-PAID
+      - ERR-BAD-SIGNATURE
+      - ERR-STRIPE-FAILURE
+      - DATA
+      - T-STRIPE-001a
+      - T-STRIPE-001b
+      - T-STRIPE-002a
+      - T-STRIPE-002b
+      - T-STRIPE-002c
+      - T-STRIPE-002d
+      - T-STRIPE-002e
     files:
-    - apps/api/src/index.ts
+      - "apps/api/migrations/0041_reservations_stripe.sql"
+      - "apps/api/src/stripe.ts"
+      - "apps/api/src/index.ts"
+      - "apps/api/test/stripe-webhook.test.ts"
     must_preserve:
-    - INV-status-domain
-    - INV-dto-additive-optional
-    produce:
-    - code
-    verifies:
-    - R-RESV-001
-    - R-RESV-002
-    - R-OTA-001
-    - R-OTA-002
-  TASK-api-tests:
+      - INV-webhook-signed
+      - INV-idempotent-paid
+      - INV-secrets-server-only
+    produce: [code, migrations, tests]
+    verifies: [R-STRIPE-001, R-STRIPE-002, R-STRIPE-003, R-STRIPE-004]
+  TASK-frontend:
     scope:
-    - T-RESV-001a
-    - T-RESV-001b
-    - T-OTA-001a
-    - T-OTA-001b
+      - R-STRIPE-005
+      - UI
+      - T-STRIPE-003a
     files:
-    - apps/api/test/ota-insert.test.ts
-    - apps/api/test/admin-reservations-list.test.ts
+      - "apps/web/src/lib/api.ts"
+      - "apps/web/src/lib/components/admin/InvoiceCreator.svelte"
+      - "apps/web/src/lib/components/admin/ReservationDetailModal.svelte"
     must_preserve:
-    - INV-status-domain
-    produce:
-    - code
-    verifies:
-    - R-RESV-001
-    - R-OTA-001
-  TASK-web:
+      - INV-secrets-server-only
+    produce: [code]
+    verifies: [R-STRIPE-005]
+  TASK-config:
     scope:
-    - R-UI-001
-    - OP-Reservation.setStatusIcon
-    - T-UI-001a
-    - T-UI-001b
+      - R-STRIPE-002
     files:
-    - apps/web/src/lib/components/admin/ReservationTableRow.svelte
-    - apps/web/src/lib/components/admin/__tests__/ReservationTableRow.test.ts
+      - "apps/api/package.json"
+      - ".dev.env.example"
     must_preserve:
-    - INV-no-raw-markup
-    - INV-a11y-accessible-name
-    produce:
-    - code
-    verifies:
-    - R-UI-001
+      - INV-secrets-server-only
+    produce: [config]
+    verifies: []
+
 STATE:
   ST-01:
     status: locked
-    decision: New ReservationRow fields (source, external_ref, user_id) are optional/nullable
-    rationale: the type is shared by four SELECTs; only the admin-list SELECT projects
-      them, so additive fields must be optional to keep the others type-compatible
+    decision: "Webhook verified with constructEventAsync and createSubtleCryptoProvider; never synchronous constructEvent"
+    rationale: "Node crypto is unavailable in the Cloudflare Workers runtime"
   ST-02:
     status: locked
-    decision: OTA status is computed via an explicit conditional local, not a bare
-      'confirmed' literal
-    rationale: documents intent and stays correct if OtaParsedSchema.source ever widens
-      beyond airbnb/expedia
+    decision: "Idempotency via guarded UPDATE WHERE invoice_status IS DISTINCT FROM paid RETURNING; email enqueued only when a row returns"
+    rationale: "single-statement guard avoids double-apply on redelivery without row locking"
   ST-03:
     status: locked
-    decision: Icon buttons use inline SVG with aria-hidden, reusing existing --color-forest/--color-error
-      tokens and focus ring
-    rationale: keeps the existing data-testid/aria-label test contract green and avoids
-      raw markup or new colours
+    decision: "Hosted-invoice URL returned in the invoice response, not stored as a column"
+    rationale: "only the three specified columns are added; persisted paid_at and invoice_status drive reload-safe badges"
   ST-04:
     status: locked
-    decision: No DB migration is added for Stream 2
-    rationale: status, source, code, external_ref, user_id columns already exist;
-      only projection and one INSERT status value change
-  ST-05:
-    status: locked
-    decision: The frontend apps/web/src/lib/api.ts ReservationRow type is left unchanged
-    rationale: "it already declares code, status, source, external_ref, user_id as\
-      \ optional/nullable \u2014 verify, do not duplicate"
+    decision: "Email gating delegated to enqueueEmail which self-gates on email_confirmation_enabled"
+    rationale: "avoids duplicating toggle logic in the webhook handler"
