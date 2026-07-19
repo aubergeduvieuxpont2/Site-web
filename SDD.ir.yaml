@@ -1,275 +1,304 @@
 REQ:
   R-STRIPE-001:
-    actor: "Admin user"
-    capability: "generate a Stripe hosted invoice for a reservation and persist its id and open status"
-    constraints: "reuse computeInvoice deposit-aware amount; keep HubSpot invoice.create enqueue; allow only while unpaid"
+    actor: Admin user
+    capability: generate a Stripe hosted invoice for a reservation and persist its
+      id and open status
+    constraints: reuse computeInvoice deposit-aware amount; keep HubSpot invoice.create
+      enqueue; allow only while unpaid
     priority: MUST
     tests:
-      - T-STRIPE-001a
-      - T-STRIPE-001b
+    - T-STRIPE-001a
+    - T-STRIPE-001b
   R-STRIPE-002:
-    actor: "Stripe webhook sender"
-    capability: "flip a direct reservation to confirmed when its invoice is paid"
-    constraints: "signature-verified; idempotent; sets status confirmed, paid_at now, invoice_status paid"
+    actor: Stripe webhook sender
+    capability: flip a direct reservation to confirmed when its invoice is paid
+    constraints: signature-verified; idempotent; sets status confirmed, paid_at now,
+      invoice_status paid
     priority: MUST
     tests:
-      - T-STRIPE-002a
-      - T-STRIPE-002d
+    - T-STRIPE-002a
+    - T-STRIPE-002d
   R-STRIPE-003:
-    actor: "System"
-    capability: "enqueue the confirmation email on paid only when email_confirmation_enabled is on"
-    constraints: "gating delegated to enqueueEmail self-gating"
+    actor: System
+    capability: enqueue the confirmation email on paid only when email_confirmation_enabled
+      is on
+    constraints: gating delegated to enqueueEmail self-gating
     priority: MUST
     tests:
-      - T-STRIPE-002a
-      - T-STRIPE-002b
+    - T-STRIPE-002a
+    - T-STRIPE-002b
   R-STRIPE-004:
-    actor: "Stripe webhook sender"
-    capability: "reject unverified webhooks and ignore unrelated events without side effects"
-    constraints: "missing or invalid signature returns 400; unrelated event returns 200 no-op"
+    actor: Stripe webhook sender
+    capability: reject unverified webhooks and ignore unrelated events without side
+      effects
+    constraints: missing or invalid signature returns 400; unrelated event returns
+      200 no-op
     priority: MUST
     tests:
-      - T-STRIPE-002c
-      - T-STRIPE-002e
+    - T-STRIPE-002c
+    - T-STRIPE-002e
   R-STRIPE-005:
-    actor: "Admin user"
-    capability: "see paid state and the Stripe hosted invoice link in the admin UI"
-    constraints: "invoice_status and paid_at are optional nullable DTO fields; URL from invoice response"
+    actor: Admin user
+    capability: see paid state and the Stripe hosted invoice link in the admin UI
+    constraints: invoice_status and paid_at are optional nullable DTO fields; URL
+      from invoice response
     priority: SHOULD
     tests:
-      - T-STRIPE-003a
-
+    - T-STRIPE-003a
 E:
   E-Reservation:
     fields:
-      id: "integer"
-      status: "text pending confirmed cancelled"
-      source: "text website airbnb expedia"
-      email: "string"
-      stripe_invoice_id: "text nullable"
-      invoice_status: "text nullable open paid"
-      paid_at: "timestamptz nullable"
-    keys: "id"
-    tenancy: "single-tenant"
+      id: integer
+      status: text pending confirmed cancelled
+      source: text website airbnb expedia
+      email: string
+      stripe_invoice_id: text nullable
+      invoice_status: text nullable open paid
+      paid_at: timestamptz nullable
+    keys: id
+    tenancy: single-tenant
     invariants:
-      - INV-webhook-signed
-      - INV-idempotent-paid
-      - INV-secrets-server-only
-
+    - INV-webhook-signed
+    - INV-idempotent-paid
+    - INV-secrets-server-only
 OP:
   OP-Reservation.generateInvoice:
-    input: "reservationId integer, type deposit or full, optional depositPercent number"
-    auth: [admin]
+    input: reservationId integer, type deposit or full, optional depositPercent number
+    auth:
+    - admin
     pre:
-      - "reservation exists with valid dates and room_count"
-      - "invoice_status is not paid"
+    - reservation exists with valid dates and room_count
+    - invoice_status is not paid
     err:
-      - ERR-ALREADY-PAID
-      - ERR-INCOMPLETE
-      - ERR-STRIPE-FAILURE
-    out: "ok true, breakdown object, stripeInvoiceId string, hostedInvoiceUrl string or null"
+    - ERR-ALREADY-PAID
+    - ERR-INCOMPLETE
+    - ERR-STRIPE-FAILURE
+    out: ok true, breakdown object, stripeInvoiceId string, hostedInvoiceUrl string
+      or null
   OP-Reservation.webhookPaid:
-    input: "rawBody string, stripeSignatureHeader string"
-    auth: [public-signature-verified]
+    input: rawBody string, stripeSignatureHeader string
+    auth:
+    - public-signature-verified
     pre:
-      - "stripe-signature header present"
-      - "STRIPE_WEBHOOK_SECRET configured"
-      - "signature verifies via constructEventAsync"
+    - stripe-signature header present
+    - STRIPE_WEBHOOK_SECRET configured
+    - signature verifies via constructEventAsync
     err:
-      - ERR-BAD-SIGNATURE
-    out: "received true"
-
+    - ERR-BAD-SIGNATURE
+    out: received true
 AUTH:
-  admin: "user role must equal admin"
-  public-signature-verified: "no session auth; trust derives only from a verified Stripe signature"
-
+  admin: user role must equal admin
+  public-signature-verified: no session auth; trust derives only from a verified Stripe
+    signature
 INV:
-  INV-webhook-signed: "no webhook side effect occurs before constructEventAsync succeeds"
-  INV-idempotent-paid: "a redelivered paid event never double-applies or enqueues a second email"
-  INV-secrets-server-only: "STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET exist only in apps/api env"
-
+  INV-webhook-signed: no webhook side effect occurs before constructEventAsync succeeds
+  INV-idempotent-paid: a redelivered paid event never double-applies or enqueues a
+    second email
+  INV-secrets-server-only: STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET exist only
+    in apps/api env
 ERR:
   ERR-ALREADY-PAID:
     code: 409
-    meaning: "reservation already paid; bill regeneration refused"
+    meaning: reservation already paid; bill regeneration refused
   ERR-INCOMPLETE:
     code: 422
-    meaning: "reservation missing dates or room count"
+    meaning: reservation missing dates or room count
   ERR-BAD-SIGNATURE:
     code: 400
-    meaning: "missing or invalid Stripe signature or missing webhook secret"
+    meaning: missing or invalid Stripe signature or missing webhook secret
   ERR-STRIPE-FAILURE:
     code: 502
-    meaning: "Stripe API call failed during invoice creation"
-
+    meaning: Stripe API call failed during invoice creation
 API:
-  "POST /api/admin/reservations/:id/invoice":
-    input: "reservationId path param plus type and optional depositPercent json"
-    output: "OP-Reservation.generateInvoice out"
-    errors: [ERR-ALREADY-PAID, ERR-INCOMPLETE, ERR-STRIPE-FAILURE]
+  POST /api/admin/reservations/:id/invoice:
+    input: reservationId path param plus type and optional depositPercent json
+    output: OP-Reservation.generateInvoice out
+    errors:
+    - ERR-ALREADY-PAID
+    - ERR-INCOMPLETE
+    - ERR-STRIPE-FAILURE
     auth: admin
-  "POST /webhooks/stripe":
-    input: "raw body plus stripe-signature header"
-    output: "received true"
-    errors: [ERR-BAD-SIGNATURE]
+  POST /webhooks/stripe:
+    input: raw body plus stripe-signature header
+    output: received true
+    errors:
+    - ERR-BAD-SIGNATURE
     auth: public-signature-verified
-
 UI:
   screen-invoice-creator:
-    actions: [createInvoice, openHostedInvoiceLink]
-    state: "idle, creating, created, error"
+    actions:
+    - createInvoice
+    - openHostedInvoiceLink
+    state: idle, creating, created, error
   screen-reservation-detail:
-    actions: [viewPaidState]
-    state: "unbilled, billed_open, paid"
-
+    actions:
+    - viewPaidState
+    state: unbilled, billed_open, paid
 DATA:
-  migration-0041: "apps/api/migrations/0041_reservations_stripe.sql adds stripe_invoice_id text, invoice_status text, paid_at timestamptz via ADD COLUMN IF NOT EXISTS"
-  admin-list-select: "GET /api/admin/reservations SELECT adds invoice_status and paid_at"
-
+  migration-0041: apps/api/migrations/0041_reservations_stripe.sql adds stripe_invoice_id
+    text, invoice_status text, paid_at timestamptz via ADD COLUMN IF NOT EXISTS
+  admin-list-select: GET /api/admin/reservations SELECT adds invoice_status and paid_at
 TEST:
   T-STRIPE-001a:
     verifies: R-STRIPE-001
-    behaviour: "admin invoice endpoint persists stripe_invoice_id and invoice_status open and keeps HubSpot enqueue"
+    behaviour: admin invoice endpoint persists stripe_invoice_id and invoice_status
+      open and keeps HubSpot enqueue
     steps:
-      - "mock stripe createHostedInvoice returns id in_1 and a hosted url"
-      - "POST /api/admin/reservations/1/invoice with type full"
-      - "assert captured UPDATE sets stripe_invoice_id and invoice_status open and response includes stripeInvoiceId and hostedInvoiceUrl"
+    - mock stripe createHostedInvoice returns id in_1 and a hosted url
+    - POST /api/admin/reservations/1/invoice with type full
+    - assert captured UPDATE sets stripe_invoice_id and invoice_status open and response
+      includes stripeInvoiceId and hostedInvoiceUrl
   T-STRIPE-001b:
     verifies: R-STRIPE-001
-    behaviour: "admin invoice endpoint returns 409 when reservation already paid"
+    behaviour: admin invoice endpoint returns 409 when reservation already paid
     steps:
-      - "mock reservation SELECT returns invoice_status paid"
-      - "POST /api/admin/reservations/1/invoice"
-      - "assert status 409 and no stripe call made"
+    - mock reservation SELECT returns invoice_status paid
+    - POST /api/admin/reservations/1/invoice
+    - assert status 409 and no stripe call made
   T-STRIPE-002a:
     verifies: R-STRIPE-002
-    behaviour: "valid signature invoice.paid flips reservation to confirmed with paid_at and enqueues email when toggle on"
+    behaviour: valid signature invoice.paid flips reservation to confirmed with paid_at
+      and enqueues email when toggle on
     steps:
-      - "mock constructStripeEvent to return an invoice.paid event with invoice id in_1"
-      - "settings SELECT for email_confirmation_enabled returns true"
-      - "POST /webhooks/stripe with a stripe-signature header"
-      - "assert captured UPDATE contains status paid_at invoice_status and an email_outbox INSERT captured and status 200"
+    - mock constructStripeEvent to return an invoice.paid event with invoice id in_1
+    - settings SELECT for email_confirmation_enabled returns true
+    - POST /webhooks/stripe with a stripe-signature header
+    - assert captured UPDATE contains status paid_at invoice_status and an email_outbox
+      INSERT captured and status 200
   T-STRIPE-002b:
     verifies: R-STRIPE-003
-    behaviour: "same paid flow enqueues no email when toggle off"
+    behaviour: same paid flow enqueues no email when toggle off
     steps:
-      - "settings SELECT for email_confirmation_enabled returns false"
-      - "POST /webhooks/stripe invoice.paid"
-      - "assert reservation UPDATE captured but no email_outbox INSERT captured and status 200"
+    - settings SELECT for email_confirmation_enabled returns false
+    - POST /webhooks/stripe invoice.paid
+    - assert reservation UPDATE captured but no email_outbox INSERT captured and status
+      200
   T-STRIPE-002c:
     verifies: R-STRIPE-004
-    behaviour: "invalid or missing signature returns 400 and changes nothing"
+    behaviour: invalid or missing signature returns 400 and changes nothing
     steps:
-      - "mock constructStripeEvent to throw"
-      - "POST /webhooks/stripe"
-      - "assert status 400 and no reservation UPDATE captured"
+    - mock constructStripeEvent to throw
+    - POST /webhooks/stripe
+    - assert status 400 and no reservation UPDATE captured
   T-STRIPE-002d:
     verifies: R-STRIPE-002
-    behaviour: "redelivered event is idempotent"
+    behaviour: redelivered event is idempotent
     steps:
-      - "guarded UPDATE returns empty array because row already paid"
-      - "POST /webhooks/stripe invoice.paid again"
-      - "assert status 200 and no second email_outbox INSERT captured and no error"
+    - guarded UPDATE returns empty array because row already paid
+    - POST /webhooks/stripe invoice.paid again
+    - assert status 200 and no second email_outbox INSERT captured and no error
   T-STRIPE-002e:
     verifies: R-STRIPE-004
-    behaviour: "unrelated event type returns 200 no-op"
+    behaviour: unrelated event type returns 200 no-op
     steps:
-      - "mock constructStripeEvent to return a customer.created event"
-      - "POST /webhooks/stripe"
-      - "assert status 200 and no reservation UPDATE captured"
+    - mock constructStripeEvent to return a customer.created event
+    - POST /webhooks/stripe
+    - assert status 200 and no reservation UPDATE captured
   T-STRIPE-003a:
     verifies: R-STRIPE-005
-    behaviour: "admin DTO exposes invoice_status and paid_at and UI shows paid state"
+    behaviour: admin DTO exposes invoice_status and paid_at and UI shows paid state
     steps:
-      - "GET /api/admin/reservations returns rows carrying invoice_status and paid_at"
-      - "ReservationDetailModal renders a paid badge when invoice_status is paid"
-
+    - GET /api/admin/reservations returns rows carrying invoice_status and paid_at
+    - ReservationDetailModal renders a paid badge when invoice_status is paid
 NFR:
-  security: "Stripe secrets only in apps/api env; webhook trust from signature only; no secret in apps/web"
-  runtime: "Cloudflare Workers compatible fetch HTTP client and SubtleCrypto provider; no Node crypto; no synchronous constructEvent"
-  reliability: "idempotent guarded UPDATE; Stripe failure does not corrupt reservation state"
-  quality: "npm run typecheck green; apps/api and apps/web Vitest green"
-
+  security: Stripe secrets only in apps/api env; webhook trust from signature only;
+    no secret in apps/web
+  runtime: Cloudflare Workers compatible fetch HTTP client and SubtleCrypto provider;
+    no Node crypto; no synchronous constructEvent
+  reliability: idempotent guarded UPDATE; Stripe failure does not corrupt reservation
+    state
+  quality: npm run typecheck green; apps/api and apps/web Vitest green
 FILE:
-  "apps/api/migrations/0041_reservations_stripe.sql": TASK-backend
-  "apps/api/src/stripe.ts": TASK-backend
-  "apps/api/src/index.ts": TASK-backend
-  "apps/api/package.json": TASK-config
-  ".dev.env.example": TASK-config
-  "apps/api/test/stripe-webhook.test.ts": TASK-backend
-  "apps/web/src/lib/api.ts": TASK-frontend
-  "apps/web/src/lib/components/admin/InvoiceCreator.svelte": TASK-frontend
-  "apps/web/src/lib/components/admin/ReservationDetailModal.svelte": TASK-frontend
-
+  apps/api/migrations/0041_reservations_stripe.sql: TASK-backend
+  apps/api/src/stripe.ts: TASK-backend
+  apps/api/src/index.ts: TASK-backend
+  apps/api/package.json: TASK-config
+  .dev.env.example: TASK-config
+  apps/api/test/stripe-webhook.test.ts: TASK-backend
+  apps/web/src/lib/api.ts: TASK-frontend
+  apps/web/src/lib/components/admin/InvoiceCreator.svelte: TASK-frontend
+  apps/web/src/lib/components/admin/ReservationDetailModal.svelte: TASK-frontend
 TASK:
   TASK-backend:
     scope:
-      - R-STRIPE-001
-      - R-STRIPE-002
-      - R-STRIPE-003
-      - R-STRIPE-004
-      - OP-Reservation.generateInvoice
-      - OP-Reservation.webhookPaid
-      - ERR-ALREADY-PAID
-      - ERR-BAD-SIGNATURE
-      - ERR-STRIPE-FAILURE
-      - DATA
-      - T-STRIPE-001a
-      - T-STRIPE-001b
-      - T-STRIPE-002a
-      - T-STRIPE-002b
-      - T-STRIPE-002c
-      - T-STRIPE-002d
-      - T-STRIPE-002e
+    - R-STRIPE-001
+    - R-STRIPE-002
+    - R-STRIPE-003
+    - R-STRIPE-004
+    - OP-Reservation.generateInvoice
+    - OP-Reservation.webhookPaid
+    - ERR-ALREADY-PAID
+    - ERR-BAD-SIGNATURE
+    - ERR-STRIPE-FAILURE
+    - T-STRIPE-001a
+    - T-STRIPE-001b
+    - T-STRIPE-002a
+    - T-STRIPE-002b
+    - T-STRIPE-002c
+    - T-STRIPE-002d
+    - T-STRIPE-002e
     files:
-      - "apps/api/migrations/0041_reservations_stripe.sql"
-      - "apps/api/src/stripe.ts"
-      - "apps/api/src/index.ts"
-      - "apps/api/test/stripe-webhook.test.ts"
+    - apps/api/migrations/0041_reservations_stripe.sql
+    - apps/api/src/stripe.ts
+    - apps/api/src/index.ts
+    - apps/api/test/stripe-webhook.test.ts
     must_preserve:
-      - INV-webhook-signed
-      - INV-idempotent-paid
-      - INV-secrets-server-only
-    produce: [code, migrations, tests]
-    verifies: [R-STRIPE-001, R-STRIPE-002, R-STRIPE-003, R-STRIPE-004]
+    - INV-webhook-signed
+    - INV-idempotent-paid
+    - INV-secrets-server-only
+    produce:
+    - code
+    - migrations
+    - tests
+    verifies:
+    - R-STRIPE-001
+    - R-STRIPE-002
+    - R-STRIPE-003
+    - R-STRIPE-004
   TASK-frontend:
     scope:
-      - R-STRIPE-005
-      - UI
-      - T-STRIPE-003a
+    - R-STRIPE-005
+    - T-STRIPE-003a
     files:
-      - "apps/web/src/lib/api.ts"
-      - "apps/web/src/lib/components/admin/InvoiceCreator.svelte"
-      - "apps/web/src/lib/components/admin/ReservationDetailModal.svelte"
+    - apps/web/src/lib/api.ts
+    - apps/web/src/lib/components/admin/InvoiceCreator.svelte
+    - apps/web/src/lib/components/admin/ReservationDetailModal.svelte
     must_preserve:
-      - INV-secrets-server-only
-    produce: [code]
-    verifies: [R-STRIPE-005]
+    - INV-secrets-server-only
+    produce:
+    - code
+    verifies:
+    - R-STRIPE-005
   TASK-config:
     scope:
-      - R-STRIPE-002
+    - R-STRIPE-002
     files:
-      - "apps/api/package.json"
-      - ".dev.env.example"
+    - apps/api/package.json
+    - .dev.env.example
     must_preserve:
-      - INV-secrets-server-only
-    produce: [config]
+    - INV-secrets-server-only
+    produce:
+    - config
     verifies: []
-
 STATE:
   ST-01:
     status: locked
-    decision: "Webhook verified with constructEventAsync and createSubtleCryptoProvider; never synchronous constructEvent"
-    rationale: "Node crypto is unavailable in the Cloudflare Workers runtime"
+    decision: Webhook verified with constructEventAsync and createSubtleCryptoProvider;
+      never synchronous constructEvent
+    rationale: Node crypto is unavailable in the Cloudflare Workers runtime
   ST-02:
     status: locked
-    decision: "Idempotency via guarded UPDATE WHERE invoice_status IS DISTINCT FROM paid RETURNING; email enqueued only when a row returns"
-    rationale: "single-statement guard avoids double-apply on redelivery without row locking"
+    decision: Idempotency via guarded UPDATE WHERE invoice_status IS DISTINCT FROM
+      paid RETURNING; email enqueued only when a row returns
+    rationale: single-statement guard avoids double-apply on redelivery without row
+      locking
   ST-03:
     status: locked
-    decision: "Hosted-invoice URL returned in the invoice response, not stored as a column"
-    rationale: "only the three specified columns are added; persisted paid_at and invoice_status drive reload-safe badges"
+    decision: Hosted-invoice URL returned in the invoice response, not stored as a
+      column
+    rationale: only the three specified columns are added; persisted paid_at and invoice_status
+      drive reload-safe badges
   ST-04:
     status: locked
-    decision: "Email gating delegated to enqueueEmail which self-gates on email_confirmation_enabled"
-    rationale: "avoids duplicating toggle logic in the webhook handler"
+    decision: Email gating delegated to enqueueEmail which self-gates on email_confirmation_enabled
+    rationale: avoids duplicating toggle logic in the webhook handler
