@@ -2,78 +2,88 @@ REQ:
   R-I18N-001:
     actor: Guest visitor
     capability: view the guest-facing site in French by default and switch to English
-    constraints: switching updates all guest copy live with no page reload and persists across navigation and refresh
+    constraints: switching updates all guest copy live with no page reload and persists
+      across navigation and refresh
     priority: MUST
     tests:
-      - T-I18N-001a
-      - T-I18N-001b
+    - T-I18N-001a
+    - T-I18N-001b
   R-I18N-002:
     actor: Frontend code
-    capability: translate a dot-keyed message with optional named interpolation for the active locale
-    constraints: interpolation uses percent-delimited tokens such as percent-name-percent; a missing key returns the key unchanged
+    capability: translate a dot-keyed message with optional named interpolation for
+      the active locale
+    constraints: interpolation uses percent-delimited tokens such as percent-name-percent;
+      a missing key returns the key unchanged
     priority: MUST
     tests:
-      - T-I18N-002a
-      - T-I18N-002b
+    - T-I18N-002a
+    - T-I18N-002b
   R-I18N-003:
     actor: Frontend store
-    capability: persist the active locale to a cookie and to localStorage and set the html lang attribute
+    capability: persist the active locale to a cookie and to localStorage and set
+      the html lang attribute
     constraints: must no-op without throwing when document or localStorage are unavailable
     priority: MUST
     tests:
-      - T-I18N-003a
-      - T-I18N-003b
+    - T-I18N-003a
+    - T-I18N-003b
   R-I18N-004:
     actor: Maintainer
     capability: keep French and English dictionaries with identical key sets
-    constraints: only guest-facing display strings move; structural fields stay in content
+    constraints: only guest-facing display strings move; structural fields stay in
+      content
     priority: MUST
     tests:
-      - T-I18N-004a
+    - T-I18N-004a
   R-LOC-001:
     actor: Registering guest
-    capability: submit a preferred locale at registration and have it persisted on the user record
+    capability: submit a preferred locale at registration and have it persisted on
+      the user record
     constraints: allowed values are the strings fr and en; absent means fr
     priority: MUST
     tests:
-      - T-LOC-001a
+    - T-LOC-001a
   R-LOC-002:
     actor: Logged-in guest
-    capability: update the stored locale through a dedicated endpoint when flipping the toggle
-    constraints: authentication-gated; anonymous flips stay in cookie and localStorage only
+    capability: update the stored locale through a dedicated endpoint when flipping
+      the toggle
+    constraints: authentication-gated; anonymous flips stay in cookie and localStorage
+      only
     priority: MUST
     tests:
-      - T-LOC-002a
-      - T-LOC-002b
+    - T-LOC-002a
+    - T-LOC-002b
   R-LOC-003:
     actor: Login and session endpoints
     capability: return the stored user locale so the frontend can initialize the store
     constraints: locale included in the login and session user objects
     priority: MUST
     tests:
-      - T-LOC-003a
+    - T-LOC-003a
   R-MAIL-001:
     actor: Email sender code
-    capability: resolve a recipient locale by user id or email with a safe French fallback
-    constraints: missing row, unknown email, null or invalid value all resolve to fr
+    capability: resolve a recipient locale by user id or email with a safe French
+      fallback
+    constraints: missing row, unknown email, null or invalid value all resolve to
+      fr
     priority: MUST
     tests:
-      - T-MAIL-001a
+    - T-MAIL-001a
   R-MAIL-002:
     actor: Email sender code
     capability: pass a resolved locale into each in-file email enqueue call
-    constraints: registration verification uses the submitted register locale; reservation flows resolve by reservation user id then fall back to fr
+    constraints: registration verification uses the submitted register locale; reservation
+      flows resolve by reservation user id then fall back to fr
     priority: MUST
     tests:
-      - T-MAIL-002a
+    - T-MAIL-002a
   R-ADMIN-001:
     actor: Admin user
     capability: keep the admin panel and admin routes in French
     constraints: no admin route or admin component is modified by this stream
     priority: MUST
     tests:
-      - T-ADMIN-001a
-
+    - T-ADMIN-001a
 E:
   E-User:
     fields:
@@ -82,36 +92,35 @@ E:
       locale: text not null default the string fr
     tenancy: single tenant
     invariants:
-      - INV-locale-valid
+    - INV-locale-valid
   E-LocaleStore:
     fields:
       locale: string fr or en
     tenancy: client per session
     invariants:
-      - INV-locale-valid
-      - INV-store-noop-safe
-
+    - INV-locale-valid
+    - INV-store-noop-safe
 OP:
   OP-Locale.set:
     input:
       locale: string fr or en
     auth:
-      - anonymous-allowed
+    - anonymous-allowed
     pre: []
     err:
-      - ERR-BADLOCALE
+    - ERR-BADLOCALE
     out:
       persisted: cookie and localStorage updated and html lang set
   OP-Locale.update:
     input:
       locale: string fr or en
     auth:
-      - user-authenticated
+    - user-authenticated
     pre:
-      - a valid session cookie is present
+    - a valid session cookie is present
     err:
-      - ERR-BADLOCALE
-      - ERR-UNAUTH
+    - ERR-BADLOCALE
+    - ERR-UNAUTH
     out:
       ok: boolean true
       locale: the stored locale string
@@ -121,33 +130,33 @@ OP:
       password: string
       locale: optional string fr or en defaulting to fr
     auth:
-      - anonymous-allowed
+    - anonymous-allowed
     pre: []
     err:
-      - ERR-BADLOCALE
+    - ERR-BADLOCALE
     out:
       user: the created user including locale
   OP-Mail.resolveLocale:
     input:
       selector: a numeric user id or an email address
     auth:
-      - internal
+    - internal
     pre: []
     err: []
     out:
       locale: the stored locale when valid otherwise fr
-
 AUTH:
   anonymous-allowed: any visitor may set the client locale with no session
   user-authenticated: a valid session cookie identifies the acting user
   internal: server-internal helper not exposed over HTTP
-
 INV:
   INV-locale-valid: a persisted locale is always one of the strings fr or en
-  INV-store-noop-safe: the locale store never throws when document or localStorage are absent
-  INV-admin-french: admin routes and admin components are never converted and remain French
-  INV-key-parity: the French and English dictionaries always expose identical dot-key sets
-
+  INV-store-noop-safe: the locale store never throws when document or localStorage
+    are absent
+  INV-admin-french: admin routes and admin components are never converted and remain
+    French
+  INV-key-parity: the French and English dictionaries always expose identical dot-key
+    sets
 ERR:
   ERR-BADLOCALE:
     code: 400
@@ -155,13 +164,12 @@ ERR:
   ERR-UNAUTH:
     code: 401
     meaning: the request has no valid session
-
 API:
   POST /api/auth/register:
     input: email and password and optional locale
     output: E-User
     errors:
-      - ERR-BADLOCALE
+    - ERR-BADLOCALE
     auth: anonymous-allowed
   POST /api/auth/login:
     input: email and password
@@ -177,126 +185,128 @@ API:
     input: locale one of the strings fr or en
     output: ok true and the stored locale
     errors:
-      - ERR-BADLOCALE
-      - ERR-UNAUTH
+    - ERR-BADLOCALE
+    - ERR-UNAUTH
     auth: user-authenticated
-
 UI:
   screen-header-nav:
     actions:
-      - flip locale to fr
-      - flip locale to en
+    - flip locale to fr
+    - flip locale to en
     state:
-      - active-locale-fr
-      - active-locale-en
+    - active-locale-fr
+    - active-locale-en
   screen-guest-pages:
     actions:
-      - render translated copy for the active locale
+    - render translated copy for the active locale
     state:
-      - localized
-
+    - localized
 DATA:
-  migration 0042_users_locale.sql: adds users.locale as text not null default the string fr using ADD COLUMN IF NOT EXISTS
+  migration 0042_users_locale.sql: adds users.locale as text not null default the
+    string fr using ADD COLUMN IF NOT EXISTS
   users table: gains the locale column; existing rows backfill to fr from the default
-
 TEST:
   T-I18N-001a:
     verifies: R-I18N-001
-    behaviour: clicking the header EN toggle switches guest copy to English with no reload
+    behaviour: clicking the header EN toggle switches guest copy to English with no
+      reload
     steps:
-      - render a guest surface with the default locale
-      - assert a known string renders in French
-      - invoke the store setter for English
-      - assert the same string now renders in English
+    - render a guest surface with the default locale
+    - assert a known string renders in French
+    - invoke the store setter for English
+    - assert the same string now renders in English
   T-I18N-001b:
     verifies: R-I18N-001
-    behaviour: the chosen locale survives a simulated refresh by reading persisted storage
+    behaviour: the chosen locale survives a simulated refresh by reading persisted
+      storage
     steps:
-      - set the locale to English through the store setter
-      - read the persisted cookie and localStorage values
-      - assert both hold English
+    - set the locale to English through the store setter
+    - read the persisted cookie and localStorage values
+    - assert both hold English
   T-I18N-002a:
     verifies: R-I18N-002
     behaviour: the translate helper interpolates a named token
     steps:
-      - define a greeting message containing a name placeholder as a percent-delimited token
-      - call the translate helper with a name value
-      - assert the returned string contains the supplied name and no leftover percent-delimited token
+    - define a greeting message containing a name placeholder as a percent-delimited
+      token
+    - call the translate helper with a name value
+    - assert the returned string contains the supplied name and no leftover percent-delimited
+      token
   T-I18N-002b:
     verifies: R-I18N-002
     behaviour: a missing key returns the key unchanged
     steps:
-      - call the translate helper with a key that is absent from the dictionary
-      - assert the returned value equals the key string
+    - call the translate helper with a key that is absent from the dictionary
+    - assert the returned value equals the key string
   T-I18N-003a:
     verifies: R-I18N-003
     behaviour: setting the locale sets the html lang attribute
     steps:
-      - set the locale to English through the store setter
-      - assert the html element lang attribute equals English
+    - set the locale to English through the store setter
+    - assert the html element lang attribute equals English
   T-I18N-003b:
     verifies: R-I18N-003
     behaviour: the store is a clean no-op when browser globals are absent
     steps:
-      - evaluate the store initializer in an environment without document or localStorage
-      - assert no error is thrown and the locale defaults to French
+    - evaluate the store initializer in an environment without document or localStorage
+    - assert no error is thrown and the locale defaults to French
   T-I18N-004a:
     verifies: R-I18N-004
     behaviour: the French and English dictionaries have identical key sets
     steps:
-      - flatten the French dictionary to a sorted array of dot keys
-      - flatten the English dictionary to a sorted array of dot keys
-      - assert the two arrays are deeply equal
+    - flatten the French dictionary to a sorted array of dot keys
+    - flatten the English dictionary to a sorted array of dot keys
+    - assert the two arrays are deeply equal
   T-LOC-001a:
     verifies: R-LOC-001
     behaviour: a register request carrying English persists an English locale
     steps:
-      - post a register request whose body includes the locale English
-      - assert the users INSERT captures the English locale value
+    - post a register request whose body includes the locale English
+    - assert the users INSERT captures the English locale value
   T-LOC-002a:
     verifies: R-LOC-002
     behaviour: an authenticated locale update writes the users locale column
     steps:
-      - post to the profile locale endpoint with English and a valid session
-      - assert the response reports ok true with English and the stored column is English
+    - post to the profile locale endpoint with English and a valid session
+    - assert the response reports ok true with English and the stored column is English
   T-LOC-002b:
     verifies: R-LOC-002
     behaviour: an invalid or unauthenticated locale update is rejected
     steps:
-      - post to the profile locale endpoint with an invalid value and assert status 400
-      - post to the profile locale endpoint with no session and assert status 401
+    - post to the profile locale endpoint with an invalid value and assert status
+      400
+    - post to the profile locale endpoint with no session and assert status 401
   T-LOC-003a:
     verifies: R-LOC-003
     behaviour: login and session responses include the stored locale
     steps:
-      - log in as a user whose stored locale is English
-      - assert the returned user object includes the English locale
+    - log in as a user whose stored locale is English
+    - assert the returned user object includes the English locale
   T-MAIL-001a:
     verifies: R-MAIL-001
     behaviour: the locale resolver returns the stored locale or falls back to French
     steps:
-      - resolve the locale for a user whose stored locale is English and assert English
-      - resolve the locale for a missing user or unknown email and assert French
+    - resolve the locale for a user whose stored locale is English and assert English
+    - resolve the locale for a missing user or unknown email and assert French
   T-MAIL-002a:
     verifies: R-MAIL-002
     behaviour: an English recipient selects the English template at enqueue
     steps:
-      - trigger an email whose recipient has an English stored locale
-      - assert the enqueue receives the English locale and the English template is selected
+    - trigger an email whose recipient has an English stored locale
+    - assert the enqueue receives the English locale and the English template is selected
   T-ADMIN-001a:
     verifies: R-ADMIN-001
     behaviour: admin surfaces remain French
     steps:
-      - inspect the admin routes and admin components after the stream
-      - assert none were modified and their copy remains French
-
+    - inspect the admin routes and admin components after the stream
+    - assert none were modified and their copy remains French
 NFR:
   typecheck: npm run typecheck passes across workspaces
   tests: the apps/api and apps/web Vitest suites pass
-  responsiveness: the header toggle has no horizontal overflow at a 360 pixel viewport width
+  responsiveness: the header toggle has no horizontal overflow at a 360 pixel viewport
+    width
   security: no secrets are introduced into apps/web
   idempotency: the 0042 migration is safe to apply repeatedly
-
 FILE:
   apps/web/src/lib/i18n.svelte.ts: TASK-i18n-core
   apps/web/src/lib/messages/fr.ts: TASK-i18n-core
@@ -329,143 +339,139 @@ FILE:
   apps/web/src/lib/__tests__/i18n-parity.test.ts: TASK-tests
   apps/api/test/register-locale.test.ts: TASK-tests
   apps/api/test/email-locale.test.ts: TASK-tests
-
 TASK:
   TASK-i18n-core:
     scope:
-      - R-I18N-002
-      - R-I18N-003
-      - R-I18N-004
-      - OP-Locale.set
-      - INV-locale-valid
-      - INV-store-noop-safe
-      - INV-key-parity
+    - R-I18N-002
+    - R-I18N-003
+    - R-I18N-004
+    - OP-Locale.set
+    - INV-locale-valid
+    - INV-store-noop-safe
+    - INV-key-parity
     files:
-      - apps/web/src/lib/i18n.svelte.ts
-      - apps/web/src/lib/messages/fr.ts
-      - apps/web/src/lib/messages/en.ts
-      - apps/web/src/lib/content.ts
+    - apps/web/src/lib/i18n.svelte.ts
+    - apps/web/src/lib/messages/fr.ts
+    - apps/web/src/lib/messages/en.ts
+    - apps/web/src/lib/content.ts
     must_preserve:
-      - INV-key-parity
-      - INV-store-noop-safe
+    - INV-key-parity
+    - INV-store-noop-safe
     produce:
-      - code
+    - code
     verifies:
-      - R-I18N-002
-      - R-I18N-003
-      - R-I18N-004
+    - R-I18N-002
+    - R-I18N-003
+    - R-I18N-004
   TASK-web-shell:
     scope:
-      - R-I18N-001
-      - R-LOC-002
-      - UI
-      - INV-admin-french
+    - R-I18N-001
+    - R-LOC-002
+    - INV-admin-french
     files:
-      - apps/web/src/lib/components/Nav.svelte
-      - apps/web/src/lib/components/Footer.svelte
-      - apps/web/src/lib/components/ReviewsStrip.svelte
-      - apps/web/src/lib/components/ProfilReservationTable.svelte
-      - apps/web/src/lib/components/MaintenanceBanner.svelte
-      - apps/web/src/routes/+layout.svelte
-      - apps/web/src/app.html
+    - apps/web/src/lib/components/Nav.svelte
+    - apps/web/src/lib/components/Footer.svelte
+    - apps/web/src/lib/components/ReviewsStrip.svelte
+    - apps/web/src/lib/components/ProfilReservationTable.svelte
+    - apps/web/src/lib/components/MaintenanceBanner.svelte
+    - apps/web/src/routes/+layout.svelte
+    - apps/web/src/app.html
     must_preserve:
-      - INV-admin-french
+    - INV-admin-french
     produce:
-      - code
+    - code
     verifies:
-      - R-I18N-001
+    - R-I18N-001
   TASK-web-pages:
     scope:
-      - R-I18N-001
-      - INV-admin-french
+    - R-I18N-001
+    - INV-admin-french
     files:
-      - apps/web/src/routes/+page.svelte
-      - apps/web/src/routes/le-site/+page.svelte
-      - apps/web/src/routes/a-propos/+page.svelte
-      - apps/web/src/routes/contact/+page.svelte
-      - apps/web/src/routes/avis/+page.svelte
-      - apps/web/src/routes/avis/nouveau/+page.svelte
-      - apps/web/src/routes/connexion/+page.svelte
-      - apps/web/src/routes/profil/+page.svelte
-      - apps/web/src/routes/reinitialisation/+page.svelte
-      - apps/web/src/routes/verification/+page.svelte
-      - apps/web/src/routes/confidentialite/+page.svelte
-      - apps/web/src/routes/politiques/+page.svelte
+    - apps/web/src/routes/+page.svelte
+    - apps/web/src/routes/le-site/+page.svelte
+    - apps/web/src/routes/a-propos/+page.svelte
+    - apps/web/src/routes/contact/+page.svelte
+    - apps/web/src/routes/avis/+page.svelte
+    - apps/web/src/routes/avis/nouveau/+page.svelte
+    - apps/web/src/routes/connexion/+page.svelte
+    - apps/web/src/routes/profil/+page.svelte
+    - apps/web/src/routes/reinitialisation/+page.svelte
+    - apps/web/src/routes/verification/+page.svelte
+    - apps/web/src/routes/confidentialite/+page.svelte
+    - apps/web/src/routes/politiques/+page.svelte
     must_preserve:
-      - INV-admin-french
+    - INV-admin-french
     produce:
-      - code
+    - code
     verifies:
-      - R-I18N-001
+    - R-I18N-001
   TASK-web-api-client:
     scope:
-      - R-LOC-001
-      - R-LOC-002
-      - R-LOC-003
+    - R-LOC-001
+    - R-LOC-002
+    - R-LOC-003
     files:
-      - apps/web/src/lib/api.ts
+    - apps/web/src/lib/api.ts
     must_preserve:
-      - INV-locale-valid
+    - INV-locale-valid
     produce:
-      - code
+    - code
     verifies:
-      - R-LOC-002
-      - R-LOC-003
+    - R-LOC-002
+    - R-LOC-003
   TASK-api-locale:
     scope:
-      - R-LOC-001
-      - R-LOC-002
-      - R-LOC-003
-      - R-MAIL-001
-      - R-MAIL-002
-      - OP-Locale.update
-      - OP-Register.withLocale
-      - OP-Mail.resolveLocale
-      - ERR-BADLOCALE
-      - ERR-UNAUTH
-      - DATA
+    - R-LOC-001
+    - R-LOC-002
+    - R-LOC-003
+    - R-MAIL-001
+    - R-MAIL-002
+    - OP-Locale.update
+    - OP-Register.withLocale
+    - OP-Mail.resolveLocale
+    - ERR-BADLOCALE
+    - ERR-UNAUTH
     files:
-      - apps/api/migrations/0042_users_locale.sql
-      - apps/api/src/index.ts
-      - apps/api/src/emailLocale.ts
+    - apps/api/migrations/0042_users_locale.sql
+    - apps/api/src/index.ts
+    - apps/api/src/emailLocale.ts
     must_preserve:
-      - INV-locale-valid
+    - INV-locale-valid
     produce:
-      - code
-      - migrations
+    - code
+    - migrations
     verifies:
-      - R-LOC-001
-      - R-LOC-002
-      - R-LOC-003
-      - R-MAIL-001
-      - R-MAIL-002
+    - R-LOC-001
+    - R-LOC-002
+    - R-LOC-003
+    - R-MAIL-001
+    - R-MAIL-002
   TASK-tests:
     scope:
-      - T-I18N-002a
-      - T-I18N-002b
-      - T-I18N-003a
-      - T-I18N-003b
-      - T-I18N-004a
-      - T-LOC-001a
-      - T-MAIL-001a
-      - T-MAIL-002a
+    - T-I18N-002a
+    - T-I18N-002b
+    - T-I18N-003a
+    - T-I18N-003b
+    - T-I18N-004a
+    - T-LOC-001a
+    - T-MAIL-001a
+    - T-MAIL-002a
     files:
-      - apps/web/src/lib/__tests__/i18n.test.ts
-      - apps/web/src/lib/__tests__/i18n-parity.test.ts
-      - apps/api/test/register-locale.test.ts
-      - apps/api/test/email-locale.test.ts
+    - apps/web/src/lib/__tests__/i18n.test.ts
+    - apps/web/src/lib/__tests__/i18n-parity.test.ts
+    - apps/api/test/register-locale.test.ts
+    - apps/api/test/email-locale.test.ts
     must_preserve:
-      - INV-key-parity
+    - INV-key-parity
     produce:
-      - tests
+    - tests
     verifies:
-      - R-I18N-002
-      - R-I18N-003
-      - R-I18N-004
-      - R-LOC-001
-      - R-MAIL-001
-      - R-MAIL-002
-
+    - R-I18N-002
+    - R-I18N-003
+    - R-I18N-004
+    - R-LOC-001
+    - R-MAIL-001
+    - R-MAIL-002
 STATE:
   ST-01:
     status: locked
@@ -474,16 +480,23 @@ STATE:
   ST-02:
     status: locked
     decision: interpolation placeholders are percent-delimited tokens such as percent-name-percent
-    rationale: keeps dictionaries as plain data and the translate helper trivial with no template compiler
+    rationale: keeps dictionaries as plain data and the translate helper trivial with
+      no template compiler
   ST-03:
     status: locked
-    decision: the server users.locale is the source of truth on login and session restore while anonymous choices live only in cookie and localStorage
-    rationale: authenticated preference should follow the account across devices while anonymous visitors need no server record
+    decision: the server users.locale is the source of truth on login and session
+      restore while anonymous choices live only in cookie and localStorage
+    rationale: authenticated preference should follow the account across devices while
+      anonymous visitors need no server record
   ST-04:
     status: locked
-    decision: email locale is resolved at send time from the users table with a French fallback
-    rationale: reuses the pipeline existing locale support and safely covers anonymous bookings and lookup failures
+    decision: email locale is resolved at send time from the users table with a French
+      fallback
+    rationale: reuses the pipeline existing locale support and safely covers anonymous
+      bookings and lookup failures
   ST-05:
     status: locked
-    decision: only email enqueue call sites inside apps/api/src/index.ts are threaded; review-request and OTA-welcome senders keep the French default
-    rationale: the task scopes email locale to the index call sites and those other senders are out of scope for this stream
+    decision: only email enqueue call sites inside apps/api/src/index.ts are threaded;
+      review-request and OTA-welcome senders keep the French default
+    rationale: the task scopes email locale to the index call sites and those other
+      senders are out of scope for this stream
