@@ -564,7 +564,7 @@ export const en: Messages = {
       rateLabel: 'Rate',
       rateUnit: '/night',
       customRateBadge: 'Custom rate',
-      customRateAriaLabel: 'Custom rate applied',
+      customRateAriaLabel: 'Custom rate',
       weeklyRateLabel: 'Weekly rate active',
       weeklyRateUnit: '/week',
       maintenanceNotice: 'Reservations are temporarily suspended. Please try again soon.',

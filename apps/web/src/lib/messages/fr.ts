@@ -563,7 +563,7 @@ export const fr = {
       rateLabel: 'Tarif',
       rateUnit: '/nuit',
       customRateBadge: 'Tarif personnalisé',
-      customRateAriaLabel: 'Tarif personnalisé appliqué',
+      customRateAriaLabel: 'Tarif personnalisé',
       weeklyRateLabel: 'Tarif semaine actif',
       weeklyRateUnit: '/semaine',
       maintenanceNotice: 'Les réservations sont temporairement suspendues. Merci de réessayer bientôt.',
