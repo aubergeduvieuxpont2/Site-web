@@ -452,11 +452,11 @@ export const en: Messages = {
         "Privacy policy of the Auberge du Vieux Pont: data collection, use and user rights.",
     },
     sectionLabel: 'Privacy',
-    heading: 'Privacy policy',
-    lead: 'Your personal data, its use and your rights.',
+    heading: 'Protecting your information',
+    lead: 'We collect only what is needed to manage your stay, nothing more. Compliant with Quebec law.',
     closing: {
-      title: 'Questions?',
-      text: 'For any privacy-related questions, write to us at info@aubergeduvieuxpont.ca.',
+      title: 'Exercising your rights',
+      text: 'Access, correction or deletion on request. Write to us directly.',
     },
   },
 

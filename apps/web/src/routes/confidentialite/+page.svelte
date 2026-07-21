@@ -49,8 +49,8 @@
   <!-- Closing CTA section -->
   <div class="closing-strip" data-testid="confidentialite-closing">
     <span class="section-code">C-04</span>
-    <h2 class="closing-title">Des questions sur la confidentialité ?</h2>
-    <p class="closing-text">Pour toute question concernant notre politique de confidentialité ou vos données personnelles, écrivez-nous directement.</p>
+    <h2 class="closing-title">{t('confidentialite.closing.title')}</h2>
+    <p class="closing-text">{t('confidentialite.closing.text')}</p>
     <a href={`mailto:${SITE.email}`} class="email-link">
       {SITE.email}
     </a>

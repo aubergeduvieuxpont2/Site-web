@@ -451,11 +451,11 @@ export const fr = {
         "Politique de confidentialité de l'Auberge du Vieux Pont : collecte de données, utilisation et droits des utilisateurs.",
     },
     sectionLabel: 'Confidentialité',
-    heading: 'Politique de confidentialité',
-    lead: 'Vos données personnelles, leur usage et vos droits.',
+    heading: 'Protection de vos renseignements',
+    lead: 'On collecte le strict nécessaire pour gérer votre séjour, rien de plus. Conforme à la loi québécoise.',
     closing: {
-      title: 'Des questions ?',
-      text: 'Pour toute question relative à votre vie privée, écrivez-nous à info@aubergeduvieuxpont.ca.',
+      title: 'Pour exercer vos droits',
+      text: 'Accès, rectification ou suppression sur demande. Écrivez-nous directement.',
     },
   },
 
