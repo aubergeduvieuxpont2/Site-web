@@ -62,14 +62,14 @@
   <!-- Header -->
   <div class="page-avis__header">
     <div class="page-avis__header-inner">
-      <SectionLabel text={t('avis.label')} showHairline={false} />
+      <SectionLabel text={t('avis.sectionLabel')} showHairline={false} />
       <h1 class="page-avis__title" data-testid="avis-title">{t('avis.heading')}</h1>
 
       {#if averageRating !== null && total > 0}
         <div class="page-avis__average" data-testid="avis-average">
           <span
             class="page-avis__average-stars"
-            aria-label={t('avis.ratingAriaLabel', { rating: averageRating.toFixed(1) })}
+            aria-label={t('avis.average.ariaLabel', { rating: averageRating.toFixed(1) })}
             data-testid="avis-average-stars"
           >
             {starsPartial(averageRating)}

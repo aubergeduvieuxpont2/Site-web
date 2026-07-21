@@ -46,8 +46,10 @@
     data-testid="reviews-strip"
   >
     <div class="reviews-strip__inner">
+      <!-- i18n TODO: needs its own dictionary key (suggested `avis.strip.heading`).
+           `avis.heading` is "Témoignages" — the /avis page title — not this copy. -->
       <h2 id="reviews-strip-heading" class="reviews-strip__heading" data-testid="reviews-strip-heading">
-        {t("avis.heading")}
+        Ce que disent nos clients
       </h2>
 
       <div class="reviews-strip__grid" data-testid="reviews-strip-grid">
@@ -55,7 +57,7 @@
           <div class="reviews-strip__card" data-testid="review-strip-card">
             <span
               class="reviews-strip__stars"
-              aria-label={t("avis.ratingAriaLabel", { rating: String(review.rating) })}
+              aria-label={t("avis.card.ratingLabel", { rating: String(review.rating) })}
               data-testid="review-strip-stars"
             >
               {stars(review.rating)}
@@ -77,7 +79,7 @@
       </div>
 
       <a href="/avis" class="reviews-strip__all-link" data-testid="reviews-strip-all-link">
-        {t("avis.label")}
+        {t("avis.label")} →
       </a>
     </div>
   </section>

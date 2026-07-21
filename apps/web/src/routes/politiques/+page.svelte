@@ -5,16 +5,12 @@
   import Contour from "$lib/components/Contour.svelte";
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
-
-  function codeToKey(code: string): string {
-    return code.replace('-', '').toLowerCase();
-  }
 </script>
 
 <section class="page-politiques bg-surface">
   <!-- Header area with SectionLabel + page title -->
   <div class="header" data-testid="politiques-header">
-    <SectionLabel text={t('politiques.label')} showHairline={true} />
+    <SectionLabel text={t('politiques.sectionLabel')} showHairline={true} />
     <h1 class="page-title">{t('politiques.heading')}</h1>
     <p class="lead-text">{t('politiques.lead')}</p>
   </div>
@@ -28,13 +24,13 @@
       <section class="policy-section" data-testid={`policy-section-${section.code}`}>
         <div class="section-head">
           <span class="section-code" aria-hidden="true">{section.code}</span>
-          <h2 class="section-title">{t('policies.' + codeToKey(section.code) + '.title')}</h2>
+          <h2 class="section-title">{t('policies.' + section.code + '.title')}</h2>
         </div>
         <ul class="item-list">
           {#each section.items.map((_, idx) => idx) as i (i)}
             <li class="item" data-testid={`policy-item-${section.code}-${i}`}>
               <span class="bullet" aria-hidden="true"></span>
-              <span class="item-text">{t('policies.' + codeToKey(section.code) + '.i' + i)}</span>
+              <span class="item-text">{t('policies.' + section.code + '.items.' + i)}</span>
             </li>
           {/each}
         </ul>
@@ -180,7 +176,7 @@
   schema={[
     breadcrumbSchema([
       { name: t('nav.home'), path: "/" },
-      { name: t('politiques.label'), path: "/politiques" },
+      { name: t('politiques.sectionLabel'), path: "/politiques" },
     ]),
   ]}
 />

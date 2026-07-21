@@ -48,7 +48,7 @@
     pwdSuccess = false;
 
     if (newPassword.length < 8) {
-      pwdError = t('profil.password.errorMinLength');
+      pwdError = t('profil.password.errors.tooShort');
       return;
     }
 
@@ -145,7 +145,7 @@
     <!-- PHASE: loading -->
     <div
       class="profil__skeleton"
-      aria-label={t('profil.loading')}
+      aria-label={t('profil.loading.ariaLabel')}
       role="status"
       data-testid="profil-skeleton"
     >
@@ -158,9 +158,9 @@
   {:else if phase === "error"}
     <!-- PHASE: error (network / unexpected) -->
     <div class="profil__error" role="alert" data-testid="profil-error">
-      <span class="profil__tech-label">{t('profil.errorLabel')}</span>
+      <span class="profil__tech-label">{t('profil.error.label')}</span>
       <p class="profil__error-msg" data-testid="profil-error-message">{errorMessage}</p>
-      <a href="/" class="button button--secondary">{t('profil.backHome')}</a>
+      <a href="/" class="button button--secondary">{t('profil.error.backHome')}</a>
     </div>
   {:else if user}
     <!-- PHASE: loaded -->
@@ -168,7 +168,9 @@
       <!-- ── Page header ── -->
       <header class="profil__page-header">
         <span class="profil__tech-label" data-testid="profil-role-label">
-          {user.role === "admin" ? t('profil.roleLabelAdmin') : t('profil.roleLabelGuest')}
+          {t('nav.profil').toUpperCase()} — {(user.role === "admin"
+            ? t('profil.role.admin')
+            : t('profil.role.guest')).toUpperCase()}
         </span>
         <div class="profil__page-header-row">
           <h1 class="profil__title" data-testid="profil-title">
@@ -177,12 +179,12 @@
           <button
             class="button button--secondary profil__logout-btn"
             type="button"
-            aria-label={t('profil.logoutAriaLabel')}
+            aria-label={t('profil.logout.ariaLabel')}
             data-testid="profil-logout-btn"
             disabled={loggingOut}
             onclick={handleLogout}
           >
-            {t('profil.logout')}
+            {t('profil.logout.text')}
           </button>
         </div>
       </header>
@@ -197,15 +199,15 @@
         <div class="profil__user-card" data-testid="profil-user-card">
           <dl class="profil__user-dl">
             <div class="profil__user-field">
-              <dt class="profil__user-dt">{t('profil.info.name')}</dt>
+              <dt class="profil__user-dt">{t('profil.fields.name')}</dt>
               <dd class="profil__user-dd" data-testid="profil-user-name">{user.name ?? "—"}</dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">{t('profil.info.email')}</dt>
+              <dt class="profil__user-dt">{t('profil.fields.email')}</dt>
               <dd class="profil__user-dd" data-testid="profil-user-email">{user.email}</dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">{t('profil.info.role')}</dt>
+              <dt class="profil__user-dt">{t('profil.fields.role')}</dt>
               <dd class="profil__user-dd">
                 <span
                   class="profil__role-badge {user.role === 'admin'
@@ -213,26 +215,26 @@
                     : ''}"
                   data-testid="profil-role-badge"
                 >
-                  {user.role === "admin" ? t('profil.info.adminRole') : t('profil.info.guestRole')}
+                  {user.role === "admin" ? t('profil.role.admin') : t('profil.role.guest')}
                 </span>
               </dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">{t('profil.info.rate')}</dt>
+              <dt class="profil__user-dt">{t('profil.fields.rate')}</dt>
               <dd
                 class="profil__user-dd profil__user-dd--rate"
                 data-testid="profil-user-rate"
               >
                 <span class="profil__rate-value">
-                  {formattedRate}&nbsp;{t('profil.info.rateUnit')}
+                  {formattedRate}&nbsp;{t('profil.rate.unit')}
                 </span>
                 {#if isCustomRate}
                   <span
                     class="profil__role-badge profil__role-badge--custom"
-                    aria-label={t('profil.info.customRate')}
+                    aria-label={t('profil.rate.customAriaLabel')}
                     data-testid="profil-rate-badge"
                   >
-                    {t('profil.info.customRate')}
+                    {t('profil.rate.custom')}
                   </span>
                 {/if}
               </dd>
@@ -244,7 +246,7 @@
               class="button button--action profil__admin-link"
               data-testid="profil-admin-link"
             >
-              {t('profil.info.adminDashboard')}
+              {t('profil.admin.link')}
             </a>
           {/if}
         </div>
@@ -301,7 +303,7 @@
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-pwd-new">
               {t('profil.password.new')}
-              <span class="profil__pwd-hint" aria-hidden="true">({t('profil.password.hint')})</span>
+              <span class="profil__pwd-hint" aria-hidden="true">{t('profil.password.hint')}</span>
             </label>
             <input
               id="profil-pwd-new"
@@ -362,26 +364,26 @@
           class="profil__section-heading"
           data-testid="profil-email-heading"
         >
-          {t('profil.emailChange.heading')}
+          {t('profil.email.heading')}
         </h2>
 
         <p
           class="profil__email-current profil__pwd-hint"
           data-testid="profil-email-current"
         >
-          {t('profil.emailChange.currentLabel', { email: user.email })}
+          {t('profil.email.currentPrefix')}{user.email}
         </p>
 
         <form
           class="profil__pwd-form"
           data-testid="profil-email-form"
-          aria-label={t('profil.emailChange.formAriaLabel')}
+          aria-label={t('profil.email.formAriaLabel')}
           onsubmit={handleEmailChange}
           novalidate
         >
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-email-new">
-              {t('profil.emailChange.newLabel')}
+              {t('profil.email.new')}
             </label>
             <input
               id="profil-email-new"
@@ -427,7 +429,7 @@
               role="status"
               data-testid="profil-email-success"
             >
-              {t('profil.emailChange.success')}
+              {t('profil.email.success')}
             </div>
           {/if}
 
@@ -436,10 +438,10 @@
               class="button button--action"
               type="submit"
               disabled={emailSubmitting}
-              aria-label={t('profil.emailChange.submitAriaLabel')}
+              aria-label={t('profil.email.submitAriaLabel')}
               data-testid="profil-email-submit"
             >
-              {emailSubmitting ? t('profil.emailChange.submitting') : t('profil.emailChange.submit')}
+              {emailSubmitting ? t('profil.email.submitting') : t('profil.email.submit')}
             </button>
           </div>
         </form>

@@ -46,8 +46,8 @@
       // message; only a transport failure is surfaced distinctly.
       loginError =
         result.error === "Réseau indisponible"
-          ? t('connexion.login.networkError')
-          : t('connexion.login.error');
+          ? t('connexion.errors.network')
+          : t('connexion.errors.invalidCredentials');
       loginStatus = "idle";
     } else {
       // Load the canonical session (with computed effectiveNightlyPrice) into
@@ -75,7 +75,7 @@
     // address exists (no user enumeration). Only a transport failure surfaces;
     // any success swaps the whole zone for a generic confirmation.
     if (isError(result)) {
-      forgotError = t('connexion.forgot.networkError');
+      forgotError = t('connexion.errors.network');
       forgotStatus = "idle";
     } else {
       forgotSent = true;
@@ -90,7 +90,7 @@
     // Client-side length check before hitting the network. The API enforces the
     // same rule server-side; this is only a fast-fail for UX.
     if (regPassword.length < 8) {
-      regError = t('connexion.register.errorPassword');
+      regError = t('connexion.errors.passwordTooShort');
       return;
     }
 
@@ -106,7 +106,7 @@
     if (isError(result)) {
       regError =
         result.error === "Réseau indisponible"
-          ? t('connexion.register.errorNetwork')
+          ? t('connexion.errors.network')
           : result.error; // includes server-side messages e.g. "Un compte existe déjà"
       regStatus = "idle";
     } else {
@@ -125,7 +125,7 @@
 
 <div class="connexion">
   <div class="connexion__page-header">
-    <SectionLabel text={t('connexion.label')} showHairline={true} />
+    <SectionLabel text={t('connexion.sectionLabel')} showHairline={true} />
     <h1 class="connexion__display">{t('connexion.heading')}</h1>
     <p class="connexion__lead">{t('connexion.lead')}</p>
   </div>
@@ -142,12 +142,12 @@
         class="connexion__form"
         id="login-form"
         novalidate
-        aria-label={t('connexion.login.ariaLabel')}
+        aria-label={t('connexion.login.formAriaLabel')}
         data-testid="form-login"
         onsubmit={handleLogin}
       >
         <div class="connexion__field">
-          <label class="connexion__label" for="login-email">{t('connexion.login.email')}</label>
+          <label class="connexion__label" for="login-email">{t('connexion.fields.email')}</label>
           <input
             class="connexion__input"
             id="login-email"
@@ -156,12 +156,12 @@
             aria-required="true"
             data-testid="login-email"
             bind:value={loginEmail}
-            placeholder={t('connexion.login.emailPlaceholder')}
+            placeholder={t('connexion.fields.emailPlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="login-password">{t('connexion.login.password')}</label>
+          <label class="connexion__label" for="login-password">{t('connexion.fields.password')}</label>
           <input
             class="connexion__input"
             id="login-password"
@@ -185,7 +185,7 @@
 
         <div class="connexion__actions">
           <Button type="submit" variant="primary" disabled={loginStatus === "sending"}>
-            {loginStatus === "sending" ? t('connexion.login.submitting') : t('connexion.login.submit')}
+            {loginStatus === "sending" ? t('connexion.login.sending') : t('connexion.login.submit')}
           </Button>
         </div>
       </form>
@@ -212,14 +212,14 @@
             class:is-open={forgotOpen}
             id="forgot-drawer"
             role="region"
-            aria-label={t('connexion.forgot.drawerAriaLabel')}
+            aria-label={t('connexion.forgot.regionAriaLabel')}
             inert={!forgotOpen}
           >
             <div class="connexion__forgot-drawer-inner">
               <form
                 class="connexion__forgot-form"
                 novalidate
-                aria-label={t('connexion.forgot.ariaLabel')}
+                aria-label={t('connexion.forgot.formAriaLabel')}
                 data-testid="forgot-form"
                 onsubmit={handleForgot}
               >
@@ -235,7 +235,7 @@
                     aria-required="true"
                     data-testid="forgot-email"
                     bind:value={forgotEmail}
-                    placeholder={t('connexion.forgot.emailPlaceholder')}
+                    placeholder={t('connexion.fields.emailPlaceholder')}
                   />
                 </div>
 
@@ -251,7 +251,7 @@
 
                 <div class="connexion__actions">
                   <Button type="submit" variant="primary" disabled={forgotStatus === "sending"}>
-                    {forgotStatus === "sending" ? t('connexion.forgot.submitting') : t('connexion.forgot.submit')}
+                    {forgotStatus === "sending" ? t('connexion.forgot.sending') : t('connexion.forgot.submit')}
                   </Button>
                 </div>
               </form>
@@ -283,14 +283,14 @@
         class="connexion__form"
         id="register-form"
         novalidate
-        aria-label={t('connexion.register.ariaLabel')}
+        aria-label={t('connexion.register.formAriaLabel')}
         data-testid="form-register"
         onsubmit={handleRegister}
       >
         <!-- Name row: first + last side-by-side on ≥480px -->
         <div class="connexion__name-row">
           <div class="connexion__field">
-            <label class="connexion__label" for="reg-first-name">{t('connexion.register.firstName')}</label>
+            <label class="connexion__label" for="reg-first-name">{t('connexion.fields.firstName')}</label>
             <input
               class="connexion__input"
               id="reg-first-name"
@@ -298,11 +298,11 @@
               autocomplete="given-name"
               data-testid="register-first-name"
               bind:value={regFirstName}
-              placeholder={t('connexion.register.firstNamePlaceholder')}
+              placeholder={t('connexion.fields.firstNamePlaceholder')}
             />
           </div>
           <div class="connexion__field">
-            <label class="connexion__label" for="reg-last-name">{t('connexion.register.lastName')}</label>
+            <label class="connexion__label" for="reg-last-name">{t('connexion.fields.lastName')}</label>
             <input
               class="connexion__input"
               id="reg-last-name"
@@ -310,13 +310,13 @@
               autocomplete="family-name"
               data-testid="register-last-name"
               bind:value={regLastName}
-              placeholder={t('connexion.register.lastNamePlaceholder')}
+              placeholder={t('connexion.fields.lastNamePlaceholder')}
             />
           </div>
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="reg-email">{t('connexion.register.email')}</label>
+          <label class="connexion__label" for="reg-email">{t('connexion.fields.email')}</label>
           <input
             class="connexion__input"
             id="reg-email"
@@ -325,12 +325,12 @@
             aria-required="true"
             data-testid="register-email"
             bind:value={regEmail}
-            placeholder={t('connexion.register.emailPlaceholder')}
+            placeholder={t('connexion.fields.emailPlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="reg-password">{t('connexion.register.password')}</label>
+          <label class="connexion__label" for="reg-password">{t('connexion.fields.password')}</label>
           <input
             class="connexion__input"
             id="reg-password"
@@ -342,14 +342,14 @@
             bind:value={regPassword}
           />
           <span class="connexion__field-hint" id="reg-password-hint">
-            {t('connexion.register.passwordHint')}
+            {t('connexion.fields.passwordHint')}
           </span>
         </div>
 
         <div class="connexion__field">
           <label class="connexion__label" for="reg-phone">
-            {t('connexion.register.phone')}
-            <span class="connexion__field-optional" aria-label={t('connexion.register.phoneOptional')}>{t('connexion.register.phoneOptional')}</span>
+            {t('connexion.fields.phone')}
+            <span class="connexion__field-optional" aria-label={t('connexion.fields.optional')}>{t('connexion.fields.optional')}</span>
           </label>
           <input
             class="connexion__input"
@@ -358,14 +358,14 @@
             autocomplete="tel"
             data-testid="register-phone"
             bind:value={regPhone}
-            placeholder={t('connexion.register.phonePlaceholder')}
+            placeholder={t('connexion.fields.phonePlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
           <label class="connexion__label" for="reg-company">
-            {t('connexion.register.company')}
-            <span class="connexion__field-optional" aria-label={t('connexion.register.companyOptional')}>{t('connexion.register.companyOptional')}</span>
+            {t('connexion.fields.company')}
+            <span class="connexion__field-optional" aria-label={t('connexion.fields.optional')}>{t('connexion.fields.optional')}</span>
           </label>
           <input
             class="connexion__input"
@@ -374,7 +374,7 @@
             autocomplete="organization"
             data-testid="register-company"
             bind:value={regCompany}
-            placeholder={t('connexion.register.companyPlaceholder')}
+            placeholder={t('connexion.fields.companyPlaceholder')}
           />
         </div>
 
@@ -396,14 +396,14 @@
             data-testid="register-notice"
           >
             <span class="connexion__notice-text">
-              {t('connexion.register.notice')}
+              {t('connexion.register.successNotice')}
             </span>
           </div>
         {/if}
 
         <div class="connexion__actions">
           <Button type="submit" variant="action" disabled={regStatus === "sending"}>
-            {regStatus === "sending" ? t('connexion.register.submitting') : t('connexion.register.submit')}
+            {regStatus === "sending" ? t('connexion.register.sending') : t('connexion.register.submit')}
           </Button>
         </div>
       </form>
@@ -807,5 +807,5 @@
 </style>
 
 <svelte:head>
-  <title>{t('connexion.pageTitle')}</title>
+  <title>{t('connexion.seo.title')}</title>
 </svelte:head>

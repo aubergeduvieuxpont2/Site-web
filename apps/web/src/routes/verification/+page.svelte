@@ -54,13 +54,13 @@
 
 <main class="verification" data-testid="verification-page">
   <div class="verification__container">
-    <SectionLabel text={t('verification.label')} showHairline={true} />
+    <SectionLabel text={t('verification.sectionLabel')} showHairline={true} />
 
     {#if viewState === "loading"}
       <div class="verification__loading-state" data-testid="verify-loading-state" aria-busy="true">
         <div class="verification__spinner" aria-hidden="true"></div>
         <p class="verification__loading-body" role="status" aria-live="polite">
-          {t('verification.loading')}
+          {t('verification.loading.body')}
         </p>
       </div>
     {:else if viewState === "success"}
@@ -76,9 +76,9 @@
         </h1>
         <p class="verification__success-body" data-testid="verify-success-body">
           {#if purpose === "change"}
-            {t('verification.success.bodyChange', { email: confirmedEmail ? ` (${confirmedEmail})` : '' })}
+            {t('verification.success.body.change', { email: confirmedEmail ? ` (${confirmedEmail})` : '' })}
           {:else}
-            {t('verification.success.bodyRegister')}
+            {t('verification.success.body.register')}
           {/if}
         </p>
         <Button href="/profil" variant="secondary">{t('verification.success.cta')}</Button>
@@ -322,5 +322,5 @@
 </style>
 
 <svelte:head>
-  <title>{t('verification.pageTitle')}</title>
+  <title>{t('verification.seo.title')}</title>
 </svelte:head>

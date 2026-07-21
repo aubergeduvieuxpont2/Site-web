@@ -10,17 +10,17 @@
   import SectionLabel from '$lib/components/SectionLabel.svelte';
 
   const values = $derived([
-    { code: '01', title: t('aboutValues.v01.title'), text: t('aboutValues.v01.text') },
-    { code: '02', title: t('aboutValues.v02.title'), text: t('aboutValues.v02.text') },
-    { code: '03', title: t('aboutValues.v03.title'), text: t('aboutValues.v03.text') },
-    { code: '04', title: t('aboutValues.v04.title'), text: t('aboutValues.v04.text') },
+    { code: '01', title: t('apropos.values.0.title'), text: t('apropos.values.0.text') },
+    { code: '02', title: t('apropos.values.1.title'), text: t('apropos.values.1.text') },
+    { code: '03', title: t('apropos.values.2.title'), text: t('apropos.values.2.text') },
+    { code: '04', title: t('apropos.values.3.title'), text: t('apropos.values.3.text') },
   ]);
 
   const tags = $derived([
-    t('about.tags.tag0'),
-    t('about.tags.tag1'),
-    t('about.tags.tag2'),
-    t('about.tags.tag3'),
+    t('apropos.tags.0'),
+    t('apropos.tags.1'),
+    t('apropos.tags.2'),
+    t('apropos.tags.3'),
   ]);
 
   // Configured contact phone with graceful fallback to the static default.
@@ -37,21 +37,21 @@
     aria-labelledby="a-propos-heading"
   >
     <div class="page-a-propos__inner">
-      <SectionLabel text={t('about.intro.label', { year: SITE.established })} showHairline={false} />
+      <SectionLabel text={t('apropos.intro.sectionLabel')} showHairline={false} />
       <h1
         id="a-propos-heading"
         class="page-a-propos__display"
         use:reveal={{ y: 20, delay: 0.05 }}
         data-testid="a-propos-heading"
       >
-        {t('about.intro.heading')}
+        {t('apropos.heading')}
       </h1>
       <p
         class="page-a-propos__lead"
         use:reveal={{ y: 16, delay: 0.12 }}
         data-testid="a-propos-lead"
       >
-        {t('about.intro.lead')}
+        {t('apropos.lead')}
       </p>
     </div>
   </section>
@@ -71,24 +71,24 @@
 
         <!-- Text column — left on desktop, top on mobile -->
         <div class="page-a-propos__histoire-text">
-          <SectionLabel text={t('about.history.label')} />
+          <SectionLabel text={t('apropos.histoire.sectionLabel')} />
           <h2
             id="a-propos-histoire-heading"
             class="page-a-propos__section-heading"
             use:reveal={{ y: 20, delay: 0.05 }}
             data-testid="a-propos-histoire-heading"
           >
-            {t('about.history.heading')}
+            {t('apropos.histoire.heading')}
           </h2>
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
-              {t('about.history.body0', { year: SITE.established })}
+              {t('apropos.histoire.p1')}
             </p>
             <p use:reveal={{ y: 18, delay: 0.15 }}>
-              {t('about.history.body1')}
+              {t('apropos.histoire.p2')}
             </p>
             <p use:reveal={{ y: 18, delay: 0.20 }}>
-              {t('about.history.body2')}
+              {t('apropos.histoire.p3')}
             </p>
           </div>
           <figure
@@ -97,10 +97,10 @@
             data-testid="a-propos-quote"
           >
             <blockquote class="page-a-propos__blockquote">
-              {t('about.history.quote')}
+              {t('apropos.quote.text')}
             </blockquote>
             <figcaption class="page-a-propos__quote-caption">
-              {t('about.history.quoteCaption', { year: SITE.established })}
+              {t('apropos.quote.caption')}
             </figcaption>
           </figure>
         </div>
@@ -114,8 +114,8 @@
             imgKey="bridge.jpg"
             picsumSeed={88}
             aspectRatio="4/5"
-            caption={t('about.history.imageCaption')}
-            alt={t('about.history.imageAlt')}
+            caption={t('apropos.histoire.image.caption')}
+            alt={t('apropos.histoire.image.alt')}
           />
         </div>
 
@@ -135,14 +135,14 @@
   >
     <div class="page-a-propos__inner">
       <div class="page-a-propos__valeurs-header">
-        <SectionLabel text={t('about.values.label')} />
+        <SectionLabel text={t('apropos.valeurs.sectionLabel')} />
         <h2
           id="a-propos-valeurs-heading"
           class="page-a-propos__section-heading"
           use:reveal={{ y: 20, delay: 0.05 }}
           data-testid="a-propos-valeurs-heading"
         >
-          {t('about.values.heading')}
+          {t('apropos.valeurs.heading')}
         </h2>
       </div>
       <div
@@ -189,28 +189,28 @@
             imgKey="village-river.jpg"
             picsumSeed={33}
             aspectRatio="3/2"
-            caption={t('about.anchoring.imageCaption')}
-            alt={t('about.anchoring.imageAlt')}
+            caption={t('apropos.ancrage.image.caption')}
+            alt={t('apropos.ancrage.image.alt')}
           />
         </div>
 
         <!-- Text column — right on desktop, bottom on mobile -->
         <div class="page-a-propos__ancrage-text">
-          <SectionLabel text={t('about.anchoring.label')} />
+          <SectionLabel text={t('apropos.ancrage.sectionLabel')} />
           <h2
             id="a-propos-ancrage-heading"
             class="page-a-propos__section-heading"
             use:reveal={{ y: 20, delay: 0.05 }}
             data-testid="a-propos-ancrage-heading"
           >
-            {t('about.anchoring.heading')}
+            {t('apropos.ancrage.heading')}
           </h2>
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
-              {t('about.anchoring.body0')}
+              {t('apropos.ancrage.p1')}
             </p>
             <p use:reveal={{ y: 18, delay: 0.15 }}>
-              {t('about.anchoring.body1')}
+              {t('apropos.ancrage.p2')}
             </p>
           </div>
           <div
@@ -232,20 +232,20 @@
   <section
     class="page-a-propos__cta"
     data-testid="a-propos-cta"
-    aria-label={t('about.cta.heading')}
+    aria-label="Nous contacter"
   >
     <div class="page-a-propos__inner page-a-propos__cta-layout">
       <div use:reveal={{ y: 22 }} class="page-a-propos__cta-copy">
         <!-- Raw span instead of SectionLabel to avoid :global overrides on dark bg -->
-        <span class="page-a-propos__cta-eyebrow" aria-hidden="true">{t('about.cta.eyebrow')}</span>
+        <span class="page-a-propos__cta-eyebrow" aria-hidden="true">{t('apropos.cta.eyebrow')}</span>
         <h2
           class="page-a-propos__cta-heading"
           data-testid="a-propos-cta-heading"
         >
-          {t('about.cta.heading')}
+          {t('apropos.cta.heading')}
         </h2>
         <p class="page-a-propos__cta-lead">
-          {t('about.cta.lead')}
+          {t('apropos.cta.lead')}
         </p>
       </div>
       <div
@@ -256,7 +256,7 @@
           href={phoneHref}
           class="page-a-propos__cta-phone"
           data-testid="a-propos-cta-phone"
-          aria-label={t('about.cta.callAriaLabel', { phone: phoneDisplay })}
+          aria-label="Appeler le {phoneDisplay}"
         >
           {phoneDisplay}
         </a>
@@ -265,7 +265,7 @@
           class="page-a-propos__cta-link"
           data-testid="a-propos-cta-contact"
         >
-          {t('about.cta.contact')}
+          {t('apropos.cta.link')}
         </a>
       </div>
     </div>
@@ -665,8 +665,8 @@
 </style>
 
 <Seo
-  title={t('about.seo.title')}
-  description={t('about.seo.description')}
+  title={t('apropos.seo.title')}
+  description={t('apropos.seo.description')}
   path="/a-propos"
   schema={[
     breadcrumbSchema([
