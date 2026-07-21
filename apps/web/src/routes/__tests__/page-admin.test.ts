@@ -61,7 +61,6 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
     weeklyPrice: 560,
     contactEmail: "info@aubergeduvieuxpont.ca",
     contactPhone: "418 655-1212",
-    marketingRoomCount: 12,
     assignableRoomCount: 12,
     tps: 5,
     tvq: 9.975,
@@ -71,6 +70,7 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
     emailPasswordResetEnabled: false,
     emailRoomAssignmentEnabled: false,
     emailWelcomeEnabled: false,
+    emailReviewRequestEnabled: false,
     ...over,
   };
 }

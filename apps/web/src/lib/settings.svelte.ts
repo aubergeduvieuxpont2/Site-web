@@ -4,7 +4,6 @@ const DEFAULTS: PublicSettings = {
   nightlyPrice: 89,
   contactEmail: "info@aubergeduvieuxpont.ca",
   contactPhone: "418 655-1212",
-  marketingRoomCount: 12,
   publicRoomCount: 12,
   tps: 5,
   tvq: 9.975,
@@ -29,9 +28,6 @@ export function mergeSettings(
     }),
     ...(incoming.contactPhone !== undefined && {
       contactPhone: incoming.contactPhone,
-    }),
-    ...(incoming.marketingRoomCount !== undefined && {
-      marketingRoomCount: incoming.marketingRoomCount,
     }),
     ...(incoming.publicRoomCount !== undefined && {
       publicRoomCount: incoming.publicRoomCount,

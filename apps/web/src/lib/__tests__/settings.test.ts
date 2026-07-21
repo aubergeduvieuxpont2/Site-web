@@ -1,8 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import * as fs from "fs";
+import * as path from "path";
 import { getPublicSettings, adminUpdateSettings } from "../api";
 import type { PublicSettings, AdminSettings } from "../api";
 
-// Pure function: merge settings (not importing from .svelte file to avoid $state issues in tests)
+// Pure function: mirrors the merge helper in settings.svelte.ts without importing
+// from the .svelte module (which requires $state and breaks the test runner).
 function mergeSettings(
   current: PublicSettings,
   incoming: Partial<PublicSettings>,
@@ -18,9 +21,6 @@ function mergeSettings(
     ...(incoming.contactPhone !== undefined && {
       contactPhone: incoming.contactPhone,
     }),
-    ...(incoming.marketingRoomCount !== undefined && {
-      marketingRoomCount: incoming.marketingRoomCount,
-    }),
     ...(incoming.publicRoomCount !== undefined && {
       publicRoomCount: incoming.publicRoomCount,
     }),
@@ -32,6 +32,12 @@ function mergeSettings(
     }),
     ...(incoming.accommodationTax !== undefined && {
       accommodationTax: incoming.accommodationTax,
+    }),
+    ...(incoming.weeklyPrice !== undefined && {
+      weeklyPrice: incoming.weeklyPrice,
+    }),
+    ...(incoming.reservationsEnabled !== undefined && {
+      reservationsEnabled: incoming.reservationsEnabled,
     }),
   };
 }
@@ -50,7 +56,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -64,7 +69,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "new@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -77,7 +81,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -92,7 +95,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -107,7 +109,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "old@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -122,7 +123,6 @@ describe("Settings", () => {
         nightlyPrice: 99,
         contactEmail: "new@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -135,7 +135,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -153,7 +152,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 12,
         tps: 5,
         tvq: 9.975,
@@ -173,13 +171,12 @@ describe("Settings", () => {
             nightlyPrice: 89,
             contactEmail: "info@example.com",
             contactPhone: "418 655-1212",
-            marketingRoomCount: 12,
             publicRoomCount: 8,
             tps: 5,
             tvq: 9.975,
             accommodationTax: 3.5,
-          })
-        )
+          }),
+        ),
       );
 
       const result = await getPublicSettings();
@@ -187,7 +184,6 @@ describe("Settings", () => {
         nightlyPrice: 89,
         contactEmail: "info@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         publicRoomCount: 8,
         tps: 5,
         tvq: 9.975,
@@ -209,71 +205,144 @@ describe("Settings", () => {
   });
 
   describe("adminUpdateSettings", () => {
-    it("sends PUT request with settings data", async () => {
+    it("sends POST request with all schema-required settings fields", async () => {
       vi.mocked(global.fetch).mockResolvedValueOnce(
         new Response(
           JSON.stringify({
             nightlyPrice: 99,
+            weeklyPrice: 560,
             contactEmail: "new@example.com",
             contactPhone: "418 655-1212",
-            marketingRoomCount: 12,
             assignableRoomCount: 12,
             tps: 5,
             tvq: 9.975,
             accommodationTax: 3.5,
-          })
-        )
+            reservationsEnabled: true,
+            emailConfirmationEnabled: false,
+            emailPasswordResetEnabled: false,
+            emailRoomAssignmentEnabled: false,
+            emailWelcomeEnabled: false,
+            emailReviewRequestEnabled: false,
+          }),
+        ),
       );
 
-      const settings: AdminSettings = {
+      const payload: AdminSettings = {
         nightlyPrice: 99,
+        weeklyPrice: 560,
         contactEmail: "new@example.com",
         contactPhone: "418 655-1212",
-        marketingRoomCount: 12,
         assignableRoomCount: 12,
         tps: 5,
         tvq: 9.975,
         accommodationTax: 3.5,
+        reservationsEnabled: true,
         emailConfirmationEnabled: false,
         emailPasswordResetEnabled: false,
         emailRoomAssignmentEnabled: false,
         emailWelcomeEnabled: false,
+        emailReviewRequestEnabled: false,
       };
 
-      const result = await adminUpdateSettings(settings);
+      const result = await adminUpdateSettings(payload);
 
       expect(vi.mocked(global.fetch)).toHaveBeenCalledWith(
         "/api/admin/settings",
         expect.objectContaining({
           method: "POST",
-          body: JSON.stringify(settings),
-        })
+          body: JSON.stringify(payload),
+        }),
       );
       expect(result).not.toHaveProperty("error");
     });
 
-    it("returns error on invalid request", async () => {
+    it("payload contains no marketingRoomCount key", async () => {
       vi.mocked(global.fetch).mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: "Invalid settings" }), { status: 400 })
+        new Response(JSON.stringify({ nightlyPrice: 89 })),
       );
 
-      const settings: AdminSettings = {
-        nightlyPrice: 0,
-        contactEmail: "invalid",
-        contactPhone: "",
-        marketingRoomCount: 0,
-        assignableRoomCount: 0,
-        tps: -1,
+      const payload: AdminSettings = {
+        nightlyPrice: 89,
+        weeklyPrice: 560,
+        contactEmail: "info@example.com",
+        contactPhone: "418 655-1212",
+        assignableRoomCount: 12,
+        tps: 5,
         tvq: 9.975,
         accommodationTax: 3.5,
+        reservationsEnabled: true,
         emailConfirmationEnabled: false,
         emailPasswordResetEnabled: false,
         emailRoomAssignmentEnabled: false,
         emailWelcomeEnabled: false,
+        emailReviewRequestEnabled: false,
       };
 
-      const result = await adminUpdateSettings(settings);
+      await adminUpdateSettings(payload);
+
+      const callBody = JSON.parse(
+        vi.mocked(global.fetch).mock.calls[0][1]?.body as string,
+      );
+      expect(callBody).not.toHaveProperty("marketingRoomCount");
+    });
+
+    it("returns error on invalid request", async () => {
+      vi.mocked(global.fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Invalid settings" }), { status: 400 }),
+      );
+
+      const payload: AdminSettings = {
+        nightlyPrice: 0,
+        weeklyPrice: 0,
+        contactEmail: "invalid",
+        contactPhone: "",
+        assignableRoomCount: 0,
+        tps: -1,
+        tvq: 9.975,
+        accommodationTax: 3.5,
+        reservationsEnabled: true,
+        emailConfirmationEnabled: false,
+        emailPasswordResetEnabled: false,
+        emailRoomAssignmentEnabled: false,
+        emailWelcomeEnabled: false,
+        emailReviewRequestEnabled: false,
+      };
+
+      const result = await adminUpdateSettings(payload);
       expect(result).toHaveProperty("error");
     });
+  });
+});
+
+describe("INV-no-marketing-room-count — source-level invariants", () => {
+  // These checks verify that the removed marketingRoomCount field has not
+  // crept back into any of the three source files that previously carried it.
+  // The backend no longer accepts or returns this key; any reintroduction would
+  // cause the API to reject settings updates.
+
+  it("content.ts DEFAULTS literal does not contain marketingRoomCount", () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "../content.ts"),
+      "utf-8",
+    );
+    expect(src).not.toContain("marketingRoomCount");
+  });
+
+  it("settings.svelte.ts DEFAULTS and mergeSettings do not contain marketingRoomCount", () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "../settings.svelte.ts"),
+      "utf-8",
+    );
+    expect(src).not.toContain("marketingRoomCount");
+  });
+
+  it("api.ts PublicSettings type does not contain marketingRoomCount", () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "../api.ts"),
+      "utf-8",
+    );
+    // Neither the PublicSettings interface nor any helper should reference the
+    // removed field; its presence would cause a type mismatch with the backend schema.
+    expect(src).not.toContain("marketingRoomCount");
   });
 });

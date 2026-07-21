@@ -99,10 +99,9 @@ describe('+page.svelte (page-accueil SSR)', () => {
     });
   });
 
-  // The rooms stat value is bound to the live `settings.publicRoomCount` (change
-  // 3 / criterion #5), NOT the hardcoded STATS[2].value or marketingRoomCount.
-  // Both default to 12, so mutate the store to a distinct value to observe the
-  // binding actually flows through to the rendered markup.
+  // The rooms stat value is bound to the live `settings.publicRoomCount`,
+  // NOT the hardcoded STATS[2].value. Both default to 12, so mutate the store
+  // to a distinct value to observe the binding flows through to the rendered markup.
   describe('rooms stat is driven by settings.publicRoomCount', () => {
     afterEach(() => {
       settings.publicRoomCount = 12;
@@ -120,15 +119,6 @@ describe('+page.svelte (page-accueil SSR)', () => {
       expect(html).toMatch(/sr-only[^"]*">7 chambres<\/span>/);
       // The other stats are unaffected.
       expect(html).toMatch(/sr-only[^"]*">30 min<\/span>/);
-    });
-
-    it('does not couple the rooms stat to marketingRoomCount', () => {
-      settings.publicRoomCount = 5;
-      settings.marketingRoomCount = 99;
-      const html = renderPage();
-      expect(html).toMatch(/sr-only[^"]*">5 chambres<\/span>/);
-      expect(html).not.toMatch(/sr-only[^"]*">99 chambres<\/span>/);
-      settings.marketingRoomCount = 12;
     });
   });
 

@@ -6,13 +6,12 @@
   // Parent binds this to pass the server-derived count to AdminDisponibilitesTab.
   let { assignableRoomCount = $bindable(12) }: { assignableRoomCount?: number } = $props();
 
-  // ── Local settings shape (all fields present, no optionals) ────────────────
+  // Local settings shape — matches SettingsUpdateSchema exactly.
   type LocalSettings = {
     nightlyPrice: number;
     weeklyPrice: number;
     contactEmail: string;
     contactPhone: string;
-    marketingRoomCount: number;
     tps: number;
     tvq: number;
     accommodationTax: number;
@@ -29,7 +28,6 @@
     weeklyPrice: 560,
     contactEmail: "info@aubergeduvieuxpont.ca",
     contactPhone: "418 655-1212",
-    marketingRoomCount: 12,
     tps: 5,
     tvq: 9.975,
     accommodationTax: 3.5,
@@ -43,6 +41,7 @@
 
   // ── Settings state ──────────────────────────────────────────────────────────
   let loading = $state(false);
+  let loadError = $state<string | null>(null);
   let saveError = $state<string | null>(null);
   let saved = $state(false);
   let saving = $state(false);
@@ -81,7 +80,6 @@
       weeklyPrice: res.weeklyPrice ?? DEFAULTS.weeklyPrice,
       contactEmail: res.contactEmail,
       contactPhone: res.contactPhone,
-      marketingRoomCount: (res as any).marketingRoomCount ?? DEFAULTS.marketingRoomCount,
       tps: res.tps,
       tvq: res.tvq,
       accommodationTax: res.accommodationTax,
@@ -98,11 +96,11 @@
   // ── Load ────────────────────────────────────────────────────────────────────
   async function loadSettings() {
     loading = true;
-    saveError = null;
+    loadError = null;
     const res = await adminGetSettings();
     loading = false;
     if (isError(res)) {
-      saveError = res.error;
+      loadError = res.error;
     } else {
       mergeFromApi(res);
     }
@@ -139,10 +137,24 @@
       return;
     }
 
-    const payload: AdminSettings = {
-      ...s,
+    // Build payload with exactly the keys that SettingsUpdateSchema validates — no extras.
+    const payload = {
+      nightlyPrice: s.nightlyPrice,
+      weeklyPrice: s.weeklyPrice,
+      contactEmail: s.contactEmail,
+      contactPhone: s.contactPhone,
+      tps: s.tps,
+      tvq: s.tvq,
+      accommodationTax: s.accommodationTax,
       assignableRoomCount,
-    };
+      reservationsEnabled: s.reservationsEnabled,
+      emailConfirmationEnabled: s.emailConfirmationEnabled,
+      emailPasswordResetEnabled: s.emailPasswordResetEnabled,
+      emailRoomAssignmentEnabled: s.emailRoomAssignmentEnabled,
+      emailWelcomeEnabled: s.emailWelcomeEnabled,
+      emailReviewRequestEnabled: s.emailReviewRequestEnabled,
+    } as unknown as AdminSettings;
+
     const res = await adminUpdateSettings(payload);
     saving = false;
 
@@ -152,6 +164,7 @@
       mergeFromApi(res);
       saved = true;
       setTimeout(() => { saved = false; }, 3000);
+      // POST-SAVE SEAM: add public-settings store refresh here once the config-refresh stream lands.
     }
   }
 
@@ -191,20 +204,22 @@
     <div class="params-tab__loading" aria-busy="true" aria-label="Chargement des paramètres…">
       <span class="params-tab__spinner" aria-hidden="true"></span>
     </div>
-  {:else if saveError && !saving}
-    <div class="params-tab__error-banner" role="alert" data-testid="params-error">{saveError}</div>
+  {:else if loadError}
+    <div class="params-tab__error-banner" role="alert" data-testid="params-error">{loadError}</div>
   {/if}
 
   {#if !loading}
+    <!-- Screen-reader heading for the overall settings section; tabs and cards provide visual structure. -->
+    <h2 class="params-tab__sr-only" id="settings-heading">Paramètres</h2>
     <!-- ── Card: Tarification & taxes ── -->
     <section class="params-tab__card" aria-labelledby="card-tarification">
       <h2 class="params-tab__card-title" id="card-tarification">Tarification &amp; taxes</h2>
       <div class="params-tab__fields">
 
         <div class="params-tab__field">
-          <label class="params-tab__label" for="pt-nightly-price">Prix par nuit ($)</label>
+          <label class="params-tab__label" for="input-nightly-price">Prix par nuit ($)</label>
           <input
-            id="pt-nightly-price"
+            id="input-nightly-price"
             type="number"
             min="1"
             bind:value={s.nightlyPrice}
@@ -295,9 +310,9 @@
       <div class="params-tab__fields">
 
         <div class="params-tab__field">
-          <label class="params-tab__label" for="pt-contact-email">Courriel de contact</label>
+          <label class="params-tab__label" for="input-contact-email">Courriel de contact</label>
           <input
-            id="pt-contact-email"
+            id="input-contact-email"
             type="email"
             bind:value={s.contactEmail}
             class="params-tab__input"
@@ -450,8 +465,10 @@
     </section>
 
     <!-- ── Sticky save bar (all cards above share one button) ── -->
-    <div class="params-tab__save-bar">
-      {#if saved}
+    <div class="params-tab__save-bar" data-testid="params-save-bar">
+      {#if saveError}
+        <span class="params-tab__save-error" role="alert" data-testid="params-save-error">{saveError}</span>
+      {:else if saved}
         <span class="params-tab__save-success" role="status" data-testid="settings-saved">
           Paramètres enregistrés.
         </span>
@@ -459,6 +476,7 @@
       <button
         type="button"
         class="params-tab__btn"
+        class:params-tab__btn--has-error={!!saveError}
         onclick={saveSettings}
         disabled={saving}
         aria-label="Enregistrer les paramètres"
@@ -542,6 +560,19 @@
 </div>
 
 <style>
+  /* ─── Screen-reader-only utility ─── */
+  .params-tab__sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+    padding: 0;
+  }
+
   /* ─── Shell ─── */
   .params-tab {
     --pt-surface: var(--color-surface-container-lowest, #fafaf8);
@@ -559,6 +590,9 @@
     flex-direction: column;
     gap: 24px;
     max-width: 640px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
   }
 
   /* ─── Loading ─── */
@@ -605,6 +639,9 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    overflow: hidden;
   }
 
   .params-tab__card-title {
@@ -663,6 +700,7 @@
     border: 1px solid var(--pt-border);
     border-radius: 4px;
     transition: border-color 160ms ease;
+    box-sizing: border-box;
   }
 
   .params-tab__input:focus {
@@ -786,10 +824,22 @@
     font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--pt-ink-soft);
+    color: var(--pt-forest);
     padding: 10px 14px;
-    background-color: color-mix(in srgb, var(--pt-border) 20%, white);
+    background-color: var(--pt-forest-surface);
     border-radius: 4px;
+  }
+
+  .params-tab__save-error {
+    font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+    font-size: 13px;
+    color: var(--pt-error);
+    padding: 10px 14px;
+    background-color: color-mix(in srgb, var(--pt-error) 6%, white);
+    border: 1px solid color-mix(in srgb, var(--pt-error) 30%, white);
+    border-radius: 4px;
+    flex: 1;
+    min-width: 0;
   }
 
   /* ─── Button ─── */
@@ -797,7 +847,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 40px;
+    height: 44px;
     padding: 0 20px;
     min-width: 120px;
     font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
@@ -811,6 +861,13 @@
     border-radius: 4px;
     cursor: pointer;
     transition: opacity 160ms ease, transform 160ms cubic-bezier(0.33, 1, 0.68, 1);
+    flex-shrink: 0;
+    touch-action: manipulation;
+  }
+
+  .params-tab__btn--has-error {
+    background-color: color-mix(in srgb, var(--pt-error) 12%, white);
+    color: var(--pt-error);
   }
 
   .params-tab__btn:disabled {
@@ -891,6 +948,14 @@
     .params-tab__save-bar {
       flex-direction: column;
       align-items: flex-start;
+    }
+
+    .params-tab__btn {
+      width: 100%;
+    }
+
+    .params-tab__save-error {
+      width: 100%;
     }
   }
 </style>
