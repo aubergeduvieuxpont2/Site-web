@@ -7,10 +7,6 @@
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
 
-  function codeToKey(code: string): string {
-    return code.replace('-', '').toLowerCase();
-  }
-
   // Replace the static SITE.email in any translated item text with the
   // admin-configured address so the page never shows a stale one.
   function withConfiguredEmail(item: string): string {
@@ -21,7 +17,7 @@
 <section class="page-confidentialite bg-surface">
   <!-- Header area with SectionLabel + page title -->
   <div class="header" data-testid="confidentialite-header">
-    <SectionLabel text={t('confidentialite.label')} showHairline={true} />
+    <SectionLabel text={t('confidentialite.sectionLabel')} showHairline={true} />
     <h1 class="page-title">{t('confidentialite.heading')}</h1>
     <p class="lead-text">{t('confidentialite.lead')}</p>
   </div>
@@ -35,13 +31,13 @@
       <section class="policy-section" data-testid={`privacy-section-${section.code}`}>
         <div class="section-head">
           <span class="section-code" aria-hidden="true">{section.code}</span>
-          <h2 class="section-title">{t('privacy.' + codeToKey(section.code) + '.title')}</h2>
+          <h2 class="section-title">{t('privacy.' + section.code + '.title')}</h2>
         </div>
         <ul class="item-list">
           {#each section.items.map((_, i) => i) as idx (idx)}
             <li class="item" data-testid={`privacy-item-${section.code}-${idx}`}>
               <span class="bullet" aria-hidden="true"></span>
-              <span class="item-text">{withConfiguredEmail(t('privacy.' + codeToKey(section.code) + '.i' + idx))}</span>
+              <span class="item-text">{withConfiguredEmail(t('privacy.' + section.code + '.items.' + idx))}</span>
             </li>
           {/each}
         </ul>
@@ -260,7 +256,7 @@
   schema={[
     breadcrumbSchema([
       { name: t('nav.home'), path: "/" },
-      { name: t('confidentialite.label'), path: "/confidentialite" },
+      { name: t('confidentialite.sectionLabel'), path: "/confidentialite" },
     ]),
   ]}
 />
