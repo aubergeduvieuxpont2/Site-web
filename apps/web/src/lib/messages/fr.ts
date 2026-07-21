@@ -390,7 +390,7 @@ export const fr = {
     stayMany: '%n% séjours',
     nightOne: '1 nuit',
     nightMany: '%n% nuits',
-    ratingAriaLabel: 'Note : %rating% étoiles sur 5',
+    ratingAriaLabel: 'Note : %rating% sur 5',
   },
 
   avisNouveau: {
@@ -566,7 +566,7 @@ export const fr = {
       customRateAriaLabel: 'Tarif personnalisé',
       weeklyRateLabel: 'Tarif semaine actif',
       weeklyRateUnit: '/semaine',
-      maintenanceNotice: 'Les réservations sont temporairement suspendues. Merci de réessayer bientôt.',
+      maintenanceNotice: 'Réservations en pause — maintenance en cours.',
       sending: 'Envoi en cours…',
       submit: 'Envoyer la demande',
       errorCallout: 'En attendant, appelez-nous :',

@@ -391,7 +391,7 @@ export const en: Messages = {
     stayMany: '%n% stays',
     nightOne: '1 night',
     nightMany: '%n% nights',
-    ratingAriaLabel: 'Rating: %rating% stars out of 5',
+    ratingAriaLabel: 'Rating: %rating% out of 5',
   },
 
   avisNouveau: {
@@ -567,7 +567,7 @@ export const en: Messages = {
       customRateAriaLabel: 'Custom rate',
       weeklyRateLabel: 'Weekly rate active',
       weeklyRateUnit: '/week',
-      maintenanceNotice: 'Reservations are temporarily suspended. Please try again soon.',
+      maintenanceNotice: 'Bookings paused — maintenance under way.',
       sending: 'Sending…',
       submit: 'Send request',
       errorCallout: 'In the meantime, call us:',

@@ -259,7 +259,7 @@
           bind:this={outcomeHeading}
           data-testid="nouveau-avis-ineligible-heading"
         >
-          Lien invalide ou expiré
+          Lien invalide
         </h1>
         <p class="page-nouveau-avis__outcome-body" data-testid="nouveau-avis-ineligible-body">
           Ce lien n'est plus valide ou a déjà été utilisé.
