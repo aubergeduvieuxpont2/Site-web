@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { adminGetSettings, adminUpdateSettings, changePassword, isError } from "$lib/api";
   import type { AdminSettings } from "$lib/api";
+  import { loadSettings as refreshPublicSettings } from "$lib/settings.svelte";
 
   // Parent binds this to pass the server-derived count to AdminDisponibilitesTab.
   let { assignableRoomCount = $bindable(12) }: { assignableRoomCount?: number } = $props();
@@ -164,7 +165,8 @@
       mergeFromApi(res);
       saved = true;
       setTimeout(() => { saved = false; }, 3000);
-      // POST-SAVE SEAM: add public-settings store refresh here once the config-refresh stream lands.
+      // POST-SAVE SEAM: refresh the public store so Nav/Footer/banner reflect the change immediately.
+      refreshPublicSettings().catch(() => {});
     }
   }
 
