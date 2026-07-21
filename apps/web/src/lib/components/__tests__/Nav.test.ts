@@ -170,7 +170,7 @@ describe("Nav", () => {
     });
 
     it("shows the Admin link (desktop + mobile) for an admin user", async () => {
-      setUser({ id: 1, email: "admin@test.com", name: "Admin", role: "admin" });
+      setUser({ id: 1, email: "admin@test.com", name: "Admin", role: "admin", locale: "fr" });
       const { queryByTestId } = render(Nav);
 
       const desktop = queryByTestId("nav-admin-link");
@@ -186,7 +186,7 @@ describe("Nav", () => {
     });
 
     it("shows the Profil link (desktop + mobile) for a guest user", async () => {
-      setUser({ id: 2, email: "guest@test.com", name: "Guest", role: "guest" });
+      setUser({ id: 2, email: "guest@test.com", name: "Guest", role: "guest", locale: "fr" });
       const { queryByTestId } = render(Nav);
 
       const desktop = queryByTestId("nav-profil-link");
@@ -202,7 +202,7 @@ describe("Nav", () => {
     });
 
     it("treats a guest user with profil link not admin", async () => {
-      setUser({ id: 3, email: "guest2@test.com", name: "Guest2", role: "guest" });
+      setUser({ id: 3, email: "guest2@test.com", name: "Guest2", role: "guest", locale: "fr" });
       const { queryByTestId } = render(Nav);
       const profil = queryByTestId("nav-profil-link");
       expect(profil).toBeTruthy();
@@ -228,7 +228,7 @@ describe("Nav", () => {
     });
 
     it("hides Connexion (desktop + mobile) once a user is authenticated", async () => {
-      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest", locale: "fr" });
       const { queryByTestId } = render(Nav);
       expect(queryByTestId("nav-connexion-link")).toBeNull();
       expect(queryByTestId("nav-connexion-link-mobile")).toBeNull();
@@ -253,7 +253,7 @@ describe("Nav", () => {
     });
 
     it("shows logout (desktop + mobile) once a user is authenticated", () => {
-      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest", locale: "fr" });
       const { queryByTestId } = render(Nav);
 
       const desktop = queryByTestId("nav-logout");
@@ -270,7 +270,7 @@ describe("Nav", () => {
     });
 
     it("calls POST /api/auth/logout and clears the user on click", async () => {
-      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest" });
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest", locale: "fr" });
       const fetchMock = vi.fn(() =>
         Promise.resolve({
           ok: true,

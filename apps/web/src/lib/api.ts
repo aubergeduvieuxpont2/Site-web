@@ -396,8 +396,8 @@ export async function changeProfileEmail(
 export async function updateLocale(
   locale: "fr" | "en",
 ): Promise<{ ok: true; locale: "fr" | "en" } | ApiError> {
-  return fetchJson<{ ok: true; locale: "fr" | "en" }>("/profile/locale", {
-    method: "PATCH",
+  return fetchJson<{ ok: true; locale: "fr" | "en" }>("/auth/locale", {
+    method: "POST",
     body: JSON.stringify({ locale }),
   });
 }

@@ -5,7 +5,7 @@
   import { settings } from "../settings.svelte";
   import Wordmark from "./Wordmark.svelte";
   import { auth, clearUser } from "../auth.svelte";
-  import { logout } from "../api";
+  import { logout, updateLocale } from "../api";
   import { locale, setLocale, t } from "../i18n.svelte";
 
   // Configured contact phone with graceful fallback to the static default.
@@ -39,17 +39,12 @@
 
   async function handleLocaleSwitch(newLocale: "fr" | "en") {
     setLocale(newLocale);
+    // Logged-in visitors persist the choice server-side so it follows the
+    // account (and drives transactional email language). Anonymous flips live
+    // in cookie/localStorage only. Server sync is best-effort: the client-side
+    // preference is already applied either way.
     if (auth.user) {
-      try {
-        await fetch("/api/me/locale", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ locale: newLocale }),
-        });
-      } catch {
-        // locale already persisted client-side; server sync is best-effort
-      }
+      await updateLocale(newLocale);
     }
   }
 

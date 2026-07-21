@@ -38,7 +38,7 @@
           <h2 class="section-title">{t('privacy.' + codeToKey(section.code) + '.title')}</h2>
         </div>
         <ul class="item-list">
-          {#each section.items as item, idx (idx)}
+          {#each section.items.map((_, i) => i) as idx (idx)}
             <li class="item" data-testid={`privacy-item-${section.code}-${idx}`}>
               <span class="bullet" aria-hidden="true"></span>
               <span class="item-text">{withConfiguredEmail(t('privacy.' + codeToKey(section.code) + '.i' + idx))}</span>

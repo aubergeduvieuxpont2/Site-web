@@ -1,5 +1,11 @@
 <script lang="ts">
   import { t } from "$lib/i18n.svelte";
+
+  // `text` is an optional override; when omitted the banner shows the
+  // translated default and follows the active locale. Derived rather than a
+  // $props default so it stays reactive to both the prop and a locale switch.
+  let { text }: { text?: string } = $props();
+  const bannerText = $derived(text ?? t("contact.form.maintenanceNotice"));
 </script>
 
 <div
@@ -8,7 +14,7 @@
   aria-live="polite"
   data-testid="maintenance-banner"
 >
-  {t("contact.form.maintenanceNotice")}
+  {bannerText}
 </div>
 
 <style>

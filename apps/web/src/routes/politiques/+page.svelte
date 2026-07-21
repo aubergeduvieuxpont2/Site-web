@@ -31,7 +31,7 @@
           <h2 class="section-title">{t('policies.' + codeToKey(section.code) + '.title')}</h2>
         </div>
         <ul class="item-list">
-          {#each section.items as item, i (i)}
+          {#each section.items.map((_, idx) => idx) as i (i)}
             <li class="item" data-testid={`policy-item-${section.code}-${i}`}>
               <span class="bullet" aria-hidden="true"></span>
               <span class="item-text">{t('policies.' + codeToKey(section.code) + '.i' + i)}</span>
