@@ -18,6 +18,7 @@
     "deploy:email-ingest": "npm run deploy --workspace apps/email-ingest",
     "test": "npm test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "check:workers": "node scripts/check-worker-global-scope.mjs",
     "db:migrate": "npm run db:migrate --workspace apps/api"
   },
   "engines": {

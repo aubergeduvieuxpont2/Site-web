@@ -33,5 +33,21 @@ jobs:
       - name: Test (all workspaces)
         run: npm test --workspaces --if-present
 
+      # Deploy-safety gates: neither `tsc` nor vitest catch Cloudflare Worker
+      # startup errors. (1) A static guard for global-scope async I/O / crypto /
+      # timers — the exact class that broke every deploy in #53 (wrangler error
+      # 10021), which `wrangler deploy --dry-run` does NOT catch. (2) A dry-run
+      # bundle of each Worker to catch build/config breakage before the deploy
+      # pipeline. Neither needs a Cloudflare token (keeps this PR job token-free,
+      # per finding H4).
+      - name: Check Worker global scope
+        run: node scripts/check-worker-global-scope.mjs
+
+      - name: Validate Worker bundles (wrangler dry-run)
+        run: |
+          (cd apps/api && npx wrangler deploy --dry-run)
+          (cd apps/hubspot && npx wrangler deploy --dry-run)
+          (cd apps/email-ingest && npx wrangler deploy --dry-run)
+
       - name: Build web
         run: npm run build:web
