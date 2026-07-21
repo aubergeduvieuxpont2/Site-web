@@ -163,7 +163,9 @@ Stream 3 relies on `source` and `status`.
 **Files:**
 - Modify: `apps/web/src/lib/components/admin/AdminParametresTab.svelte` (polish:
   card hierarchy, spacing, mobile-responsive, accessible labels/errors, save
-  affordance; render the currently-dead `marketingRoomCount` input)
+  affordance; **remove** the dead `marketingRoomCount` state — do NOT render an
+  input for it, the backend has no such key and rejects it on save; see the
+  corrected note in the spec)
 - Modify: `apps/web/src/routes/admin/+page.svelte` (import + render
   `AdminParametresTab` in `panel-settings`; remove the inline flat block ~763-1065
   and its now-redundant state/handlers)
