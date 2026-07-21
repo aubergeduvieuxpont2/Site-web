@@ -741,7 +741,7 @@ export const fr = {
 
   reinitialisation: {
     seo: {
-      welcome: 'Bienvenue — Auberge du Vieux Pont',
+      welcome: 'Créez votre espace client — Auberge du Vieux Pont',
       reset: 'Réinitialisation du mot de passe — Auberge du Vieux Pont',
     },
     sectionLabel: {
@@ -767,8 +767,8 @@ export const fr = {
       newPassword: 'Nouveau mot de passe',
       hint: '8 caractères minimum',
       confirmPassword: 'Confirmer le mot de passe',
-      submit: 'Définir le mot de passe',
-      submitting: 'Modification…',
+      submit: 'Réinitialiser le mot de passe',
+      submitting: 'Envoi…',
     },
     errors: {
       short: 'Le mot de passe doit contenir au moins 8 caractères.',
@@ -776,13 +776,13 @@ export const fr = {
       network: 'Connexion impossible. Veuillez réessayer.',
     },
     success: {
-      heading: 'Mot de passe défini',
-      body: 'Votre nouveau mot de passe est actif. Vous pouvez maintenant accéder à votre espace client.',
-      link: 'Accéder à mon espace',
+      heading: 'Mot de passe mis à jour',
+      body: 'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter avec vos nouveaux identifiants.',
+      link: 'Se connecter',
     },
     error: {
       heading: 'Lien invalide ou expiré',
-      body: "Ce lien de réinitialisation n'est plus valide ou a déjà été utilisé.",
+      body: "Ce lien de réinitialisation n'est plus valide ou a déjà été utilisé. Demandez un nouveau lien à un administrateur.",
       backLink: 'Retour à la connexion',
     },
   },
@@ -801,7 +801,7 @@ export const fr = {
         register:
           'Votre adresse courriel a été confirmée. Votre compte est maintenant activé et vous retrouvez vos réservations.',
         change:
-          "Votre nouvelle adresse courriel est maintenant active. Vous l'utiliserez désormais pour vous connecter.",
+          "Votre nouvelle adresse courriel%email% est maintenant active. Vous l'utiliserez désormais pour vous connecter.",
       },
       cta: 'Accéder à mon espace',
     },

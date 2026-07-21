@@ -742,7 +742,7 @@ export const en: Messages = {
 
   reinitialisation: {
     seo: {
-      welcome: 'Welcome — Auberge du Vieux Pont',
+      welcome: 'Create your guest account — Auberge du Vieux Pont',
       reset: 'Password reset — Auberge du Vieux Pont',
     },
     sectionLabel: {
@@ -768,8 +768,8 @@ export const en: Messages = {
       newPassword: 'New password',
       hint: 'Minimum 8 characters',
       confirmPassword: 'Confirm password',
-      submit: 'Set password',
-      submitting: 'Changing…',
+      submit: 'Reset password',
+      submitting: 'Sending…',
     },
     errors: {
       short: 'Password must be at least 8 characters.',
@@ -777,13 +777,13 @@ export const en: Messages = {
       network: 'Connection failed. Please try again.',
     },
     success: {
-      heading: 'Password set',
-      body: 'Your new password is active. You can now access your guest area.',
-      link: 'Access my area',
+      heading: 'Password updated',
+      body: 'Your password has been reset successfully. You can now log in with your new credentials.',
+      link: 'Log in',
     },
     error: {
       heading: 'Invalid or expired link',
-      body: "This reset link is no longer valid or has already been used.",
+      body: "This reset link is no longer valid or has already been used. Ask an administrator for a new link.",
       backLink: 'Back to login',
     },
   },
@@ -802,7 +802,7 @@ export const en: Messages = {
         register:
           'Your email address has been confirmed. Your account is now active and you can access your reservations.',
         change:
-          "Your new email address is now active. You will use it to log in from now on.",
+          "Your new email address%email% is now active. You will use it to log in from now on.",
       },
       cta: 'Access my area',
     },
