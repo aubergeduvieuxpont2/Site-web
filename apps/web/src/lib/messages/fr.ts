@@ -667,7 +667,7 @@ export const fr = {
 
   profil: {
     seo: {
-      title: 'Profil — Auberge du Vieux Pont',
+      title: 'Mon profil — Auberge du Vieux Pont',
     },
     loading: {
       ariaLabel: 'Chargement du profil…',

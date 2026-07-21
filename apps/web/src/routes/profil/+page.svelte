@@ -914,5 +914,5 @@
 </style>
 
 <svelte:head>
-  <title>{t('profil.pageTitle')}</title>
+  <title>{t('profil.seo.title')}</title>
 </svelte:head>

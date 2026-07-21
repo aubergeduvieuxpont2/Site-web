@@ -668,7 +668,7 @@ export const en: Messages = {
 
   profil: {
     seo: {
-      title: 'Profile — Auberge du Vieux Pont',
+      title: 'My profile — Auberge du Vieux Pont',
     },
     loading: {
       ariaLabel: 'Loading profile…',
