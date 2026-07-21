@@ -122,8 +122,17 @@ per-field error state, a 5th email toggle.
 - **Adopt and polish `AdminParametresTab.svelte`**, wire it into
   `admin/+page.svelte` replacing the inline block (matching the other tabs which
   are all extracted components).
-- Fix the dead `marketingRoomCount` field (in state, no input) — either render an
-  input or remove it from state; render it (it's a real public setting).
+- Fix the dead `marketingRoomCount` field (in state, no input) by **removing it
+  from state**.
+  > **Corrected 2026-07-21.** This spec originally said to render it, "it's a real
+  > public setting". That was wrong. Verified against the code: the backend has no
+  > `marketing_room_count` key at all (absent from `SETTINGS_DEFAULTS`,
+  > `PUBLIC_SETTING_KEYS`, and the admin update handler). It was replaced by a
+  > *derived* `publicRoomCount`, computed per-request from the live count of
+  > publicly-visible rooms via `withPublicRoomCount` — the same read-only
+  > treatment as `assignable_room_count`. Rendering an input would create a field
+  > the API rejects on save, and `page-admin-settings.test.ts` deliberately
+  > asserts that input stays absent.
 - Apply the **frontend-design skill** for the visual pass: clear card hierarchy,
   spacing, mobile-responsive (verify narrow viewport), accessible labels/errors,
   a satisfying save affordance.
