@@ -1,5 +1,5 @@
 /**
- * Route-level tests for POST /webhooks/stripe.
+ * Route-level tests for POST /api/webhooks/stripe.
  *
  * Uses a mocked Stripe client so no live keys are required.
  * Uses the hoisted neon template-capture pattern to assert UPDATE queries.
@@ -81,7 +81,7 @@ function makeUnrelatedEvent() {
 
 function webhookRequest(body = "{}") {
   return app.request(
-    "http://localhost/webhooks/stripe",
+    "http://localhost/api/webhooks/stripe",
     {
       method: "POST",
       headers: {
@@ -96,14 +96,14 @@ function webhookRequest(body = "{}") {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe("POST /webhooks/stripe — signature verification", () => {
+describe("POST /api/webhooks/stripe — signature verification", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns 400 when stripe-signature header is absent", async () => {
     stripeHolder.constructEvent = async () => makeInvoicePaidEvent();
 
     const res = await app.request(
-      "http://localhost/webhooks/stripe",
+      "http://localhost/api/webhooks/stripe",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,7 +138,7 @@ describe("POST /webhooks/stripe — signature verification", () => {
     stripeHolder.constructEvent = async () => makeInvoicePaidEvent();
 
     const res = await app.request(
-      "http://localhost/webhooks/stripe",
+      "http://localhost/api/webhooks/stripe",
       {
         method: "POST",
         headers: {
@@ -154,7 +154,7 @@ describe("POST /webhooks/stripe — signature verification", () => {
   });
 });
 
-describe("POST /webhooks/stripe — unrelated event types (no-op)", () => {
+describe("POST /api/webhooks/stripe — unrelated event types (no-op)", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns 200 with received:true and performs no UPDATE for an unrelated event", async () => {
@@ -175,7 +175,7 @@ describe("POST /webhooks/stripe — unrelated event types (no-op)", () => {
   });
 });
 
-describe("POST /webhooks/stripe — invoice.paid flips reservation", () => {
+describe("POST /api/webhooks/stripe — invoice.paid flips reservation", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("issues UPDATE SET status=confirmed, invoice_status=paid, paid_at=now() for invoice.paid", async () => {
@@ -293,7 +293,7 @@ describe("POST /webhooks/stripe — invoice.paid flips reservation", () => {
   });
 });
 
-describe("POST /webhooks/stripe — idempotency (INV-idempotent-paid)", () => {
+describe("POST /api/webhooks/stripe — idempotency (INV-idempotent-paid)", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("is idempotent: a redelivered paid event returns 200 without re-enqueuing email", async () => {
