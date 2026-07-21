@@ -31,8 +31,8 @@ vi.mock("$lib/api", () => ({
 // Import AFTER the mocks are registered so the component binds to them.
 import Page from "../profil/+page.svelte";
 
-const GUEST: User = { id: 2, email: "guest@example.com", name: "Marie Guest", role: "guest" };
-const ADMIN: User = { id: 1, email: "admin@example.com", name: "Admin", role: "admin" };
+const GUEST: User = { id: 2, email: "guest@example.com", name: "Marie Guest", role: "guest", locale: "fr" };
+const ADMIN: User = { id: 1, email: "admin@example.com", name: "Admin", role: "admin", locale: "fr" };
 
 function reservation(over: Partial<ReservationRow> = {}): ReservationRow {
   return {

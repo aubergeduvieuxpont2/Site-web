@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
+import { resolveLocale } from "./emailLocale";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { generateCode } from "./reservationCode";
@@ -197,7 +198,7 @@ const reservationHook = (result: any, c: any) =>
         400
       );
 
-const RegisterSchema = z.object({
+export const RegisterSchema = z.object({
   email: z.string().trim().email("email invalide"),
   password: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
   name: trimToNull,
@@ -205,11 +206,16 @@ const RegisterSchema = z.object({
   lastName: trimToNull,
   phone: trimToNull,
   company: trimToNull,
+  locale: z.enum(["fr", "en"]).optional().default("fr"),
 });
 
 const LoginSchema = z.object({
   email: z.string().trim().min(1, "email requis"),
   password: z.string().min(1, "mot de passe requis"),
+});
+
+export const LocaleSchema = z.object({
+  locale: z.enum(["fr", "en"]),
 });
 
 const PasswordChangeSchema = z.object({
@@ -551,9 +557,11 @@ app.post(
             tvq: confirmSettings.tvq,
           });
           if (data) {
+            const resLocale = await resolveLocale(sql, created.email);
             await enqueueEmail(sql, {
               template: "reservation-confirmation",
               to: created.email,
+              locale: resLocale,
               payload: data as unknown as Record<string, unknown>,
             });
           }
@@ -773,10 +781,10 @@ app.post(
     try {
       const passwordHash = await hashPassword(data.password);
       const rows = (await sql`
-        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company, email_verified)
-        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null}, false)
-        RETURNING id, email, name, role
-      `) as User[];
+        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company, email_verified, locale)
+        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null}, false, ${data.locale})
+        RETURNING id, email, name, role, locale
+      `) as (User & { locale: string })[];
 
       const user = rows[0];
       if (!user) {
@@ -801,6 +809,7 @@ app.post(
         await enqueueEmail(sql, {
           template: "email-verification",
           to: data.email,
+          locale: data.locale,
           payload: {
             firstName: data.firstName ?? derivedName ?? "client",
             verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
@@ -866,10 +875,10 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id, email, password_hash, name, role, email_verified
+      SELECT id, email, password_hash, name, role, email_verified, locale
       FROM users
       WHERE lower(email) = lower(${data.email})
-    `) as (User & { password_hash: string; email_verified: boolean })[];
+    `) as (User & { password_hash: string; email_verified: boolean; locale: string })[];
 
     const user = rows[0];
 
@@ -951,8 +960,8 @@ app.get("/api/auth/me", async (c) => {
 
   const sql = neon(c.env.DB_CONN);
   const userRows = (await sql`
-    SELECT discount_percent, fixed_nightly_price, fixed_weekly_price FROM users WHERE id = ${user.id}
-  `) as { discount_percent: number | null; fixed_nightly_price: number | null; fixed_weekly_price: number | null }[];
+    SELECT discount_percent, fixed_nightly_price, fixed_weekly_price, locale FROM users WHERE id = ${user.id}
+  `) as { discount_percent: number | null; fixed_nightly_price: number | null; fixed_weekly_price: number | null; locale: string }[];
 
   const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
   const adminSettings = rowsToAdminSettings(settingsRows);
@@ -973,7 +982,8 @@ app.get("/api/auth/me", async (c) => {
     adminSettings.weeklyPrice
   );
 
-  return c.json({ user: { ...user, effectiveNightlyPrice, effectiveWeeklyPrice } });
+  const meLocale = userRows[0]?.locale === "en" ? "en" : "fr";
+  return c.json({ user: { ...user, effectiveNightlyPrice, effectiveWeeklyPrice, locale: meLocale } });
 });
 
 app.post("/api/auth/logout", async (c) => {
@@ -986,6 +996,24 @@ app.post("/api/auth/logout", async (c) => {
     "Set-Cookie": getClearSessionCookieHeader(),
   });
 });
+
+// Locale update — persists the authenticated user's preferred locale.
+// Anonymous locale preference is stored client-side only (cookie/localStorage).
+app.post(
+  "/api/auth/locale",
+  authRateLimiter,
+  zValidator("json", LocaleSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const { locale } = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+    await sql`UPDATE users SET locale = ${locale} WHERE id = ${user.id}`;
+    return c.json({ ok: true, locale });
+  }
+);
 
 // Password change (session-authed)
 app.post(
@@ -1040,8 +1068,8 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id, email, first_name, name FROM users WHERE lower(email) = lower(${data.email})
-    `) as { id: number; email: string; first_name: string | null; name: string | null }[];
+      SELECT id, email, first_name, name, locale FROM users WHERE lower(email) = lower(${data.email})
+    `) as { id: number; email: string; first_name: string | null; name: string | null; locale: string }[];
 
     const user = rows[0];
     if (user) {
@@ -1055,9 +1083,11 @@ app.post(
       `;
 
       try {
+        const userLocale = user.locale === "en" ? "en" : "fr";
         await enqueueEmail(sql, {
           template: "password-reset",
           to: user.email,
+          locale: userLocale,
           payload: {
             firstName: user.first_name ?? user.name ?? "client",
             resetUrl: `${SITE_ORIGIN}/reinitialisation?token=${rawToken}`,
@@ -1260,8 +1290,8 @@ app.post(
 
     // Verify password
     const userRow = (await sql`
-      SELECT password_hash, first_name FROM users WHERE id = ${user.id}
-    `) as { password_hash: string; first_name: string | null }[];
+      SELECT password_hash, first_name, locale FROM users WHERE id = ${user.id}
+    `) as { password_hash: string; first_name: string | null; locale: string }[];
 
     if (userRow.length === 0) {
       return c.json({ error: "User not found" }, 404);
@@ -1302,9 +1332,11 @@ app.post(
         VALUES (${tokenHash}, ${user.id}, 'change', ${newEmail}, ${expiresAt})
       `;
       // Confirmation link to the NEW address…
+      const profileLocale = userRow[0].locale === "en" ? "en" : "fr";
       await enqueueEmail(sql, {
         template: "email-verification",
         to: newEmail,
+        locale: profileLocale,
         payload: {
           firstName,
           verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
@@ -1316,6 +1348,7 @@ app.post(
       await enqueueEmail(sql, {
         template: "email-change-alert",
         to: user.email,
+        locale: profileLocale,
         payload: { firstName, newEmail },
       });
     } catch (err) {
@@ -1805,9 +1838,11 @@ app.post(
             const room = roomRows[0];
             // Airbnb-sourced reservations have an empty email — nothing to send to.
             if (!r || !room || !r.email) return;
+            const roomAssignLocale = await resolveLocale(sql, r.email);
             await enqueueEmail(sql, {
               template: "room-assigned",
               to: r.email,
+              locale: roomAssignLocale,
               payload: {
                 name: r.name,
                 roomLabel: room.name,
@@ -2480,9 +2515,11 @@ app.post("/webhooks/stripe", async (c) => {
   if (updated.length > 0) {
     const reservation = updated[0];
     try {
+      const webhookLocale = await resolveLocale(sql, reservation.email);
       await enqueueEmail(sql, {
         template: "reservation-confirmation",
         to: reservation.email,
+        locale: webhookLocale,
         payload: {
           confirmationCode: `RES-${reservation.id}`,
           name: reservation.name,

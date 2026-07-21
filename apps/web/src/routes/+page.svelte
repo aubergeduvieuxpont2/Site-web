@@ -12,6 +12,7 @@
   import { settings } from '$lib/settings.svelte';
   import { auth } from '$lib/auth.svelte';
   import { reveal, countUp } from '$lib/motion';
+  import { t } from '$lib/i18n.svelte';
 
   const featuredRooms = ROOMS.slice(0, 3);
 
@@ -19,10 +20,10 @@
   // const) because loadSettings() resolves after mount; the year keeps its
   // digits unlocalized so countUp doesn't render "1 972".
   const renderedStats = $derived([
-    STATS[0],
-    { ...STATS[1], localize: false },
-    { ...STATS[2], value: settings.publicRoomCount },
-    STATS[3],
+    { value: STATS[0].value, suffix: t('stats.0.suffix'), label: t('stats.0.label') },
+    { value: STATS[1].value, suffix: STATS[1].suffix, label: t('stats.1.label'), localize: false },
+    { value: settings.publicRoomCount, suffix: t('stats.2.suffix'), label: t('stats.2.label') },
+    { value: STATS[3].value, suffix: t('stats.3.suffix'), label: t('stats.3.label') },
   ]);
 </script>
 
@@ -40,26 +41,26 @@
 
     <div class="page-accueil__hero-content">
       <p class="page-accueil__hero-eyebrow">Saint-Raymond · Portneuf · Québec</p>
-      <h1 id="hero-heading" class="page-accueil__hero-heading">L'art de recevoir les travailleurs de terrain</h1>
+      <h1 id="hero-heading" class="page-accueil__hero-heading">{t('accueil.hero.heading')}</h1>
       <p class="page-accueil__hero-sub">
-        Une auberge de caractère pour les travailleurs de terrain — foresterie et secteur hydroélectrique.
+        {t('accueil.hero.sub')}
       </p>
       <div class="page-accueil__hero-ctas" data-testid="hero-ctas">
         <div data-testid="hero-cta-reserver">
           {#if settings.reservationsEnabled}
-            <Button variant="action" href="/contact">Réserver</Button>
+            <Button variant="action" href="/contact">{t('accueil.hero.cta.reserver')}</Button>
           {:else}
-            <Button variant="action" disabled>Réserver</Button>
+            <Button variant="action" disabled>{t('accueil.hero.cta.reserver')}</Button>
           {/if}
         </div>
         <div data-testid="hero-cta-lesite">
-          <Button variant="secondary" href="/le-site">Le site</Button>
+          <Button variant="secondary" href="/le-site">{t('accueil.hero.cta.lesite')}</Button>
         </div>
       </div>
     </div>
 
     <div class="page-accueil__hero-scroll" aria-hidden="true">
-      <span class="page-accueil__hero-scroll-label">Défiler</span>
+      <span class="page-accueil__hero-scroll-label">{t('accueil.hero.scroll')}</span>
       <div class="page-accueil__hero-scroll-line"></div>
     </div>
   </section>
@@ -67,7 +68,7 @@
   <!-- ── STATS STRIP ───────────────────────────────────────── -->
   <section
     class="page-accueil__stats"
-    aria-label="Chiffres clés"
+    aria-label={t('accueil.stats.ariaLabel')}
     data-testid="stats-section"
   >
     <div class="page-accueil__stats-inner">
@@ -104,19 +105,19 @@
     aria-labelledby="rooms-heading"
     data-testid="rooms-section"
   >
-    <SectionLabel text="Nos chambres" showHairline={false} />
+    <SectionLabel text={t('accueil.rooms.sectionLabel')} showHairline={false} />
     <h2 id="rooms-heading" class="page-accueil__h2" use:reveal>
-      Des espaces pensés pour vous
+      {t('accueil.rooms.heading')}
     </h2>
 
-    <div class="page-accueil__price-display" aria-label="Prix par nuit">
+    <div class="page-accueil__price-display" aria-label={t('accueil.rooms.priceAriaLabel')}>
       <span class="page-accueil__price-amount" data-testid="price-amount"
         ><span class="page-accueil__price-number"
           >${(auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice).toFixed(2)}</span
-        ><span class="page-accueil__price-unit"> /nuit</span
+        ><span class="page-accueil__price-unit">{t('accueil.rooms.priceUnit')}</span
       ></span>
       {#if auth.user?.effectiveNightlyPrice != null && auth.user.effectiveNightlyPrice !== settings.nightlyPrice}
-        <span class="page-accueil__price-badge" data-testid="custom-pricing-badge">Tarif personnalisé</span>
+        <span class="page-accueil__price-badge" data-testid="custom-pricing-badge">{t('accueil.rooms.customBadge')}</span>
       {/if}
     </div>
 
@@ -129,7 +130,7 @@
     </div>
 
     <div class="page-accueil__rooms-more" data-testid="rooms-more" use:reveal={{ y: 8 }}>
-      <Button variant="secondary" href="/le-site#chambres">Voir toutes les chambres</Button>
+      <Button variant="secondary" href="/le-site#chambres">{t('accueil.rooms.seeAll')}</Button>
     </div>
   </section>
 
@@ -149,19 +150,17 @@
         <ImagePanel
           imgKey="living-dining.jpg"
           picsumSeed={10}
-          alt="Intérieur de l'Auberge du Vieux Pont"
+          alt={t('accueil.amenities.imageAlt')}
           aspectRatio="4/3"
         />
       </div>
 
       <div class="page-accueil__amenities-text" use:reveal={{ x: 20, duration: 0.7 }}>
-        <SectionLabel text="L'expérience" showHairline={false} />
-        <h2 id="amenities-heading" class="page-accueil__h2">Fait pour ceux qui bougent</h2>
+        <SectionLabel text={t('accueil.amenities.sectionLabel')} showHairline={false} />
+        <h2 id="amenities-heading" class="page-accueil__h2">{t('accueil.amenities.heading')}</h2>
 
         <p class="page-accueil__amenities-body">
-          L'Auberge du Vieux Pont a été conçue pour les travailleurs de terrain. Stockage sécurisé,
-          recharge d'outils et de radios, salle de séchage — tout est là pour que vous déposiez
-          vos affaires et repartiez reposés.
+          {t('accueil.amenities.body')}
         </p>
 
         <ul class="page-accueil__amenities-list" role="list">
@@ -170,12 +169,12 @@
               <span class="page-accueil__amenity-code" aria-hidden="true">
                 {amenity.code}
               </span>
-              <span class="page-accueil__amenity-title">{amenity.title}</span>
+              <span class="page-accueil__amenity-title">{t('amenities.' + amenity.code + '.title')}</span>
             </li>
           {/each}
         </ul>
 
-        <Button variant="primary" href="/le-site">Découvrir le site</Button>
+        <Button variant="primary" href="/le-site">{t('accueil.amenities.cta')}</Button>
       </div>
     </div>
   </section>
@@ -191,14 +190,14 @@
     aria-labelledby="faq-heading"
     data-testid="faq-section"
   >
-    <SectionLabel text="Questions fréquentes" showHairline={false} />
-    <h2 id="faq-heading" class="page-accueil__h2">Bon à savoir avant de réserver</h2>
+    <SectionLabel text={t('accueil.faq.sectionLabel')} showHairline={false} />
+    <h2 id="faq-heading" class="page-accueil__h2">{t('accueil.faq.heading')}</h2>
 
     <dl class="page-accueil__faq-list">
-      {#each FAQ as item}
+      {#each FAQ as _item, i}
         <div class="page-accueil__faq-item" data-testid="faq-item" use:reveal={{ y: 12 }}>
-          <dt class="page-accueil__faq-q">{item.question}</dt>
-          <dd class="page-accueil__faq-a">{item.answer}</dd>
+          <dt class="page-accueil__faq-q">{t('faq.' + i + '.question')}</dt>
+          <dd class="page-accueil__faq-a">{t('faq.' + i + '.answer')}</dd>
         </div>
       {/each}
     </dl>
@@ -221,17 +220,16 @@
     data-testid="cta-section"
   >
     <div class="page-accueil__cta-inner" use:reveal={{ y: 16 }}>
-      <SectionLabel text="Réservation" showHairline={false} />
-      <h2 id="cta-heading" class="page-accueil__cta-heading">Planifiez votre séjour</h2>
+      <SectionLabel text={t('accueil.cta.sectionLabel')} showHairline={false} />
+      <h2 id="cta-heading" class="page-accueil__cta-heading">{t('accueil.cta.heading')}</h2>
       <p class="page-accueil__cta-body">
-        Groupes, équipes, travailleurs de quart — on a la chambre qu'il vous faut.
-        Réservez directement par formulaire, sans intermédiaire.
+        {t('accueil.cta.body')}
       </p>
       <div data-testid="cta-reserver">
         {#if settings.reservationsEnabled}
-          <Button variant="action" href="/contact">Réserver maintenant</Button>
+          <Button variant="action" href="/contact">{t('accueil.cta.btn')}</Button>
         {:else}
-          <Button variant="action" disabled>Réserver maintenant</Button>
+          <Button variant="action" disabled>{t('accueil.cta.btn')}</Button>
         {/if}
       </div>
     </div>
@@ -700,8 +698,8 @@
 </style>
 
 <Seo
-  title="Auberge du Vieux Pont — hébergement pour travailleurs de terrain"
-  description="Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres insonorisées, stockage d'équipement, tarifs d'entreprise, à 30 min des chantiers."
+  title={t('accueil.seo.title')}
+  description={t('accueil.seo.description')}
   path="/"
   schema={[lodgingBusinessSchema(settings.contactPhone), faqSchema(FAQ)]}
 />

@@ -5,13 +5,20 @@ import * as path from "path";
 const pageFile = path.resolve(__dirname, "../contact/+page.svelte");
 const read = () => fs.readFileSync(pageFile, "utf-8");
 
+// Guest-facing copy now lives in the fr/en dictionaries rather than inline in
+// the page, so copy assertions check that the page wires the right key AND
+// that the French text still reads as before.
+const frFile = path.resolve(__dirname, "../../lib/messages/fr.ts");
+const readFr = () => fs.readFileSync(frFile, "utf-8");
+
 describe("page-contact", () => {
   describe("no chambre prefill", () => {
     it("placeholder does not contain chambre text", () => {
       const content = read();
       expect(content).toContain("placeholder=");
       expect(content).not.toContain("chambre souhaitée");
-      expect(content).toMatch(/placeholder="[^"]*Demandes spéciales[^"]*"/);
+      expect(content).toMatch(/placeholder=\{t\('contact\.form\.messagePlaceholder'\)\}/);
+      expect(readFr()).toContain("Demandes spéciales");
     });
 
     it("has no ?chambre= query param handling", () => {
@@ -94,7 +101,8 @@ describe("page-contact", () => {
     it("sets checkOut error when the dates are out of order", () => {
       const content = read();
       expect(content).toContain("datesOutOfOrder(form.checkIn, form.checkOut)");
-      expect(content).toContain(
+      expect(content).toContain("contact.errors.checkOutOrder");
+      expect(readFr()).toContain(
         "La date de départ doit être postérieure à la date d'arrivée."
       );
     });
@@ -154,7 +162,8 @@ describe("page-contact", () => {
     it("shows the custom-rate badge only when isCustomRate", () => {
       const content = read();
       expect(content).toContain('data-testid="contact-rate-badge"');
-      expect(content).toContain('aria-label="Tarif personnalisé"');
+      expect(content).toContain("contact.form.customRateAriaLabel");
+      expect(readFr()).toContain("customRateAriaLabel: 'Tarif personnalisé'");
       expect(content).toMatch(
         /\{#if isCustomRate\}[\s\S]*?data-testid="contact-rate-badge"/
       );
@@ -194,7 +203,8 @@ describe("page-contact", () => {
       expect(content).toContain("<dl ");
       expect(content).toContain("<dt ");
       expect(content).toContain("<dd ");
-      expect(content).toContain("Total estimé");
+      expect(content).toContain("contact.estimate.total");
+      expect(readFr()).toContain("Total estimé");
     });
 
     it("renders percent labels using formatPct for each tax row", () => {
@@ -207,13 +217,15 @@ describe("page-contact", () => {
     it("defines formatPct using Intl.NumberFormat with fr-CA locale", () => {
       const content = read();
       expect(content).toContain("function formatPct");
-      expect(content).toContain('new Intl.NumberFormat("fr-CA"');
+      expect(content).toContain("Intl.NumberFormat(");
+      expect(content).toContain("'fr-CA'");
       expect(content).toContain("maximumFractionDigits: 3");
     });
 
     it("formats currency with fr-CA CAD via Intl.NumberFormat", () => {
       const content = read();
-      expect(content).toContain('new Intl.NumberFormat("fr-CA"');
+      expect(content).toContain("Intl.NumberFormat(");
+      expect(content).toContain("'fr-CA'");
       expect(content).toContain('currency: "CAD"');
     });
 

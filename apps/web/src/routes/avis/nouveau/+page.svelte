@@ -88,9 +88,16 @@
   }
 
   // ── Star label helpers ────────────────────────────────────────────────────
+  const STAR_LABELS: Record<number, string> = {
+    1: 'Mauvais',
+    2: 'Passable',
+    3: 'Bien',
+    4: 'Très bien',
+    5: 'Excellent',
+  };
+
   function starLabel(n: number): string {
-    const labels = ["", "Passable", "Correct", "Bien", "Très bien", "Excellent"];
-    return labels[n] ?? "";
+    return STAR_LABELS[n] ?? '';
   }
 
   const displayRating = $derived(hoveredRating || selectedRating);
@@ -108,18 +115,18 @@
         data-testid="nouveau-avis-loading"
       >
         <span class="page-nouveau-avis__spinner" aria-hidden="true"></span>
-        <p class="page-nouveau-avis__loading-text">Vérification en cours…</p>
+        <p class="page-nouveau-avis__loading-text">Vérification de votre invitation…</p>
       </div>
 
     {:else if viewState === "eligible"}
       <!-- Review form -->
       <div data-testid="nouveau-avis-form-wrap">
-        <SectionLabel text="Avis" showHairline={false} />
+        <SectionLabel text="TÉMOIGNAGE" showHairline={false} />
         <h1 class="page-nouveau-avis__title" data-testid="nouveau-avis-title">
-          {firstName ? `Merci, ${firstName} !` : "Partagez votre expérience"}
+          {firstName ? "Merci, " + firstName + " !" : "Partagez votre expérience"}
         </h1>
         <p class="page-nouveau-avis__subtitle">
-          Votre avis aide d'autres clients à mieux choisir.
+          Votre avis aide les futurs voyageurs à choisir leur hébergement.
         </p>
 
         <form
@@ -132,7 +139,7 @@
           <div class="page-nouveau-avis__field" data-testid="star-picker-wrap">
             <fieldset class="page-nouveau-avis__stars-fieldset">
               <legend class="page-nouveau-avis__label">
-                Note <span class="page-nouveau-avis__required" aria-hidden="true">*</span>
+                Votre note <span class="page-nouveau-avis__required" aria-hidden="true">*</span>
               </legend>
 
               <div
@@ -144,7 +151,7 @@
                   <button
                     type="button"
                     class="page-nouveau-avis__star {displayRating >= n ? 'page-nouveau-avis__star--filled' : ''}"
-                    aria-label="{n} étoile{n > 1 ? 's' : ''} — {starLabel(n)}"
+                    aria-label={`${n} étoile${n > 1 ? 's' : ''} — ${starLabel(n)}`}
                     aria-pressed={selectedRating === n}
                     onmouseover={() => { hoveredRating = n; }}
                     onfocus={() => { hoveredRating = n; }}
@@ -179,7 +186,7 @@
               rows={6}
               minlength={10}
               maxlength={2000}
-              placeholder="Décrivez votre séjour… (10 à 2000 caractères)"
+              placeholder="Partagez les détails de votre séjour…"
               aria-describedby="review-body-count"
               required
               data-testid="review-body-textarea"
@@ -235,7 +242,7 @@
           Merci pour votre avis !
         </h1>
         <p class="page-nouveau-avis__outcome-body" data-testid="nouveau-avis-thanks-body">
-          Votre témoignage sera examiné et publié prochainement.
+          Votre témoignage sera publié après révision.
         </p>
         <Button variant="secondary" href="/">Retour à l'accueil</Button>
       </div>
@@ -255,8 +262,7 @@
           Lien invalide
         </h1>
         <p class="page-nouveau-avis__outcome-body" data-testid="nouveau-avis-ineligible-body">
-          Ce lien n'est pas valide ou a déjà été utilisé. Si vous pensez qu'il s'agit
-          d'une erreur, contactez-nous.
+          Ce lien n'est plus valide ou a déjà été utilisé.
         </p>
         <Button variant="secondary" href="/">Retour à l'accueil</Button>
       </div>
@@ -266,7 +272,7 @@
 </div>
 
 <Seo
-  title="Laisser un avis — Auberge du Vieux Pont"
+  title="Laisser un avis | Auberge du Vieux Pont"
   description="Partagez votre expérience à l'Auberge du Vieux Pont."
   path="/avis/nouveau"
 />

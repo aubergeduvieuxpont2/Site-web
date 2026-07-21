@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { resetPassword, isError } from "$lib/api";
+  import { t } from "$lib/i18n.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
   import Contour from "$lib/components/Contour.svelte";
@@ -38,11 +39,11 @@
 
     // Client-side checks are UX-only; the API enforces the same rules server-side.
     if (newPassword.length < 8) {
-      formError = "Le mot de passe doit contenir au moins 8 caractères.";
+      formError = t('reinitialisation.errors.short');
       return;
     }
     if (newPassword !== confirmPassword) {
-      formError = "Les mots de passe ne correspondent pas.";
+      formError = t('reinitialisation.errors.mismatch');
       return;
     }
     if (!token) {
@@ -64,7 +65,7 @@
         viewState = "error";
       } else {
         viewState = "form";
-        formError = msg || "Connexion impossible. Veuillez réessayer.";
+        formError = msg || t('reinitialisation.errors.network');
       }
     } else {
       viewState = "success";
@@ -74,7 +75,7 @@
 
 <main class="reinitialisation" data-testid="reinitialisation-page">
   <div class="reinitialisation__container">
-    <SectionLabel text={isWelcome ? "Bienvenue" : "Réinitialisation"} showHairline={true} />
+    <SectionLabel text={isWelcome ? t('reinitialisation.sectionLabel.welcome') : t('reinitialisation.sectionLabel.reset')} showHairline={true} />
 
     {#if viewState === "form" || viewState === "submitting"}
       <section
@@ -91,7 +92,7 @@
             aria-hidden="true"
             data-testid="reset-card-tag"
           >
-            {isWelcome ? "BIENVENUE" : "PASS-RESET"}
+            {isWelcome ? t('reinitialisation.card.tag.welcome') : t('reinitialisation.card.tag.reset')}
           </span>
           <h1
             class="reinitialisation__heading"
@@ -99,25 +100,25 @@
             id="reset-heading"
             data-testid="reset-heading"
           >
-            {isWelcome ? "Bienvenue !" : "Nouveau mot de passe"}
+            {isWelcome ? t('reinitialisation.heading.welcome') : t('reinitialisation.heading.reset')}
           </h1>
           <p class="reinitialisation__subhead" data-testid="reset-subhead">
             {isWelcome
-              ? "Choisissez votre mot de passe pour accéder à votre espace client."
-              : "Choisissez un mot de passe d'au moins 8 caractères."}
+              ? t('reinitialisation.subhead.welcome')
+              : t('reinitialisation.subhead.reset')}
           </p>
         </header>
 
         <form
           class="reinitialisation__form"
           novalidate
-          aria-label="Formulaire de réinitialisation de mot de passe"
+          aria-label={t('reinitialisation.form.ariaLabel')}
           data-testid="reset-form"
           onsubmit={handleSubmit}
         >
           <div class="reinitialisation__field" data-testid="reset-new-password-field">
             <label class="reinitialisation__label" for="reset-new-password">
-              Nouveau mot de passe
+              {t('reinitialisation.form.newPassword')}
             </label>
             <input
               class="reinitialisation__input"
@@ -134,13 +135,13 @@
               bind:value={newPassword}
             />
             <span class="reinitialisation__hint" id="reset-password-hint">
-              8 caractères minimum
+              {t('reinitialisation.form.hint')}
             </span>
           </div>
 
           <div class="reinitialisation__field" data-testid="reset-confirm-password-field">
             <label class="reinitialisation__label" for="reset-confirm-password">
-              Confirmer le mot de passe
+              {t('reinitialisation.form.confirmPassword')}
             </label>
             <input
               class="reinitialisation__input"
@@ -170,7 +171,7 @@
           </div>
 
           <Button type="submit" variant="primary" block={true} disabled={viewState === "submitting"}>
-            {viewState === "submitting" ? "Envoi…" : "Réinitialiser le mot de passe"}
+            {viewState === "submitting" ? t('reinitialisation.form.submitting') : t('reinitialisation.form.submit')}
           </Button>
         </form>
       </section>
@@ -182,13 +183,12 @@
             <path d="M14 14 L26 26 M26 14 L14 26" stroke="var(--color-error)" stroke-width="1.5" stroke-linecap="square" />
           </svg>
         </div>
-        <h1 class="reinitialisation__error-heading">Lien invalide ou expiré</h1>
+        <h1 class="reinitialisation__error-heading">{t('reinitialisation.error.heading')}</h1>
         <p class="reinitialisation__error-body">
-          Ce lien de réinitialisation n'est plus valide ou a déjà été utilisé. Demandez un nouveau
-          lien à un administrateur.
+          {t('reinitialisation.error.body')}
         </p>
         <a href="/connexion" class="reinitialisation__back-link" data-testid="reset-back-to-login">
-          Retour à la connexion
+          {t('reinitialisation.error.backLink')}
         </a>
       </div>
     {:else}
@@ -200,13 +200,12 @@
           </svg>
         </div>
         <h1 class="reinitialisation__success-heading" tabindex="-1" bind:this={successHeading}>
-          Mot de passe mis à jour
+          {t('reinitialisation.success.heading')}
         </h1>
         <p class="reinitialisation__success-body">
-          Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter
-          avec vos nouveaux identifiants.
+          {t('reinitialisation.success.body')}
         </p>
-        <Button href="/connexion" variant="secondary">Se connecter</Button>
+        <Button href="/connexion" variant="secondary">{t('reinitialisation.success.link')}</Button>
       </div>
     {/if}
 
@@ -593,9 +592,5 @@
 </style>
 
 <svelte:head>
-  <title>
-    {isWelcome
-      ? "Créez votre espace client — Auberge du Vieux Pont"
-      : "Réinitialisation du mot de passe — Auberge du Vieux Pont"}
-  </title>
+  <title>{isWelcome ? t('reinitialisation.seo.welcome') : t('reinitialisation.seo.reset')}</title>
 </svelte:head>

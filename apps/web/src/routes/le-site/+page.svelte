@@ -10,12 +10,13 @@
   import { ATTRACTIONS, PROPERTY_AREAS } from '$lib/content';
   import { settings, loadSettings } from '$lib/settings.svelte';
   import { auth } from '$lib/auth.svelte';
+  import { t } from '$lib/i18n.svelte';
 
-  const NAV_SECTIONS = [
-    { id: 'chambres', label: 'Chambres' },
-    { id: 'attraits', label: 'Attraits' },
-    { id: 'lieu', label: 'Le lieu' },
-  ] as const;
+  const NAV_SECTIONS = $derived([
+    { id: 'chambres' as const, label: t('lesite.nav.chambres') },
+    { id: 'attraits' as const, label: t('lesite.nav.attraits') },
+    { id: 'lieu' as const, label: t('lesite.nav.lieu') },
+  ]);
 
   let activeSection = $state<string>('chambres');
   let sectionObserver: IntersectionObserver | undefined;
@@ -77,7 +78,7 @@
   <!-- Sticky in-page nav -->
   <nav
     class="page-le-site__inpage-nav"
-    aria-label="Sur cette page"
+    aria-label={t('lesite.inpageNav.ariaLabel')}
     data-testid="inpage-nav"
   >
     <div class="page-le-site__inpage-inner">
@@ -100,24 +101,22 @@
     id="chambres"
     class="page-le-site__section"
     data-testid="section-chambres"
-    aria-label="Aperçu de la propriété"
+    aria-label={t('lesite.chambres.ariaLabel')}
   >
     <div class="page-le-site__section-inner">
       <Contour number="01" width="contained" />
-      <SectionLabel text="Hébergement" />
+      <SectionLabel text={t('lesite.chambres.sectionLabel')} />
       <h2 class="page-le-site__heading" use:reveal={{ y: 20, delay: 0.05 }}>
-        Nos espaces
+        {t('lesite.chambres.heading')}
       </h2>
       <p
         class="page-le-site__intro"
         data-testid="property-overview-intro"
         use:reveal={{ y: 16, delay: 0.1 }}
       >
-        Chaque espace est calibré pour ceux qui arrivent couverts de boue et repartent reposés.
-        Les chambres sont assignées à votre arrivée selon les besoins de votre équipe.
-        Tarif unique&nbsp;:
+        {t('lesite.chambres.intro')}
         <strong class="page-le-site__price" data-testid="property-overview-price"
-          >{auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice} $/nuit</strong
+          >{auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice} {t('lesite.price.unit')}</strong
         >.
       </p>
 
@@ -127,16 +126,16 @@
           <article
             class="page-le-site__area"
             data-testid="area-{area.id}"
-            aria-label={area.label}
+            aria-label={t('areas.' + area.id + '.label')}
           >
             <div class="page-le-site__area-header">
-              <SectionLabel text={area.label} showHairline={false} />
-              <p class="page-le-site__area-blurb">{area.blurb}</p>
+              <SectionLabel text={t('areas.' + area.id + '.label')} showHairline={false} />
+              <p class="page-le-site__area-blurb">{t('areas.' + area.id + '.blurb')}</p>
             </div>
             <div class="page-le-site__area-grid page-le-site__area-grid--3" use:revealStagger={{ y: 20, each: 0.06 }}>
               {#each area.images as img (img.key)}
                 <div class="page-le-site__area-cell" data-testid="area-image-{img.key}">
-                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={img.alt} caption={img.caption} aspectRatio="4/3" />
+                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={t('areas.' + area.id + '.images.' + img.key.replace(/\.\w+$/, '') + '.alt')} caption={t('areas.' + area.id + '.images.' + img.key.replace(/\.\w+$/, '') + '.caption')} aspectRatio="4/3" />
                 </div>
               {/each}
             </div>
@@ -146,25 +145,25 @@
           <article
             class="page-le-site__area"
             data-testid="area-{area.id}"
-            aria-label={area.label}
+            aria-label={t('areas.' + area.id + '.label')}
           >
             <div class="page-le-site__area-header">
-              <SectionLabel text={area.label} showHairline={false} />
-              <p class="page-le-site__area-blurb">{area.blurb}</p>
+              <SectionLabel text={t('areas.' + area.id + '.label')} showHairline={false} />
+              <p class="page-le-site__area-blurb">{t('areas.' + area.id + '.blurb')}</p>
             </div>
             <div class="page-le-site__area-lead" data-testid="area-image-{area.images[0].key}" use:reveal={{ y: 16 }}>
               <ImagePanel
                 imgKey={area.images[0].key}
                 picsumSeed={area.images[0].key}
-                alt={area.images[0].alt}
-                caption={area.images[0].caption}
+                alt={t('areas.' + area.id + '.images.' + area.images[0].key.replace(/\.\w+$/, '') + '.alt')}
+                caption={t('areas.' + area.id + '.images.' + area.images[0].key.replace(/\.\w+$/, '') + '.caption')}
                 aspectRatio="16/6"
               />
             </div>
             <div class="page-le-site__area-grid page-le-site__area-grid--2" use:revealStagger={{ y: 20, each: 0.06 }}>
               {#each area.images.slice(1) as img (img.key)}
                 <div class="page-le-site__area-cell" data-testid="area-image-{img.key}">
-                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={img.alt} caption={img.caption} aspectRatio="4/3" />
+                  <ImagePanel imgKey={img.key} picsumSeed={img.key} alt={t('areas.' + area.id + '.images.' + img.key.replace(/\.\w+$/, '') + '.alt')} caption={t('areas.' + area.id + '.images.' + img.key.replace(/\.\w+$/, '') + '.caption')} aspectRatio="4/3" />
                 </div>
               {/each}
             </div>
@@ -175,27 +174,27 @@
             class="page-le-site__area page-le-site__area--editorial"
             class:page-le-site__area--reverse={area.editorialReverse}
             data-testid="area-{area.id}"
-            aria-label={area.label}
+            aria-label={t('areas.' + area.id + '.label')}
           >
             <div class="page-le-site__area-editorial-image" data-testid="area-image-{area.images[0].key}" use:reveal={{ y: 16 }}>
               <ImagePanel
                 imgKey={area.images[0].key}
                 picsumSeed={area.images[0].key}
-                alt={area.images[0].alt}
-                caption={area.images[0].caption}
+                alt={t('areas.' + area.id + '.images.' + area.images[0].key.replace(/\.\w+$/, '') + '.alt')}
+                caption={t('areas.' + area.id + '.images.' + area.images[0].key.replace(/\.\w+$/, '') + '.caption')}
                 aspectRatio="3/2"
               />
             </div>
             <div class="page-le-site__area-editorial-text">
-              <SectionLabel text={area.label} showHairline={false} />
-              <p class="page-le-site__area-blurb">{area.blurb}</p>
+              <SectionLabel text={t('areas.' + area.id + '.label')} showHairline={false} />
+              <p class="page-le-site__area-blurb">{t('areas.' + area.id + '.blurb')}</p>
             </div>
           </article>
         {/if}
       {/each}
 
       <div class="page-le-site__area-cta" data-testid="property-overview-cta">
-        <Button variant="action" href="/contact">Réserver votre séjour</Button>
+        <Button variant="action" href="/contact">{t('lesite.chambres.cta')}</Button>
       </div>
     </div>
   </section>
@@ -208,21 +207,21 @@
   <section id="attraits" class="page-le-site__section" data-testid="section-attraits">
     <div class="page-le-site__section-inner">
       <Contour number="02" width="contained" />
-      <SectionLabel text="Attraits" />
+      <SectionLabel text={t('lesite.attraits.sectionLabel')} />
       <h2 class="page-le-site__heading" use:reveal={{ y: 20, delay: 0.05 }}>
-        Aux alentours
+        {t('lesite.attraits.heading')}
       </h2>
       <div class="page-le-site__attraits-grid" data-testid="attraits-grid" use:revealStagger={{ y: 20, each: 0.06 }}>
         {#each ATTRACTIONS as attr}
           <article class="page-le-site__attrait" data-testid="attrait-card">
             <div class="page-le-site__attrait-meta">
               <span class="page-le-site__attrait-code" aria-hidden="true">{attr.code}</span>
-              <span class="page-le-site__attrait-dist">{attr.distance}</span>
-              <span class="page-le-site__attrait-grade">{attr.grade}</span>
+              <span class="page-le-site__attrait-dist">{t('attractions.' + attr.code + '.distance')}</span>
+              <span class="page-le-site__attrait-grade">{t('attractions.' + attr.code + '.grade')}</span>
             </div>
-            <h3 class="page-le-site__attrait-name">{attr.name}</h3>
-            <span class="page-le-site__attrait-cat">{attr.category}</span>
-            <p class="page-le-site__attrait-text">{attr.text}</p>
+            <h3 class="page-le-site__attrait-name">{t('attractions.' + attr.code + '.name')}</h3>
+            <span class="page-le-site__attrait-cat">{t('attractions.' + attr.code + '.category')}</span>
+            <p class="page-le-site__attrait-text">{t('attractions.' + attr.code + '.text')}</p>
           </article>
         {/each}
       </div>
@@ -237,28 +236,25 @@
   <section id="lieu" class="page-le-site__section page-le-site__section--lieu" data-testid="section-lieu">
     <div class="page-le-site__section-inner">
       <Contour number="03" width="contained" />
-      <SectionLabel text="Le lieu" />
+      <SectionLabel text={t('lesite.lieu.sectionLabel')} />
       <div class="page-le-site__lieu-editorial">
         <div class="page-le-site__lieu-text" use:reveal={{ y: 20, delay: 0.05 }}>
           <h2 class="page-le-site__heading">
-            Un vieux pont sur la Sainte-Anne
+            {t('lesite.lieu.heading')}
           </h2>
           <p class="page-le-site__body">
-            Depuis 1972, l'Auberge du Vieux Pont domine la rivière Sainte-Anne au cœur de
-            Saint-Raymond. Pierre, bois, fer forgé — les matériaux parlent d'eux-mêmes.
-            À proximité des principaux chantiers forestiers et des lignes du réseau hydroélectrique de Portneuf.
+            {t('lesite.lieu.p1')}
           </p>
           <p class="page-le-site__body">
-            Un endroit calibré pour ceux qui partent tôt et rentrent tard, avec du béton qu'on
-            lave à grande eau.
+            {t('lesite.lieu.p2')}
           </p>
-          <Button variant="secondary" href="/contact">Nous contacter</Button>
+          <Button variant="secondary" href="/contact">{t('lesite.lieu.ctaBtn')}</Button>
         </div>
         <div class="page-le-site__lieu-image" use:reveal={{ y: 16, delay: 0.12 }}>
           <ImagePanel
             imgKey="auberge-exterior.jpg"
             picsumSeed={33}
-            alt="Vue extérieure de l'Auberge du Vieux Pont sur la rivière Sainte-Anne"
+            alt={t('lesite.lieu.image.alt')}
             aspectRatio="3/2"
           />
         </div>
@@ -270,7 +266,7 @@
         picsumSeed={55}
         alt=""
         aspectRatio="16/5"
-        caption="Le pont et la Sainte-Anne · Saint-Raymond, Portneuf"
+        caption={t('lesite.lieu.strip.caption')}
       />
     </div>
   </section>
@@ -278,15 +274,14 @@
   <!-- ── CTA ─────────────────────────────────────────── -->
   <div class="page-le-site__cta-strip" data-testid="cta-strip">
     <div class="page-le-site__cta-inner">
-      <SectionLabel text="Réservation" />
+      <SectionLabel text={t('lesite.cta.sectionLabel')} />
       <h2 class="page-le-site__cta-heading" use:reveal={{ y: 16 }}>
-        Prêt à réserver?
+        {t('lesite.cta.heading')}
       </h2>
       <p class="page-le-site__cta-body" use:reveal={{ y: 12, delay: 0.06 }}>
-        Envoyez-nous votre demande — nous confirmons sous 24 h et adaptons l'hébergement
-        à la taille de votre équipe.
+        {t('lesite.cta.body')}
       </p>
-      <Button variant="action" href="/contact">Réserver maintenant</Button>
+      <Button variant="action" href="/contact">{t('lesite.cta.btn')}</Button>
     </div>
   </div>
 
@@ -699,13 +694,13 @@
 </style>
 
 <Seo
-  title="Le site — Auberge du Vieux Pont"
-  description="Découvrez L'Auberge du Vieux Pont : chambres insonorisées, cuisine partagée, buanderie, salle de séchage et salon commun, sur la rivière Sainte-Anne à Saint-Raymond."
+  title={t('lesite.seo.title')}
+  description={t('lesite.seo.description')}
   path="/le-site"
   schema={[
     breadcrumbSchema([
-      { name: 'Accueil', path: '/' },
-      { name: 'Le site', path: '/le-site' },
+      { name: t('nav.home'), path: '/' },
+      { name: t('nav.lesite'), path: '/le-site' },
     ]),
   ]}
 />

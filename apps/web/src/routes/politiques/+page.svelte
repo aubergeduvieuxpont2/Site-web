@@ -1,5 +1,6 @@
 <script lang="ts">
   import { POLICIES } from "$lib/content";
+  import { t } from "$lib/i18n.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
   import Seo from "$lib/components/Seo.svelte";
@@ -9,12 +10,9 @@
 <section class="page-politiques bg-surface">
   <!-- Header area with SectionLabel + page title -->
   <div class="header" data-testid="politiques-header">
-    <SectionLabel text="Politiques de l'établissement" showHairline={true} />
-    <h1 class="page-title">Les règles de la maison</h1>
-    <p class="lead-text">
-      Claires et sans surprise. Conditions de séjour, accueil des équipes et
-      respect mutuel.
-    </p>
+    <SectionLabel text={t('politiques.sectionLabel')} showHairline={true} />
+    <h1 class="page-title">{t('politiques.heading')}</h1>
+    <p class="lead-text">{t('politiques.lead')}</p>
   </div>
 
   <!-- Contour divider -->
@@ -26,13 +24,13 @@
       <section class="policy-section" data-testid={`policy-section-${section.code}`}>
         <div class="section-head">
           <span class="section-code" aria-hidden="true">{section.code}</span>
-          <h2 class="section-title">{section.title}</h2>
+          <h2 class="section-title">{t('policies.' + section.code + '.title')}</h2>
         </div>
         <ul class="item-list">
-          {#each section.items as item, i (i)}
+          {#each section.items.map((_, idx) => idx) as i (i)}
             <li class="item" data-testid={`policy-item-${section.code}-${i}`}>
               <span class="bullet" aria-hidden="true"></span>
-              <span class="item-text">{item}</span>
+              <span class="item-text">{t('policies.' + section.code + '.items.' + i)}</span>
             </li>
           {/each}
         </ul>
@@ -172,13 +170,13 @@
 </style>
 
 <Seo
-  title="Politiques — Auberge du Vieux Pont"
-  description="Politiques et règlements de L'Auberge du Vieux Pont : arrivée, départ, annulation et vie commune à Saint-Raymond."
+  title={t('politiques.seo.title')}
+  description={t('politiques.seo.description')}
   path="/politiques"
   schema={[
     breadcrumbSchema([
-      { name: "Accueil", path: "/" },
-      { name: "Politiques", path: "/politiques" },
+      { name: t('nav.home'), path: "/" },
+      { name: t('politiques.sectionLabel'), path: "/politiques" },
     ]),
   ]}
 />
