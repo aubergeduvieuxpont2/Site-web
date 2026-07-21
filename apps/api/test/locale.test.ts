@@ -58,6 +58,18 @@ describe("RegisterSchema locale field — OP-Register.withLocale", () => {
     const result = RegisterSchema.safeParse({ ...base, locale: 1 });
     expect(result.success).toBe(false);
   });
+  // Ported from the duplicate register-locale.test.ts: adding locale must not
+  // relax the schema's other constraints.
+  it("still requires a valid email when locale is provided", () => {
+    const result = RegisterSchema.safeParse({ ...base, email: "not-an-email", locale: "en" });
+    expect(result.success).toBe(false);
+  });
+
+  it("still requires a password meeting the minimum length when locale is provided", () => {
+    const result = RegisterSchema.safeParse({ ...base, password: "short", locale: "en" });
+    expect(result.success).toBe(false);
+  });
+
 });
 
 // ---------------------------------------------------------------------------

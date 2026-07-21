@@ -150,4 +150,18 @@ describe("email locale selection", () => {
     expect(rendered.html).toContain("TVQ");
     expect(rendered.html).toContain("hébergement");
   });
+
+  // Ported from the duplicate emailLocale.test.ts: guard that the helper issues
+  // exactly one query per lookup (no accidental double round-trip).
+  it("invokes the sql function once for a numeric id selector", async () => {
+    const sql = vi.fn().mockResolvedValue([{ locale: "fr" }]);
+    await resolveLocale(sql as any, 5);
+    expect(sql).toHaveBeenCalledTimes(1);
+  });
+
+  it("invokes the sql function once for an email string selector", async () => {
+    const sql = vi.fn().mockResolvedValue([{ locale: "fr" }]);
+    await resolveLocale(sql as any, "a@b.com");
+    expect(sql).toHaveBeenCalledTimes(1);
+  });
 });
