@@ -22,6 +22,7 @@ export interface User {
   email: string;
   name: string | null;
   role: "guest" | "admin";
+  locale: "fr" | "en";
   hubspotContactId?: string | null;
   effectiveNightlyPrice?: number;
   effectiveWeeklyPrice?: number;
@@ -50,6 +51,9 @@ export interface ReservationRow {
   source?: string | null;
   external_ref?: string | null;
   user_id?: number | null;
+  stripe_invoice_id?: string | null;
+  invoice_status?: string | null;
+  paid_at?: string | null;
 }
 
 export interface OutboxRow {
@@ -264,12 +268,14 @@ export async function register(
   email: string,
   password: string,
   profile?: RegisterProfile,
+  locale?: "fr" | "en",
 ): Promise<{ user: User } | ApiError> {
   return fetchJson<{ user: User }>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email,
       password,
+      ...(locale !== undefined ? { locale } : {}),
       firstName: profile?.firstName ?? null,
       lastName: profile?.lastName ?? null,
       phone: profile?.phone ?? null,
@@ -375,6 +381,24 @@ export async function changeProfileEmail(
   return fetchJson<{ ok: true; pending: true }>("/profile/email", {
     method: "POST",
     body: JSON.stringify({ newEmail, currentPassword }),
+  });
+}
+
+/**
+ * Persist the authenticated user's locale preference on the server. Called
+ * when a logged-in visitor flips the language toggle; anonymous flips are
+ * stored in cookie and localStorage only and do not call this endpoint.
+ *
+ * Returns `{ ok: true, locale }` on success. A 400 surfaces as `{ error }`
+ * when the supplied locale is not one of the strings fr or en; a 401 surfaces
+ * when no valid session is present.
+ */
+export async function updateLocale(
+  locale: "fr" | "en",
+): Promise<{ ok: true; locale: "fr" | "en" } | ApiError> {
+  return fetchJson<{ ok: true; locale: "fr" | "en" }>("/auth/locale", {
+    method: "POST",
+    body: JSON.stringify({ locale }),
   });
 }
 
@@ -827,10 +851,10 @@ export async function adminCreateInvoice(
   reservationId: number,
   type: "deposit" | "full",
   depositPercent?: number,
-): Promise<{ ok: true; breakdown: InvoiceBreakdown } | ApiError> {
+): Promise<{ ok: true; breakdown: InvoiceBreakdown; stripeInvoiceId?: string | null; hostedInvoiceUrl?: string | null } | ApiError> {
   const safe = safeReservationId(reservationId);
   if (safe === null) return { error: "Identifiant invalide" };
-  return fetchJson<{ ok: true; breakdown: InvoiceBreakdown }>(
+  return fetchJson<{ ok: true; breakdown: InvoiceBreakdown; stripeInvoiceId?: string | null; hostedInvoiceUrl?: string | null }>(
     `/admin/reservations/${encodeURIComponent(String(safe))}/invoice`,
     { method: "POST", body: JSON.stringify({ type, depositPercent }) },
   );

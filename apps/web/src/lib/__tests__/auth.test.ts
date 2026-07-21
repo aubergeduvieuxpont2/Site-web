@@ -7,6 +7,7 @@ const guest: User = {
   email: "guest@example.com",
   name: "Guest",
   role: "guest",
+  locale: "fr",
 };
 
 // Mock fetch used by getMe() inside loadAuth().

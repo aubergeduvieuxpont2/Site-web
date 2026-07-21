@@ -152,6 +152,38 @@
                 {formatDateTime(row.created_at)}
               </dd>
             </div>
+
+            {#if row.invoice_status}
+              <div class="rdm__dl-row">
+                <dt class="rdm__dt">Statut facture</dt>
+                <dd class="rdm__dd" data-testid="rdm-invoice-status">
+                  <span
+                    class="rdm__invoice-badge rdm__invoice-badge--{row.invoice_status}"
+                    data-testid="rdm-invoice-badge"
+                  >
+                    {row.invoice_status === 'paid' ? 'Payée' : row.invoice_status === 'open' ? 'Ouverte' : row.invoice_status}
+                  </span>
+                </dd>
+              </div>
+            {/if}
+
+            {#if row.paid_at}
+              <div class="rdm__dl-row">
+                <dt class="rdm__dt">Payée le</dt>
+                <dd class="rdm__dd rdm__dd--mono" data-testid="rdm-paid-at">
+                  {formatDateTime(row.paid_at)}
+                </dd>
+              </div>
+            {/if}
+
+            {#if row.stripe_invoice_id}
+              <div class="rdm__dl-row">
+                <dt class="rdm__dt">Facture Stripe</dt>
+                <dd class="rdm__dd" data-testid="rdm-stripe-invoice-id">
+                  <span class="rdm__dd--mono">{row.stripe_invoice_id}</span>
+                </dd>
+              </div>
+            {/if}
           </dl>
         </section>
 
@@ -412,6 +444,27 @@
   .rdm__status-badge--cancelled {
     background: #fce8e8;
     color: #ba1a1a;
+  }
+
+  /* ── Invoice status badge ── */
+  .rdm__invoice-badge {
+    display: inline-block;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .rdm__invoice-badge--open {
+    background: #fff8e6;
+    color: #7a5c00;
+  }
+
+  .rdm__invoice-badge--paid {
+    background: #d4ede0;
+    color: #1a5c2d;
   }
 
   /* ── Facture button ── */

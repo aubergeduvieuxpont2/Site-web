@@ -16,6 +16,7 @@
   import { auth } from "$lib/auth.svelte";
   import Button from "$lib/components/Button.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
+  import { t, locale } from "$lib/i18n.svelte";
 
   let form = $state({
     firstName: "",
@@ -154,7 +155,7 @@
   );
 
   function formatRate(value: number): string {
-    return new Intl.NumberFormat("fr-CA", {
+    return new Intl.NumberFormat(locale.current === 'en' ? 'en-CA' : 'fr-CA', {
       style: "currency",
       currency: "CAD",
       minimumFractionDigits: 2,
@@ -164,7 +165,7 @@
 
   function formatPct(value: number): string {
     return (
-      new Intl.NumberFormat("fr-CA", { maximumFractionDigits: 3 }).format(value) + " %"
+      new Intl.NumberFormat(locale.current === 'en' ? 'en-CA' : 'fr-CA', { maximumFractionDigits: 3 }).format(value) + " %"
     );
   }
 
@@ -205,17 +206,16 @@
     // Identity fields are only required when logged out — otherwise they come
     // from the session user.
     if (!loggedIn) {
-      if (!form.firstName.trim()) errors.firstName = "Le prénom est requis.";
-      if (!form.lastName.trim()) errors.lastName = "Le nom est requis.";
-      if (!form.email.trim()) errors.email = "Le courriel est requis.";
+      if (!form.firstName.trim()) errors.firstName = t('contact.errors.firstNameRequired');
+      if (!form.lastName.trim()) errors.lastName = t('contact.errors.lastNameRequired');
+      if (!form.email.trim()) errors.email = t('contact.errors.emailRequired');
       else if (!EMAIL_RE.test(form.email.trim()))
-        errors.email = "Courriel invalide.";
+        errors.email = t('contact.errors.emailInvalid');
     }
     if (!(Number(form.roomCount) >= 1))
-      errors.roomCount = "Au moins une chambre est requise.";
+      errors.roomCount = t('contact.errors.roomCountRequired');
     if (datesOutOfOrder(form.checkIn, form.checkOut))
-      errors.checkOut =
-        "La date de départ doit être postérieure à la date d'arrivée.";
+      errors.checkOut = t('contact.errors.checkOutOrder');
     fieldErrors = errors;
     return Object.keys(errors).length === 0;
   }
@@ -246,7 +246,7 @@
       status = "error";
       errorMsg = result.error;
     } else {
-      greetingName = eff.firstName || "merci";
+      greetingName = eff.firstName || t('contact.success.nameFallback');
       status = "sent";
     }
   }
@@ -256,11 +256,10 @@
   <!-- ── HERO ─────────────────────────────────────────────── -->
   <section class="page-contact__hero">
     <div class="page-contact__hero-inner">
-      <SectionLabel text="Réservation & contact" showHairline={true} />
-      <h1 class="page-contact__title">Écrivez-nous</h1>
+      <SectionLabel text={t('contact.hero.sectionLabel')} showHairline={true} />
+      <h1 class="page-contact__title">{t('contact.hero.title')}</h1>
       <p class="page-contact__lead">
-        Envoyez votre demande de réservation ou vos questions. Nous répondons à
-        chaque message&nbsp;; pour une réponse immédiate, appelez-nous.
+        {t('contact.hero.lead')}
       </p>
     </div>
   </section>
@@ -279,23 +278,21 @@
                 tabindex="-1"
                 bind:this={successHeading}
               >
-                C'est noté, {greetingName}.
+                {t('contact.success.greeting', { name: greetingName })}
               </h2>
               <p class="page-contact__success-body">
-                Votre demande est enregistrée. Nous vous répondrons par courriel
-                sous peu pour confirmer les détails de votre séjour.
+                {t('contact.success.body')}
               </p>
               <div class="page-contact__success-cta">
-                <span class="page-contact__tech-label">Une question pressante&nbsp;?</span>
+                <span class="page-contact__tech-label">{t('contact.success.urgentLabel')}</span>
                 <a class="page-contact__phone-link" href={phoneHref}>{phoneDisplay}</a>
               </div>
             </div>
           {:else}
             <div class="page-contact__form-header">
-              <SectionLabel text="Demande de réservation" />
+              <SectionLabel text={t('contact.form.sectionLabel')} />
               <p class="page-contact__form-desc">
-                Les champs marqués d'un astérisque sont requis. Les dates et le
-                nombre de personnes nous aident à préparer votre arrivée.
+                {t('contact.form.desc')}
               </p>
             </div>
 
@@ -315,7 +312,7 @@
                   transition:fade={{ duration: 150 }}
                 >
                   <span class="page-contact__identity-label"
-                    >Réservation au nom de</span
+                    >{t('contact.form.identityLabel')}</span
                   >
                   <span class="page-contact__identity-value">
                     {effective.firstName}
@@ -330,7 +327,7 @@
                 >
                   <div class="page-contact__field">
                     <label class="page-contact__label" for="field-first-name">
-                      Prénom<span class="page-contact__required" aria-hidden="true"> *</span>
+                      {t('contact.form.firstName')}<span class="page-contact__required" aria-hidden="true"> *</span>
                     </label>
                     <input
                       class="page-contact__input"
@@ -356,7 +353,7 @@
                   </div>
                   <div class="page-contact__field">
                     <label class="page-contact__label" for="field-last-name">
-                      Nom<span class="page-contact__required" aria-hidden="true"> *</span>
+                      {t('contact.form.lastName')}<span class="page-contact__required" aria-hidden="true"> *</span>
                     </label>
                     <input
                       class="page-contact__input"
@@ -385,7 +382,7 @@
                 <!-- Courriel -->
                 <div class="page-contact__field" transition:fade={{ duration: 150 }}>
                   <label class="page-contact__label" for="field-email">
-                    Courriel<span class="page-contact__required" aria-hidden="true"> *</span>
+                    {t('contact.form.email')}<span class="page-contact__required" aria-hidden="true"> *</span>
                   </label>
                   <input
                     class="page-contact__input"
@@ -414,7 +411,7 @@
               <!-- Dates -->
               <div class="page-contact__field-row">
                 <div class="page-contact__field">
-                  <label class="page-contact__label" for="field-checkin">Date d'arrivée</label>
+                  <label class="page-contact__label" for="field-checkin">{t('contact.form.checkIn')}</label>
                   <input
                     class="page-contact__input"
                     id="field-checkin"
@@ -424,7 +421,7 @@
                   />
                 </div>
                 <div class="page-contact__field">
-                  <label class="page-contact__label" for="field-checkout">Date de départ</label>
+                  <label class="page-contact__label" for="field-checkout">{t('contact.form.checkOut')}</label>
                   <input
                     class="page-contact__input"
                     id="field-checkout"
@@ -451,7 +448,7 @@
               <!-- Personnes + Nombre de chambres -->
               <div class="page-contact__field-row">
                 <div class="page-contact__field">
-                  <label class="page-contact__label" for="field-guests">Nombre de personnes</label>
+                  <label class="page-contact__label" for="field-guests">{t('contact.form.guests')}</label>
                   <input
                     class="page-contact__input"
                     id="field-guests"
@@ -464,7 +461,7 @@
                 </div>
                 <div class="page-contact__field">
                   <label class="page-contact__label" for="field-rooms">
-                    Nombre de chambres<span class="page-contact__required" aria-hidden="true"> *</span>
+                    {t('contact.form.roomCount')}<span class="page-contact__required" aria-hidden="true"> *</span>
                   </label>
                   <input
                     class="page-contact__input"
@@ -498,14 +495,14 @@
                 role="status"
                 aria-live="polite"
               >
-                <span class="page-contact__rate-label">Tarif</span>
-                <span class="page-contact__rate-value">{formatRate(nightlyRate)} /nuit</span>
+                <span class="page-contact__rate-label">{t('contact.form.rateLabel')}</span>
+                <span class="page-contact__rate-value">{formatRate(nightlyRate)} {t('contact.form.rateUnit')}</span>
                 {#if isCustomRate}
                   <span
                     class="page-contact__rate-badge"
                     data-testid="contact-rate-badge"
-                    aria-label="Tarif personnalisé"
-                  >Tarif personnalisé</span>
+                    aria-label={t('contact.form.customRateAriaLabel')}
+                  >{t('contact.form.customRateBadge')}</span>
                 {/if}
               </div>
 
@@ -517,12 +514,12 @@
                   aria-live="polite"
                   aria-atomic="true"
                 >
-                  <span class="page-contact__tech-label">Tarif semaine actif</span>
+                  <span class="page-contact__tech-label">{t('contact.form.weeklyRateLabel')}</span>
                   <span
                     class="page-contact__weekly-rate"
                     data-testid="weekly-rate-value"
                   >
-                    {formatRate(weeklyRate)} /semaine
+                    {formatRate(weeklyRate)} {t('contact.form.weeklyRateUnit')}
                   </span>
                 </div>
               {/if}
@@ -539,35 +536,35 @@
                   <dl class="page-contact__estimate-rows">
                     <div class="page-contact__estimate-row" data-testid="estimate-base">
                       <dt class="page-contact__estimate-label">
-                        Base ({nights} nuit(s) × {rooms} chambre(s) × {formatRate(nightlyRate)})
+                        {t('contact.estimate.base', { nights: String(nights), rooms: String(rooms), rate: formatRate(nightlyRate) })}
                       </dt>
                       <dd class="page-contact__estimate-amount">{formatRate(estimate.base)}</dd>
                     </div>
 
                     <div class="page-contact__estimate-row" data-testid="estimate-hebergement">
                       <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
-                        Taxe d'hébergement ({formatPct(settings.accommodationTax)})
+                        {t('contact.estimate.hebergement', { pct: formatPct(settings.accommodationTax) })}
                       </dt>
                       <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.hebergementTax)}</dd>
                     </div>
 
                     <div class="page-contact__estimate-row" data-testid="estimate-tps">
                       <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
-                        TPS ({formatPct(settings.tps)})
+                        {t('contact.estimate.tps', { pct: formatPct(settings.tps) })}
                       </dt>
                       <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.tps)}</dd>
                     </div>
 
                     <div class="page-contact__estimate-row" data-testid="estimate-tvq">
                       <dt class="page-contact__estimate-label page-contact__estimate-label--tax">
-                        TVQ ({formatPct(settings.tvq)})
+                        {t('contact.estimate.tvq', { pct: formatPct(settings.tvq) })}
                       </dt>
                       <dd class="page-contact__estimate-amount page-contact__estimate-amount--tax">{formatRate(estimate.tvq)}</dd>
                     </div>
 
                     <div class="page-contact__estimate-row page-contact__estimate-row--total" data-testid="estimate-total">
                       <dt class="page-contact__estimate-label page-contact__estimate-label--total">
-                        Total estimé
+                        {t('contact.estimate.total')}
                       </dt>
                       <dd class="page-contact__estimate-amount page-contact__estimate-total">{formatRate(estimate.total)}</dd>
                     </div>
@@ -585,7 +582,7 @@
                   aria-live="assertive"
                 >
                   <p class="page-contact__avail-title">
-                    Ces dates ne sont pas disponibles
+                    {t('contact.availability.unavailableTitle')}
                   </p>
                   <ul
                     class="page-contact__avail-nights"
@@ -606,20 +603,19 @@
                   data-testid="availability-error"
                   aria-live="polite"
                 >
-                  Impossible de vérifier la disponibilité en ce moment. Votre demande
-                  sera examinée manuellement.
+                  {t('contact.availability.error')}
                 </div>
               {/if}
 
               <!-- Message -->
               <div class="page-contact__field">
-                <label class="page-contact__label" for="field-message">Message</label>
+                <label class="page-contact__label" for="field-message">{t('contact.form.message')}</label>
                 <textarea
                   class="page-contact__input page-contact__input--textarea"
                   id="field-message"
                   rows="4"
                   data-testid="input-message"
-                  placeholder="Demandes spéciales, horaires, besoins particuliers…"
+                  placeholder={t('contact.form.messagePlaceholder')}
                   bind:value={form.message}
                 ></textarea>
               </div>
@@ -634,7 +630,7 @@
                 >
                   <span class="page-contact__error-msg">{errorMsg}</span>
                   <span>
-                    En attendant, appelez-nous&nbsp;:
+                    {t('contact.form.errorCallout')}
                     <a class="page-contact__error-phone" href={phoneHref}>{phoneDisplay}</a>
                   </span>
                 </div>
@@ -648,8 +644,7 @@
                   data-testid="maintenance-notice"
                   aria-live="polite"
                 >
-                  Les réservations sont temporairement suspendues. Merci de réessayer
-                  bientôt.
+                  {t('contact.form.maintenanceNotice')}
                 </div>
               {/if}
 
@@ -659,9 +654,9 @@
                   <span class="page-contact__submit-inner" aria-live="polite">
                     {#if status === "sending"}
                       <span class="page-contact__spinner" aria-hidden="true"></span>
-                      Envoi en cours…
+                      {t('contact.form.sending')}
                     {:else}
-                      Envoyer la demande
+                      {t('contact.form.submit')}
                     {/if}
                   </span>
                 </Button>
@@ -674,7 +669,7 @@
       <!-- ── INFO COLUMN ── -->
       <div class="page-contact__info-col" use:reveal={{ delay: 0.14 }}>
         <div class="page-contact__info-section">
-          <SectionLabel text="Coordonnées" />
+          <SectionLabel text={t('contact.info.coordonnees')} />
           <address class="page-contact__address">
             <span>{SITE.address.street}</span>
             <span>{SITE.address.city}, {SITE.address.province}</span>
@@ -685,31 +680,31 @@
         <hr class="page-contact__divider" aria-hidden="true" />
 
         <div class="page-contact__info-section">
-          <span class="page-contact__tech-label">Téléphone</span>
+          <span class="page-contact__tech-label">{t('contact.info.telephone')}</span>
           <a class="page-contact__phone-link" href={phoneHref}>{phoneDisplay}</a>
         </div>
 
         <div class="page-contact__info-section">
-          <span class="page-contact__tech-label">Courriel</span>
+          <span class="page-contact__tech-label">{t('contact.info.courriel')}</span>
           <a class="page-contact__email-link" href="mailto:{settings.contactEmail || DEFAULTS.contactEmail}">{settings.contactEmail || DEFAULTS.contactEmail}</a>
         </div>
 
         <hr class="page-contact__divider" aria-hidden="true" />
 
         <div class="page-contact__info-section">
-          <span class="page-contact__tech-label">Horaires</span>
+          <span class="page-contact__tech-label">{t('contact.info.horaires')}</span>
           <dl class="page-contact__hours">
             <div class="page-contact__hour-row">
-              <dt>Arrivée</dt>
-              <dd>dès 15 h</dd>
+              <dt>{t('contact.hours.checkIn.label')}</dt>
+              <dd>{t('contact.hours.checkIn.value')}</dd>
             </div>
             <div class="page-contact__hour-row">
-              <dt>Départ</dt>
-              <dd>avant 11 h</dd>
+              <dt>{t('contact.hours.checkOut.label')}</dt>
+              <dd>{t('contact.hours.checkOut.value')}</dd>
             </div>
             <div class="page-contact__hour-row">
-              <dt>Réception</dt>
-              <dd>7 h – 22 h</dd>
+              <dt>{t('contact.hours.reception.label')}</dt>
+              <dd>{t('contact.hours.reception.value')}</dd>
             </div>
           </dl>
         </div>
@@ -721,7 +716,7 @@
   <section class="page-contact__strip">
     <div class="page-contact__strip-inner">
       <p class="page-contact__strip-text">
-        Préférez-vous la voix&nbsp;? Notre équipe répond du matin au soir.
+        {t('contact.strip.text')}
       </p>
       <a class="page-contact__strip-phone" href={phoneHref}>{phoneDisplay}</a>
     </div>
@@ -1464,13 +1459,13 @@
 </style>
 
 <Seo
-  title="Contact — Auberge du Vieux Pont"
-  description="Contactez L'Auberge du Vieux Pont à Saint-Raymond : réservations, tarifs d'entreprise et demandes d'information. Téléphone 418 655-1212."
+  title={t('contact.seo.title')}
+  description={t('contact.seo.description')}
   path="/contact"
   schema={[
     breadcrumbSchema([
-      { name: "Accueil", path: "/" },
-      { name: "Contact", path: "/contact" },
+      { name: t('nav.home'), path: '/' },
+      { name: t('nav.contact'), path: '/contact' },
     ]),
   ]}
 />

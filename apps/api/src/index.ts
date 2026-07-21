@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
+import { resolveLocale } from "./emailLocale";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { generateCode } from "./reservationCode";
@@ -64,6 +65,12 @@ import {
   type InvoiceBreakdown,
 } from "./pricing";
 import {
+  createStripeClient,
+  findOrCreateCustomer,
+  createAndFinalizeInvoice,
+  constructStripeEvent,
+} from "./stripe";
+import {
   AssignRoomSchema,
   reservationDatesValid,
   freeRoomsForRange,
@@ -79,6 +86,8 @@ type Bindings = {
   // Shared secret required from the email-ingest Worker on /internal/ota-bookings.
   INTERNAL_OTA_SECRET?: string;
   RESEND_API_KEY: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
 };
 
 type MessageRow = {
@@ -103,6 +112,12 @@ type ReservationRow = {
   message: string | null;
   created_at: string;
   status?: "pending" | "confirmed" | "cancelled";
+  source?: string | null;
+  external_ref?: string | null;
+  user_id?: number | null;
+  stripe_invoice_id?: string | null;
+  invoice_status?: string | null;
+  paid_at?: string | null;
 };
 
 type BlackoutRow = {
@@ -183,7 +198,7 @@ const reservationHook = (result: any, c: any) =>
         400
       );
 
-const RegisterSchema = z.object({
+export const RegisterSchema = z.object({
   email: z.string().trim().email("email invalide"),
   password: z.string().min(12, "le mot de passe doit contenir au moins 12 caractères"),
   name: trimToNull,
@@ -191,11 +206,16 @@ const RegisterSchema = z.object({
   lastName: trimToNull,
   phone: trimToNull,
   company: trimToNull,
+  locale: z.enum(["fr", "en"]).optional().default("fr"),
 });
 
 const LoginSchema = z.object({
   email: z.string().trim().min(1, "email requis"),
   password: z.string().min(1, "mot de passe requis"),
+});
+
+export const LocaleSchema = z.object({
+  locale: z.enum(["fr", "en"]),
 });
 
 const PasswordChangeSchema = z.object({
@@ -531,11 +551,17 @@ app.post(
             accommodationTax: confirmSettings.accommodationTax,
             type: "full",
           });
-          const data = buildReservationConfirmationData(created, invoice);
+          const data = buildReservationConfirmationData(created, invoice, {
+            accommodationTax: confirmSettings.accommodationTax,
+            tps: confirmSettings.tps,
+            tvq: confirmSettings.tvq,
+          });
           if (data) {
+            const resLocale = await resolveLocale(sql, created.email);
             await enqueueEmail(sql, {
               template: "reservation-confirmation",
               to: created.email,
+              locale: resLocale,
               payload: data as unknown as Record<string, unknown>,
             });
           }
@@ -644,10 +670,13 @@ app.post("/internal/ota-bookings", async (c) => {
   const providerLabel = d.source === "airbnb" ? "Airbnb" : "Expedia";
   const message = `Réservation ${providerLabel} #${d.externalRef}`;
 
+  // OTA bookings from known platforms are auto-confirmed; direct website bookings stay pending.
+  const otaStatus = (d.source === "airbnb" || d.source === "expedia") ? "confirmed" : "pending";
+
   // ON CONFLICT against the partial unique index dedupes resent confirmations.
   const rows = (await sql`
-    INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref)
-    VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef})
+    INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, source, external_ref, status)
+    VALUES (${name}, ${d.firstName}, ${d.lastName}, ${d.guestEmail ?? ""}, ${d.phone}, ${d.listingName}, ${d.checkIn}, ${d.checkOut}, ${d.guests}, 1, ${message}, ${d.source}, ${d.externalRef}, ${otaStatus})
     ON CONFLICT (source, external_ref) WHERE external_ref IS NOT NULL DO NOTHING
     RETURNING id, code
   `) as { id: number; code: string | null }[];
@@ -752,10 +781,10 @@ app.post(
     try {
       const passwordHash = await hashPassword(data.password);
       const rows = (await sql`
-        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company, email_verified)
-        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null}, false)
-        RETURNING id, email, name, role
-      `) as User[];
+        INSERT INTO users (email, password_hash, name, role, first_name, last_name, phone, company, email_verified, locale)
+        VALUES (${data.email}, ${passwordHash}, ${derivedName}, 'guest', ${data.firstName ?? null}, ${data.lastName ?? null}, ${data.phone ?? null}, ${data.company ?? null}, false, ${data.locale})
+        RETURNING id, email, name, role, locale
+      `) as (User & { locale: string })[];
 
       const user = rows[0];
       if (!user) {
@@ -780,6 +809,7 @@ app.post(
         await enqueueEmail(sql, {
           template: "email-verification",
           to: data.email,
+          locale: data.locale,
           payload: {
             firstName: data.firstName ?? derivedName ?? "client",
             verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
@@ -845,10 +875,10 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id, email, password_hash, name, role, email_verified
+      SELECT id, email, password_hash, name, role, email_verified, locale
       FROM users
       WHERE lower(email) = lower(${data.email})
-    `) as (User & { password_hash: string; email_verified: boolean })[];
+    `) as (User & { password_hash: string; email_verified: boolean; locale: string })[];
 
     const user = rows[0];
 
@@ -930,8 +960,8 @@ app.get("/api/auth/me", async (c) => {
 
   const sql = neon(c.env.DB_CONN);
   const userRows = (await sql`
-    SELECT discount_percent, fixed_nightly_price, fixed_weekly_price FROM users WHERE id = ${user.id}
-  `) as { discount_percent: number | null; fixed_nightly_price: number | null; fixed_weekly_price: number | null }[];
+    SELECT discount_percent, fixed_nightly_price, fixed_weekly_price, locale FROM users WHERE id = ${user.id}
+  `) as { discount_percent: number | null; fixed_nightly_price: number | null; fixed_weekly_price: number | null; locale: string }[];
 
   const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
   const adminSettings = rowsToAdminSettings(settingsRows);
@@ -952,7 +982,8 @@ app.get("/api/auth/me", async (c) => {
     adminSettings.weeklyPrice
   );
 
-  return c.json({ user: { ...user, effectiveNightlyPrice, effectiveWeeklyPrice } });
+  const meLocale = userRows[0]?.locale === "en" ? "en" : "fr";
+  return c.json({ user: { ...user, effectiveNightlyPrice, effectiveWeeklyPrice, locale: meLocale } });
 });
 
 app.post("/api/auth/logout", async (c) => {
@@ -966,9 +997,28 @@ app.post("/api/auth/logout", async (c) => {
   });
 });
 
+// Locale update — persists the authenticated user's preferred locale.
+// Anonymous locale preference is stored client-side only (cookie/localStorage).
+app.post(
+  "/api/auth/locale",
+  authRateLimiter,
+  zValidator("json", LocaleSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const { locale } = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+    await sql`UPDATE users SET locale = ${locale} WHERE id = ${user.id}`;
+    return c.json({ ok: true, locale });
+  }
+);
+
 // Password change (session-authed)
 app.post(
   "/api/auth/password",
+  authRateLimiter,
   zValidator("json", PasswordChangeSchema, authHook),
   async (c) => {
     const user = await getAuthUser(c);
@@ -1018,8 +1068,8 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const rows = (await sql`
-      SELECT id, email, first_name, name FROM users WHERE lower(email) = lower(${data.email})
-    `) as { id: number; email: string; first_name: string | null; name: string | null }[];
+      SELECT id, email, first_name, name, locale FROM users WHERE lower(email) = lower(${data.email})
+    `) as { id: number; email: string; first_name: string | null; name: string | null; locale: string }[];
 
     const user = rows[0];
     if (user) {
@@ -1033,9 +1083,11 @@ app.post(
       `;
 
       try {
+        const userLocale = user.locale === "en" ? "en" : "fr";
         await enqueueEmail(sql, {
           template: "password-reset",
           to: user.email,
+          locale: userLocale,
           payload: {
             firstName: user.first_name ?? user.name ?? "client",
             resetUrl: `${SITE_ORIGIN}/reinitialisation?token=${rawToken}`,
@@ -1238,8 +1290,8 @@ app.post(
 
     // Verify password
     const userRow = (await sql`
-      SELECT password_hash, first_name FROM users WHERE id = ${user.id}
-    `) as { password_hash: string; first_name: string | null }[];
+      SELECT password_hash, first_name, locale FROM users WHERE id = ${user.id}
+    `) as { password_hash: string; first_name: string | null; locale: string }[];
 
     if (userRow.length === 0) {
       return c.json({ error: "User not found" }, 404);
@@ -1280,9 +1332,11 @@ app.post(
         VALUES (${tokenHash}, ${user.id}, 'change', ${newEmail}, ${expiresAt})
       `;
       // Confirmation link to the NEW address…
+      const profileLocale = userRow[0].locale === "en" ? "en" : "fr";
       await enqueueEmail(sql, {
         template: "email-verification",
         to: newEmail,
+        locale: profileLocale,
         payload: {
           firstName,
           verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
@@ -1294,6 +1348,7 @@ app.post(
       await enqueueEmail(sql, {
         template: "email-change-alert",
         to: user.email,
+        locale: profileLocale,
         payload: { firstName, newEmail },
       });
     } catch (err) {
@@ -1333,7 +1388,7 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
+    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
     FROM reservations
     WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
     ORDER BY created_at DESC
@@ -1783,9 +1838,11 @@ app.post(
             const room = roomRows[0];
             // Airbnb-sourced reservations have an empty email — nothing to send to.
             if (!r || !room || !r.email) return;
+            const roomAssignLocale = await resolveLocale(sql, r.email);
             await enqueueEmail(sql, {
               template: "room-assigned",
               to: r.email,
+              locale: roomAssignLocale,
               payload: {
                 name: r.name,
                 roomLabel: room.name,
@@ -1863,12 +1920,16 @@ app.post(
     const sql = neon(c.env.DB_CONN);
 
     const res = (await sql`
-      SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count
+      SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count, invoice_status
       FROM reservations WHERE id = ${reservationId}
-    `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null }[];
+    `) as { email: string; arrive: string | null; depart: string | null; room_count: number | null; invoice_status: string | null }[];
 
     if (!res[0] || !reservationDatesValid(res[0].arrive, res[0].depart) || res[0].room_count === null) {
       return c.json({ error: "Réservation incomplète : dates ou nombre de chambres manquants." }, 422);
+    }
+
+    if (res[0].invoice_status === "paid") {
+      return c.json({ error: "Réservation déjà payée." }, 409);
     }
 
     const userRows = (await sql`
@@ -1928,7 +1989,33 @@ app.post(
       })
     );
 
-    return c.json({ ok: true, breakdown });
+    let stripeInvoiceId: string | null = null;
+    let hostedInvoiceUrl: string | null = null;
+    const stripeKey = c.env.STRIPE_SECRET_KEY;
+    if (stripeKey) {
+      try {
+        const stripe = createStripeClient(stripeKey);
+        const customerId = await findOrCreateCustomer(stripe, res[0].email);
+        const result = await createAndFinalizeInvoice(stripe, {
+          customerId,
+          amountCad: breakdown.amount,
+          description: `Facture - Réservation #${reservationId}`,
+        });
+        stripeInvoiceId = result.invoiceId;
+        hostedInvoiceUrl = result.hostedInvoiceUrl;
+      } catch (err) {
+        console.error("stripe_invoice_create_failed", err instanceof Error ? err.message : "unknown");
+        return c.json({ error: "Erreur lors de la création de la facture Stripe." }, 502);
+      }
+
+      await sql`
+        UPDATE reservations
+        SET stripe_invoice_id = ${stripeInvoiceId}, invoice_status = 'open'
+        WHERE id = ${reservationId}
+      `;
+    }
+
+    return c.json({ ok: true, breakdown, stripeInvoiceId, hostedInvoiceUrl });
   }
 );
 
@@ -2365,6 +2452,90 @@ app.route("/", createDashboardRouter({ authenticate: getAuthUser as any }));
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 app.route("/", createReviewsRouter({ authenticate: getAuthUser as any }));
 app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
+
+// Public Stripe webhook — no session auth; trust derives from signature only.
+// INV-webhook-signed: no side effect occurs before constructEventAsync succeeds.
+app.post("/webhooks/stripe", async (c) => {
+  const webhookSecret = c.env.STRIPE_WEBHOOK_SECRET;
+  const stripeKey = c.env.STRIPE_SECRET_KEY;
+
+  if (!webhookSecret || !stripeKey) {
+    return c.json({ error: "Stripe not configured" }, 400);
+  }
+
+  const signature = c.req.header("stripe-signature");
+  if (!signature) {
+    return c.json({ error: "Missing stripe-signature header" }, 400);
+  }
+
+  const rawBody = await c.req.text();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let event: any;
+  try {
+    const stripe = createStripeClient(stripeKey);
+    event = await constructStripeEvent(stripe, rawBody, signature, webhookSecret);
+  } catch {
+    return c.json({ error: "Invalid signature" }, 400);
+  }
+
+  const PAID_EVENT_TYPES = new Set([
+    "checkout.session.completed",
+    "invoice.paid",
+    "invoice.payment_succeeded",
+  ]);
+
+  if (!PAID_EVENT_TYPES.has(event.type)) {
+    return c.json({ received: true });
+  }
+
+  const obj = event.data.object as Record<string, unknown>;
+  let stripeInvoiceId: string | null = null;
+
+  if (event.type === "invoice.paid" || event.type === "invoice.payment_succeeded") {
+    stripeInvoiceId = (obj["id"] as string) ?? null;
+  } else if (event.type === "checkout.session.completed") {
+    stripeInvoiceId = (obj["invoice"] as string) ?? null;
+  }
+
+  if (!stripeInvoiceId) {
+    return c.json({ received: true });
+  }
+
+  const sql = neon(c.env.DB_CONN);
+
+  // INV-idempotent-paid: WHERE invoice_status != 'paid' prevents double-apply.
+  const updated = (await sql`
+    UPDATE reservations
+    SET status = 'confirmed', invoice_status = 'paid', paid_at = now()
+    WHERE stripe_invoice_id = ${stripeInvoiceId} AND (invoice_status IS NULL OR invoice_status != 'paid')
+    RETURNING id, name, email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room, room_count
+  `) as { id: number; name: string; email: string; arrive: string | null; depart: string | null; people: number; room: string | null; room_count: number | null }[];
+
+  if (updated.length > 0) {
+    const reservation = updated[0];
+    try {
+      const webhookLocale = await resolveLocale(sql, reservation.email);
+      await enqueueEmail(sql, {
+        template: "reservation-confirmation",
+        to: reservation.email,
+        locale: webhookLocale,
+        payload: {
+          confirmationCode: `RES-${reservation.id}`,
+          name: reservation.name,
+          checkIn: reservation.arrive ?? "",
+          checkOut: reservation.depart ?? "",
+          guests: reservation.people,
+          roomLabel: reservation.room ?? "À déterminer",
+        } as Record<string, unknown>,
+      });
+    } catch (err) {
+      console.error("webhook_confirmation_email_failed", err instanceof Error ? err.message : "unknown");
+    }
+  }
+
+  return c.json({ received: true });
+});
 
 // JSON 404 for unmatched routes.
 app.notFound((c) => {

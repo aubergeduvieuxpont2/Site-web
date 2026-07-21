@@ -255,3 +255,75 @@ describe("InvoiceCreator — close", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 });
+
+describe("InvoiceCreator — Stripe hosted invoice link", () => {
+  it("shows the Stripe link row when hostedInvoiceUrl is returned", async () => {
+    const url = "https://invoice.stripe.com/i/acct_test/test_abc";
+    const onCreateInvoice = vi.fn(
+      async (): Promise<InvoiceResult> => ({
+        ok: true,
+        breakdown,
+        hostedInvoiceUrl: url,
+        stripeInvoiceId: "in_test_abc",
+      }),
+    );
+    const { getByTestId } = render(InvoiceCreator, {
+      props: baseProps({ onCreateInvoice }),
+    });
+    await fireEvent.click(getByTestId("invoice-confirm"));
+    await waitFor(() => getByTestId("invoice-stripe-link-row"));
+
+    const link = getByTestId("invoice-stripe-link") as HTMLAnchorElement;
+    expect(link.href).toBe(url);
+    expect(link.target).toBe("_blank");
+    expect(link.rel).toContain("noopener");
+    expect(link.rel).toContain("noreferrer");
+  });
+
+  it("shows the stripe invoice id alongside the link", async () => {
+    const onCreateInvoice = vi.fn(
+      async (): Promise<InvoiceResult> => ({
+        ok: true,
+        breakdown,
+        hostedInvoiceUrl: "https://invoice.stripe.com/i/acct_test/test_xyz",
+        stripeInvoiceId: "in_test_xyz",
+      }),
+    );
+    const { getByTestId } = render(InvoiceCreator, {
+      props: baseProps({ onCreateInvoice }),
+    });
+    await fireEvent.click(getByTestId("invoice-confirm"));
+    await waitFor(() => getByTestId("invoice-stripe-id"));
+    expect(getByTestId("invoice-stripe-id").textContent?.trim()).toBe("in_test_xyz");
+  });
+
+  it("hides the Stripe link row when hostedInvoiceUrl is null", async () => {
+    const onCreateInvoice = vi.fn(
+      async (): Promise<InvoiceResult> => ({
+        ok: true,
+        breakdown,
+        hostedInvoiceUrl: null,
+        stripeInvoiceId: null,
+      }),
+    );
+    const { getByTestId, queryByTestId } = render(InvoiceCreator, {
+      props: baseProps({ onCreateInvoice }),
+    });
+    await fireEvent.click(getByTestId("invoice-confirm"));
+    // Breakdown section appears, but no stripe link
+    await waitFor(() => getByTestId("invoice-breakdown-section"));
+    expect(queryByTestId("invoice-stripe-link-row")).toBeNull();
+  });
+
+  it("hides the Stripe link row when hostedInvoiceUrl is absent from result", async () => {
+    const onCreateInvoice = vi.fn(
+      async (): Promise<InvoiceResult> => ({ ok: true, breakdown }),
+    );
+    const { getByTestId, queryByTestId } = render(InvoiceCreator, {
+      props: baseProps({ onCreateInvoice }),
+    });
+    await fireEvent.click(getByTestId("invoice-confirm"));
+    await waitFor(() => getByTestId("invoice-breakdown-section"));
+    expect(queryByTestId("invoice-stripe-link-row")).toBeNull();
+  });
+});

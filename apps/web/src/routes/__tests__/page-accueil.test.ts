@@ -205,6 +205,7 @@ describe('+page.svelte (page-accueil SSR)', () => {
         email: 'client@example.com',
         name: 'Client',
         role: 'guest',
+        locale: 'fr',
         effectiveNightlyPrice: 75,
       };
       auth.loaded = true;
@@ -221,6 +222,7 @@ describe('+page.svelte (page-accueil SSR)', () => {
         email: 'client@example.com',
         name: 'Client',
         role: 'guest',
+        locale: 'fr',
         effectiveNightlyPrice: 75,
       };
       auth.loaded = true;
@@ -237,6 +239,7 @@ describe('+page.svelte (page-accueil SSR)', () => {
         email: 'client@example.com',
         name: 'Client',
         role: 'guest',
+        locale: 'fr',
         effectiveNightlyPrice: 89,
       };
       auth.loaded = true;
@@ -254,6 +257,7 @@ describe('+page.svelte (page-accueil SSR)', () => {
         email: 'client@example.com',
         name: 'Client',
         role: 'guest',
+        locale: 'fr',
       };
       auth.loaded = true;
       const html = renderPage();
