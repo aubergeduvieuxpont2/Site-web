@@ -62,6 +62,33 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
+      # Stripe confirm-on-paid needs STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET set
+      # as Worker secrets (via `wrangler secret put`, NOT stored in this repo/GH).
+      # This lists the deployed worker's secret NAMES (never values) and flags a
+      # missing one so payments can't silently go dormant after a rotation/wipe.
+      # Currently WARN-only so it can't brick a deploy before the secrets are set.
+      # Once they are set, change `MODE=warn` to `MODE=fail` to make it blocking.
+      - name: Verify Stripe secrets present on the API worker
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MODE: warn
+        run: |
+          names="$(npx wrangler secret list --format json | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{try{console.log(JSON.parse(d).map(s=>s.name).join(" "))}catch{console.log("")}})')"
+          missing=""
+          for k in STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+            case " $names " in *" $k "*) : ;; *) missing="$missing $k" ;; esac
+          done
+          if [ -n "$missing" ]; then
+            if [ "$MODE" = "fail" ]; then
+              echo "::error::Missing Stripe Worker secret(s):$missing — set via 'wrangler secret put'"; exit 1
+            else
+              echo "::warning::Missing Stripe Worker secret(s):$missing — payments dormant until set via 'wrangler secret put'"
+            fi
+          else
+            echo "Stripe secrets present: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET"
+          fi
+
       - name: Deploy web (www)
         run: npx wrangler deploy
         working-directory: apps/web

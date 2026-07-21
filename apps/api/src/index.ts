@@ -2455,7 +2455,7 @@ app.route("/", createEmailsRouter({ authenticate: getAuthUser }));
 
 // Public Stripe webhook — no session auth; trust derives from signature only.
 // INV-webhook-signed: no side effect occurs before constructEventAsync succeeds.
-app.post("/webhooks/stripe", async (c) => {
+app.post("/api/webhooks/stripe", async (c) => {
   const webhookSecret = c.env.STRIPE_WEBHOOK_SECRET;
   const stripeKey = c.env.STRIPE_SECRET_KEY;
 
