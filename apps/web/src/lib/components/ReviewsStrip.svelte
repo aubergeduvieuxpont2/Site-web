@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { getPublicReviews, isError, type PublicReview } from "$lib/api";
+  import { t } from "$lib/i18n.svelte";
 
   // ── State ──────────────────────────────────────────────────────────────────
   let reviews = $state<PublicReview[]>([]);
@@ -17,11 +18,13 @@
   }
 
   function pluralSejours(n: number): string {
-    return n === 1 ? "1 séjour" : `${n} séjours`;
+    if (n === 1) return t("avis.stayOne");
+    return t("avis.stayMany", { n: String(n) });
   }
 
   function pluralNuits(n: number): string {
-    return n === 1 ? "1 nuit" : `${n} nuits`;
+    if (n === 1) return t("avis.nightOne");
+    return t("avis.nightMany", { n: String(n) });
   }
 
   // ── Mount: fetch up to 3 approved reviews ─────────────────────────────────
@@ -44,7 +47,7 @@
   >
     <div class="reviews-strip__inner">
       <h2 id="reviews-strip-heading" class="reviews-strip__heading" data-testid="reviews-strip-heading">
-        Ce que disent nos clients
+        {t("avis.heading")}
       </h2>
 
       <div class="reviews-strip__grid" data-testid="reviews-strip-grid">
@@ -52,7 +55,7 @@
           <div class="reviews-strip__card" data-testid="review-strip-card">
             <span
               class="reviews-strip__stars"
-              aria-label="Note : {review.rating} sur 5"
+              aria-label={t("avis.ratingAriaLabel", { rating: String(review.rating) })}
               data-testid="review-strip-stars"
             >
               {stars(review.rating)}
@@ -74,7 +77,7 @@
       </div>
 
       <a href="/avis" class="reviews-strip__all-link" data-testid="reviews-strip-all-link">
-        Voir tous les avis →
+        {t("avis.label")}
       </a>
     </div>
   </section>

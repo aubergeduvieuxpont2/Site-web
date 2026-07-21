@@ -1,27 +1,29 @@
 <script lang="ts">
   import { PRIVACY, SITE } from "$lib/content";
+  import { t } from "$lib/i18n.svelte";
   import { settings } from "$lib/settings.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
   import Seo from "$lib/components/Seo.svelte";
   import { breadcrumbSchema } from "$lib/seo";
 
-  // PRIVACY items are static copy; C-03 embeds the default contact email.
-  // Swap in the admin-configured address so the page never shows a stale one.
+  function codeToKey(code: string): string {
+    return code.replace('-', '').toLowerCase();
+  }
+
+  // Replace the static SITE.email in any translated item text with the
+  // admin-configured address so the page never shows a stale one.
   function withConfiguredEmail(item: string): string {
-    return item.replace(SITE.email, settings.contactEmail);
+    return item.replace(SITE.email, settings.contactEmail || SITE.email);
   }
 </script>
 
 <section class="page-confidentialite bg-surface">
   <!-- Header area with SectionLabel + page title -->
   <div class="header" data-testid="confidentialite-header">
-    <SectionLabel text="Confidentialité" showHairline={true} />
-    <h1 class="page-title">Protection de vos renseignements</h1>
-    <p class="lead-text">
-      On collecte le strict nécessaire pour gérer votre séjour, rien de plus.
-      Conforme à la loi québécoise.
-    </p>
+    <SectionLabel text={t('confidentialite.label')} showHairline={true} />
+    <h1 class="page-title">{t('confidentialite.heading')}</h1>
+    <p class="lead-text">{t('confidentialite.lead')}</p>
   </div>
 
   <!-- Contour divider -->
@@ -33,13 +35,13 @@
       <section class="policy-section" data-testid={`privacy-section-${section.code}`}>
         <div class="section-head">
           <span class="section-code" aria-hidden="true">{section.code}</span>
-          <h2 class="section-title">{section.title}</h2>
+          <h2 class="section-title">{t('privacy.' + codeToKey(section.code) + '.title')}</h2>
         </div>
         <ul class="item-list">
           {#each section.items as item, idx (idx)}
             <li class="item" data-testid={`privacy-item-${section.code}-${idx}`}>
               <span class="bullet" aria-hidden="true"></span>
-              <span class="item-text">{withConfiguredEmail(item)}</span>
+              <span class="item-text">{withConfiguredEmail(t('privacy.' + codeToKey(section.code) + '.i' + idx))}</span>
             </li>
           {/each}
         </ul>
@@ -51,10 +53,8 @@
   <!-- Closing CTA section -->
   <div class="closing-strip" data-testid="confidentialite-closing">
     <span class="section-code">C-04</span>
-    <h2 class="closing-title">Pour exercer vos droits</h2>
-    <p class="closing-text">
-      Accès, rectification ou suppression sur demande. Écrivez-nous directement.
-    </p>
+    <h2 class="closing-title">Des questions sur la confidentialité ?</h2>
+    <p class="closing-text">Pour toute question concernant notre politique de confidentialité ou vos données personnelles, écrivez-nous directement.</p>
     <a href={`mailto:${SITE.email}`} class="email-link">
       {SITE.email}
     </a>
@@ -254,13 +254,13 @@
 </style>
 
 <Seo
-  title="Confidentialité — Auberge du Vieux Pont"
-  description="Politique de confidentialité de L'Auberge du Vieux Pont — comment nous protégeons vos renseignements personnels."
+  title={t('confidentialite.seo.title')}
+  description={t('confidentialite.seo.description')}
   path="/confidentialite"
   schema={[
     breadcrumbSchema([
-      { name: "Accueil", path: "/" },
-      { name: "Confidentialité", path: "/confidentialite" },
+      { name: t('nav.home'), path: "/" },
+      { name: t('confidentialite.label'), path: "/confidentialite" },
     ]),
   ]}
 />

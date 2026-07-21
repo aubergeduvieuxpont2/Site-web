@@ -5,6 +5,7 @@
   import type { User, ReservationRow } from "$lib/api";
   import ProfilReservationTable from "$lib/components/ProfilReservationTable.svelte";
   import { settings } from "$lib/settings.svelte";
+  import { t, locale } from "$lib/i18n.svelte";
 
   // ── State ────────────────────────────────────────────────────────────
   type Phase = "loading" | "loaded" | "error";
@@ -26,7 +27,7 @@
       user.effectiveNightlyPrice !== settings.nightlyPrice,
   );
   const formattedRate = $derived(
-    new Intl.NumberFormat("fr-CA", {
+    new Intl.NumberFormat(locale.current === 'en' ? 'en-CA' : 'fr-CA', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(displayRate),
@@ -47,7 +48,7 @@
     pwdSuccess = false;
 
     if (newPassword.length < 8) {
-      pwdError = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
+      pwdError = t('profil.password.errorMinLength');
       return;
     }
 
@@ -144,7 +145,7 @@
     <!-- PHASE: loading -->
     <div
       class="profil__skeleton"
-      aria-label="Chargement du profil…"
+      aria-label={t('profil.loading')}
       role="status"
       data-testid="profil-skeleton"
     >
@@ -157,9 +158,9 @@
   {:else if phase === "error"}
     <!-- PHASE: error (network / unexpected) -->
     <div class="profil__error" role="alert" data-testid="profil-error">
-      <span class="profil__tech-label">ERREUR</span>
+      <span class="profil__tech-label">{t('profil.errorLabel')}</span>
       <p class="profil__error-msg" data-testid="profil-error-message">{errorMessage}</p>
-      <a href="/" class="button button--secondary">← Accueil</a>
+      <a href="/" class="button button--secondary">{t('profil.backHome')}</a>
     </div>
   {:else if user}
     <!-- PHASE: loaded -->
@@ -167,7 +168,7 @@
       <!-- ── Page header ── -->
       <header class="profil__page-header">
         <span class="profil__tech-label" data-testid="profil-role-label">
-          PROFIL — {user.role === "admin" ? "ADMINISTRATEUR" : "INVITÉ"}
+          {user.role === "admin" ? t('profil.roleLabelAdmin') : t('profil.roleLabelGuest')}
         </span>
         <div class="profil__page-header-row">
           <h1 class="profil__title" data-testid="profil-title">
@@ -176,12 +177,12 @@
           <button
             class="button button--secondary profil__logout-btn"
             type="button"
-            aria-label="Se déconnecter"
+            aria-label={t('profil.logoutAriaLabel')}
             data-testid="profil-logout-btn"
             disabled={loggingOut}
             onclick={handleLogout}
           >
-            Déconnexion
+            {t('profil.logout')}
           </button>
         </div>
       </header>
@@ -191,20 +192,20 @@
       <!-- ── User info card ── -->
       <section class="profil__section" aria-labelledby="profil-user-heading">
         <h2 id="profil-user-heading" class="profil__section-heading" data-testid="profil-user-heading">
-          Informations
+          {t('profil.info.heading')}
         </h2>
         <div class="profil__user-card" data-testid="profil-user-card">
           <dl class="profil__user-dl">
             <div class="profil__user-field">
-              <dt class="profil__user-dt">Nom</dt>
+              <dt class="profil__user-dt">{t('profil.info.name')}</dt>
               <dd class="profil__user-dd" data-testid="profil-user-name">{user.name ?? "—"}</dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">Courriel</dt>
+              <dt class="profil__user-dt">{t('profil.info.email')}</dt>
               <dd class="profil__user-dd" data-testid="profil-user-email">{user.email}</dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">Rôle</dt>
+              <dt class="profil__user-dt">{t('profil.info.role')}</dt>
               <dd class="profil__user-dd">
                 <span
                   class="profil__role-badge {user.role === 'admin'
@@ -212,26 +213,26 @@
                     : ''}"
                   data-testid="profil-role-badge"
                 >
-                  {user.role === "admin" ? "Administrateur" : "Invité"}
+                  {user.role === "admin" ? t('profil.info.adminRole') : t('profil.info.guestRole')}
                 </span>
               </dd>
             </div>
             <div class="profil__user-field">
-              <dt class="profil__user-dt">Votre tarif</dt>
+              <dt class="profil__user-dt">{t('profil.info.rate')}</dt>
               <dd
                 class="profil__user-dd profil__user-dd--rate"
                 data-testid="profil-user-rate"
               >
                 <span class="profil__rate-value">
-                  {formattedRate}&nbsp;$/nuit
+                  {formattedRate}&nbsp;{t('profil.info.rateUnit')}
                 </span>
                 {#if isCustomRate}
                   <span
                     class="profil__role-badge profil__role-badge--custom"
-                    aria-label="Tarif personnalisé"
+                    aria-label={t('profil.info.customRate')}
                     data-testid="profil-rate-badge"
                   >
-                    Tarif personnalisé
+                    {t('profil.info.customRate')}
                   </span>
                 {/if}
               </dd>
@@ -243,7 +244,7 @@
               class="button button--action profil__admin-link"
               data-testid="profil-admin-link"
             >
-              Tableau de bord →
+              {t('profil.info.adminDashboard')}
             </a>
           {/if}
         </div>
@@ -254,7 +255,7 @@
       <!-- ── Reservations ── -->
       <section class="profil__section" aria-labelledby="profil-res-heading">
         <h2 id="profil-res-heading" class="profil__section-heading" data-testid="profil-res-heading">
-          Mes réservations
+          {t('profil.reservations.heading')}
         </h2>
 
         <ProfilReservationTable {reservations} />
@@ -272,7 +273,7 @@
           class="profil__section-heading"
           data-testid="profil-pwd-heading"
         >
-          Changer le mot de passe
+          {t('profil.password.heading')}
         </h2>
 
         <form
@@ -283,7 +284,7 @@
         >
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-pwd-current">
-              Mot de passe actuel
+              {t('profil.password.current')}
             </label>
             <input
               id="profil-pwd-current"
@@ -299,8 +300,8 @@
 
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-pwd-new">
-              Nouveau mot de passe
-              <span class="profil__pwd-hint" aria-hidden="true">(8 caractères minimum)</span>
+              {t('profil.password.new')}
+              <span class="profil__pwd-hint" aria-hidden="true">({t('profil.password.hint')})</span>
             </label>
             <input
               id="profil-pwd-new"
@@ -331,7 +332,7 @@
               role="status"
               data-testid="profil-pwd-success"
             >
-              Mot de passe modifié avec succès.
+              {t('profil.password.success')}
             </div>
           {/if}
 
@@ -340,10 +341,10 @@
               class="button button--action"
               type="submit"
               disabled={pwdSubmitting}
-              aria-label="Modifier le mot de passe"
+              aria-label={t('profil.password.submitAriaLabel')}
               data-testid="profil-pwd-submit"
             >
-              {pwdSubmitting ? "Modification…" : "Modifier le mot de passe"}
+              {pwdSubmitting ? t('profil.password.submitting') : t('profil.password.submit')}
             </button>
           </div>
         </form>
@@ -361,26 +362,26 @@
           class="profil__section-heading"
           data-testid="profil-email-heading"
         >
-          Changer l'adresse courriel
+          {t('profil.emailChange.heading')}
         </h2>
 
         <p
           class="profil__email-current profil__pwd-hint"
           data-testid="profil-email-current"
         >
-          Adresse actuelle : {user.email}
+          {t('profil.emailChange.currentLabel', { email: user.email })}
         </p>
 
         <form
           class="profil__pwd-form"
           data-testid="profil-email-form"
-          aria-label="Changer l'adresse courriel"
+          aria-label={t('profil.emailChange.formAriaLabel')}
           onsubmit={handleEmailChange}
           novalidate
         >
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-email-new">
-              Nouvelle adresse courriel
+              {t('profil.emailChange.newLabel')}
             </label>
             <input
               id="profil-email-new"
@@ -396,7 +397,7 @@
 
           <div class="profil__pwd-field">
             <label class="profil__pwd-label" for="profil-email-password">
-              Mot de passe actuel
+              {t('profil.password.current')}
             </label>
             <input
               id="profil-email-password"
@@ -426,9 +427,7 @@
               role="status"
               data-testid="profil-email-success"
             >
-              Un lien de confirmation a été envoyé à votre nouvelle adresse — cliquez-le pour
-              activer le changement. Un avis a aussi été transmis à votre adresse actuelle, qui
-              reste en vigueur d'ici là.
+              {t('profil.emailChange.success')}
             </div>
           {/if}
 
@@ -437,10 +436,10 @@
               class="button button--action"
               type="submit"
               disabled={emailSubmitting}
-              aria-label="Modifier l'adresse courriel"
+              aria-label={t('profil.emailChange.submitAriaLabel')}
               data-testid="profil-email-submit"
             >
-              {emailSubmitting ? "Modification…" : "Modifier l'adresse courriel"}
+              {emailSubmitting ? t('profil.emailChange.submitting') : t('profil.emailChange.submit')}
             </button>
           </div>
         </form>
@@ -913,5 +912,5 @@
 </style>
 
 <svelte:head>
-  <title>Mon profil — Auberge du Vieux Pont</title>
+  <title>{t('profil.pageTitle')}</title>
 </svelte:head>

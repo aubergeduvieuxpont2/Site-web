@@ -3,6 +3,7 @@
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Seo from "$lib/components/Seo.svelte";
   import { getPublicReviews, isError, type PublicReview } from "$lib/api";
+  import { t, locale } from "$lib/i18n.svelte";
 
   // ── State ──────────────────────────────────────────────────────────────────
   let reviews = $state<PublicReview[]>([]);
@@ -25,7 +26,7 @@
 
   function formatDate(iso: string): string {
     try {
-      return new Date(iso).toLocaleDateString("fr-CA", {
+      return new Date(iso).toLocaleDateString(locale.current === 'en' ? 'en-CA' : 'fr-CA', {
         year: "numeric",
         month: "long",
         day: "numeric",
@@ -36,11 +37,11 @@
   }
 
   function pluralSejours(n: number): string {
-    return n === 1 ? "1 séjour" : `${n} séjours`;
+    return n === 1 ? t('avis.stayOne') : t('avis.stayMany', { n: String(n) });
   }
 
   function pluralNuits(n: number): string {
-    return n === 1 ? "1 nuit" : `${n} nuits`;
+    return n === 1 ? t('avis.nightOne') : t('avis.nightMany', { n: String(n) });
   }
 
   // ── Load all approved reviews ──────────────────────────────────────────────
@@ -61,14 +62,14 @@
   <!-- Header -->
   <div class="page-avis__header">
     <div class="page-avis__header-inner">
-      <SectionLabel text="Avis des clients" showHairline={false} />
-      <h1 class="page-avis__title" data-testid="avis-title">Témoignages</h1>
+      <SectionLabel text={t('avis.label')} showHairline={false} />
+      <h1 class="page-avis__title" data-testid="avis-title">{t('avis.heading')}</h1>
 
       {#if averageRating !== null && total > 0}
         <div class="page-avis__average" data-testid="avis-average">
           <span
             class="page-avis__average-stars"
-            aria-label="Note moyenne : {averageRating.toFixed(1)} sur 5"
+            aria-label={t('avis.ratingAriaLabel', { rating: averageRating.toFixed(1) })}
             data-testid="avis-average-stars"
           >
             {starsPartial(averageRating)}
@@ -77,7 +78,7 @@
             {averageRating.toFixed(1)}/5
           </span>
           <span class="page-avis__average-count" data-testid="avis-total">
-            ({total} {total === 1 ? "avis" : "avis"})
+            {total} {total === 1 ? t('avis.review.singular') : t('avis.review.plural')}
           </span>
         </div>
       {/if}
@@ -87,7 +88,7 @@
   <!-- Content -->
   <div class="page-avis__content">
     {#if loading}
-      <div class="page-avis__loading" aria-busy="true" aria-label="Chargement des avis…" data-testid="avis-loading">
+      <div class="page-avis__loading" aria-busy="true" aria-label={t('avis.loading.ariaLabel')} data-testid="avis-loading">
         <span class="page-avis__spinner" aria-hidden="true"></span>
       </div>
     {:else if error}
@@ -96,7 +97,7 @@
       </div>
     {:else if reviews.length === 0}
       <div class="page-avis__empty" data-testid="avis-empty">
-        <p>Aucun avis pour le moment. Revenez bientôt.</p>
+        <p>{t('avis.empty.body')}</p>
       </div>
     {:else}
       <div class="page-avis__list" data-testid="avis-list">
@@ -104,12 +105,12 @@
           <article
             class="page-avis__card"
             data-testid="avis-card"
-            aria-label="Avis de {review.displayName}"
+            aria-label={review.displayName}
           >
             <header class="page-avis__card-header">
               <span
                 class="page-avis__card-stars"
-                aria-label="Note : {review.rating} sur 5"
+                aria-label={t('avis.ratingAriaLabel', { rating: String(review.rating) })}
                 data-testid="avis-card-stars"
               >
                 {stars(review.rating)}
@@ -149,8 +150,8 @@
 </div>
 
 <Seo
-  title="Avis des clients — Auberge du Vieux Pont"
-  description="Lisez les témoignages de nos clients sur leur séjour à l'Auberge du Vieux Pont à Saint-Raymond."
+  title={t('avis.seo.title')}
+  description={t('avis.seo.description')}
   path="/avis"
 />
 

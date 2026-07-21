@@ -3,6 +3,7 @@
   import { SITE, phoneToHref } from "$lib/content";
   import { settings } from "$lib/settings.svelte";
   import Wordmark from "./Wordmark.svelte";
+  import { t } from "$lib/i18n.svelte";
 
   let footerEl: HTMLElement | undefined;
   let visible = $state(false);
@@ -40,15 +41,12 @@
   class="footer"
   class:footer--visible={visible}
   data-testid="footer"
-  aria-label="Pied de page"
+  aria-label={t("footer.aria")}
 >
   <div class="footer__inner">
     <!-- Left column: brand + contact -->
     <div class="footer__brand" data-testid="footer-brand">
       <Wordmark size="sm" variant="dark" />
-      <p class="footer__tagline" data-testid="footer-tagline">
-        {SITE.tagline}
-      </p>
       <address class="footer__address" data-testid="footer-address">
         <p class="footer__address-line" data-testid="footer-address-street">
           {SITE.address.street}
@@ -60,7 +58,7 @@
           href={phoneHref}
           class="footer__phone"
           data-testid="footer-phone"
-          aria-label="Téléphone: {phoneDisplay}"
+          aria-label={t("footer.phone_aria", { phone: phoneDisplay })}
         >
           {phoneDisplay}
         </a>
@@ -70,7 +68,7 @@
     <!-- Right column: footer-only nav -->
     <nav
       class="footer__nav"
-      aria-label="Navigation secondaire"
+      aria-label={t("footer.nav_aria")}
       data-testid="footer-nav"
     >
       <a
@@ -78,21 +76,21 @@
         class="footer__link"
         data-testid="footer-link-avis"
       >
-        Avis des clients
+        {t("footer.links.avis")}
       </a>
       <a
         href="/politiques"
         class="footer__link"
         data-testid="footer-link-politiques"
       >
-        Politiques de l'établissement
+        {t("footer.links.politiques")}
       </a>
       <a
         href="/confidentialite"
         class="footer__link"
         data-testid="footer-link-confidentialite"
       >
-        Politique de confidentialité
+        {t("footer.links.confidentialite")}
       </a>
     </nav>
   </div>
@@ -100,7 +98,7 @@
   <!-- Bottom strip: copyright -->
   <div class="footer__copy" data-testid="footer-copy">
     <span class="footer__copy-text" data-testid="footer-copy-text">
-      © {new Date().getFullYear()} {SITE.name}. Tous droits réservés.
+      © {new Date().getFullYear()} {SITE.name}. {t("footer.rights")}
     </span>
     <span class="footer__citq" data-testid="footer-citq">
       CITQ #{SITE.citq}

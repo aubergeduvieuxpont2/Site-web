@@ -2,18 +2,26 @@
   import { reveal, revealStagger } from '$lib/motion';
   import { SITE, phoneToHref } from '$lib/content';
   import { settings } from '$lib/settings.svelte';
+  import { t } from '$lib/i18n.svelte';
   import Seo from '$lib/components/Seo.svelte';
   import { breadcrumbSchema } from '$lib/seo';
   import Contour from '$lib/components/Contour.svelte';
   import ImagePanel from '$lib/components/ImagePanel.svelte';
   import SectionLabel from '$lib/components/SectionLabel.svelte';
 
-  const values = [
-    { code: '01', title: 'Honnête', text: "On dit les choses comme elles sont. Pas de promesses gonflées, pas de frais cachés. Le prix affiché, c'est le prix payé." },
-    { code: '02', title: 'Robuste', text: "Bâti pour durer. Planchers de béton, casiers d'acier, murs qui encaissent les bottes pleines de boue sans broncher." },
-    { code: '03', title: 'Accessible', text: "Un tarif unique pour tous. Confort et repos pour chaque travailleur, peu importe le budget. Le repos n'est pas un luxe réservé." },
-    { code: '04', title: 'Ancré', text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les chantiers et le monde qui y travaille." },
-  ];
+  const values = $derived([
+    { code: '01', title: t('aboutValues.v01.title'), text: t('aboutValues.v01.text') },
+    { code: '02', title: t('aboutValues.v02.title'), text: t('aboutValues.v02.text') },
+    { code: '03', title: t('aboutValues.v03.title'), text: t('aboutValues.v03.text') },
+    { code: '04', title: t('aboutValues.v04.title'), text: t('aboutValues.v04.text') },
+  ]);
+
+  const tags = $derived([
+    t('about.tags.tag0'),
+    t('about.tags.tag1'),
+    t('about.tags.tag2'),
+    t('about.tags.tag3'),
+  ]);
 
   // Configured contact phone with graceful fallback to the static default.
   const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
@@ -29,22 +37,21 @@
     aria-labelledby="a-propos-heading"
   >
     <div class="page-a-propos__inner">
-      <SectionLabel text="À propos · Est. {SITE.established}" showHairline={false} />
+      <SectionLabel text={t('about.intro.label', { year: SITE.established })} showHairline={false} />
       <h1
         id="a-propos-heading"
         class="page-a-propos__display"
         use:reveal={{ y: 20, delay: 0.05 }}
         data-testid="a-propos-heading"
       >
-        Bâti pour ceux qui ne reculent devant rien.
+        {t('about.intro.heading')}
       </h1>
       <p
         class="page-a-propos__lead"
         use:reveal={{ y: 16, delay: 0.12 }}
         data-testid="a-propos-lead"
       >
-        Depuis un demi-siècle, l'Auberge du Vieux Pont loge les travailleurs, les pêcheurs
-        et les équipes de terrain d'aujourd'hui. Même promesse&nbsp;: un repos honnête, sans flafla.
+        {t('about.intro.lead')}
       </p>
     </div>
   </section>
@@ -64,33 +71,24 @@
 
         <!-- Text column — left on desktop, top on mobile -->
         <div class="page-a-propos__histoire-text">
-          <SectionLabel text="D'où l'on vient" />
+          <SectionLabel text={t('about.history.label')} />
           <h2
             id="a-propos-histoire-heading"
             class="page-a-propos__section-heading"
             use:reveal={{ y: 20, delay: 0.05 }}
             data-testid="a-propos-histoire-heading"
           >
-            Une maison plantée au bord de la rivière.
+            {t('about.history.heading')}
           </h2>
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
-              Tout commence près du vieux pont Tessier, là où la rivière Sainte-Anne taille
-              son chemin dans la roche de Portneuf. En {SITE.established}, la bâtisse ouvre
-              ses portes pour loger ceux qui travaillaient fort&nbsp;: bûcherons, gens de
-              chantier, pêcheurs venus tester l'eau froide au petit matin.
+              {t('about.history.body0', { year: SITE.established })}
             </p>
             <p use:reveal={{ y: 18, delay: 0.15 }}>
-              On n'a jamais cherché à impressionner. On a cherché à dépanner. Un lit propre,
-              un repas chaud, un toit solide quand la journée finissait tard et que la
-              suivante commençait tôt. C'est devenu notre réputation — et on ne l'a pas lâchée
-              depuis.
+              {t('about.history.body1')}
             </p>
             <p use:reveal={{ y: 18, delay: 0.20 }}>
-              Avec les années, le monde a changé de bottes. La foresterie s'est mécanisée et
-              les chantiers du secteur hydroélectrique se sont développés partout en Portneuf. On a ajouté un séchage
-              pour vêtements de travail, des bornes de recharge pour outils et radios, un local
-              sécurisé renforcé. Mais l'esprit, lui, n'a pas bougé d'un pouce.
+              {t('about.history.body2')}
             </p>
           </div>
           <figure
@@ -99,10 +97,10 @@
             data-testid="a-propos-quote"
           >
             <blockquote class="page-a-propos__blockquote">
-              « On ne vend pas du luxe. On vend du repos qui tient la route. »
+              {t('about.history.quote')}
             </blockquote>
             <figcaption class="page-a-propos__quote-caption">
-              La maison · depuis {SITE.established}
+              {t('about.history.quoteCaption', { year: SITE.established })}
             </figcaption>
           </figure>
         </div>
@@ -116,8 +114,8 @@
             imgKey="bridge.jpg"
             picsumSeed={88}
             aspectRatio="4/5"
-            caption="Le Pont Tessier, Saint-Raymond"
-            alt="Le vieux pont Tessier sur la rivière Sainte-Anne en automne"
+            caption={t('about.history.imageCaption')}
+            alt={t('about.history.imageAlt')}
           />
         </div>
 
@@ -137,14 +135,14 @@
   >
     <div class="page-a-propos__inner">
       <div class="page-a-propos__valeurs-header">
-        <SectionLabel text="Nos principes" />
+        <SectionLabel text={t('about.values.label')} />
         <h2
           id="a-propos-valeurs-heading"
           class="page-a-propos__section-heading"
           use:reveal={{ y: 20, delay: 0.05 }}
           data-testid="a-propos-valeurs-heading"
         >
-          Quatre principes qui ne se négocient pas.
+          {t('about.values.heading')}
         </h2>
       </div>
       <div
@@ -191,33 +189,28 @@
             imgKey="village-river.jpg"
             picsumSeed={33}
             aspectRatio="3/2"
-            caption="Saint-Raymond · Portneuf"
-            alt="Le village de Saint-Raymond le long de la rivière Sainte-Anne"
+            caption={t('about.anchoring.imageCaption')}
+            alt={t('about.anchoring.imageAlt')}
           />
         </div>
 
         <!-- Text column — right on desktop, bottom on mobile -->
         <div class="page-a-propos__ancrage-text">
-          <SectionLabel text="Ce qu'on défend" />
+          <SectionLabel text={t('about.anchoring.label')} />
           <h2
             id="a-propos-ancrage-heading"
             class="page-a-propos__section-heading"
             use:reveal={{ y: 20, delay: 0.05 }}
             data-testid="a-propos-ancrage-heading"
           >
-            Ancrés à Saint-Raymond, les pieds dans la rivière.
+            {t('about.anchoring.heading')}
           </h2>
           <div class="page-a-propos__body-stack">
             <p use:reveal={{ y: 18, delay: 0.10 }}>
-              On n'est pas une chaîne. On est une auberge de Portneuf, tenue par du monde
-              d'ici, à deux pas des chantiers forestiers et des lignes du réseau hydroélectrique. La rivière
-              Sainte-Anne coule sous nos fenêtres&nbsp;; les principaux sites de travail sont
-              à moins de 30 minutes.
+              {t('about.anchoring.body0')}
             </p>
             <p use:reveal={{ y: 18, delay: 0.15 }}>
-              Ça veut dire des conseils qui valent quelque chose, des horaires qui collent à
-              la vraie vie, et l'assurance qu'on comprend ce que c'est qu'une longue
-              journée de chantier — réelle et épuisante.
+              {t('about.anchoring.body1')}
             </p>
           </div>
           <div
@@ -225,7 +218,7 @@
             use:reveal={{ y: 16, delay: 0.20 }}
             data-testid="a-propos-tags"
           >
-            {#each ['Saint-Raymond', 'Portneuf', 'Vue rivière', 'Foresterie'] as tag (tag)}
+            {#each tags as tag (tag)}
               <span class="page-a-propos__tag">{tag}</span>
             {/each}
           </div>
@@ -239,21 +232,20 @@
   <section
     class="page-a-propos__cta"
     data-testid="a-propos-cta"
-    aria-label="Nous contacter"
+    aria-label={t('about.cta.heading')}
   >
     <div class="page-a-propos__inner page-a-propos__cta-layout">
       <div use:reveal={{ y: 22 }} class="page-a-propos__cta-copy">
         <!-- Raw span instead of SectionLabel to avoid :global overrides on dark bg -->
-        <span class="page-a-propos__cta-eyebrow" aria-hidden="true">Visite</span>
+        <span class="page-a-propos__cta-eyebrow" aria-hidden="true">{t('about.cta.eyebrow')}</span>
         <h2
           class="page-a-propos__cta-heading"
           data-testid="a-propos-cta-heading"
         >
-          Venez voir par vous-même.
+          {t('about.cta.heading')}
         </h2>
         <p class="page-a-propos__cta-lead">
-          Le mieux pour comprendre ce qu'on est, c'est de pousser la porte.
-          Appelez-nous ou écrivez-nous — on vous attend au bord du pont.
+          {t('about.cta.lead')}
         </p>
       </div>
       <div
@@ -264,7 +256,7 @@
           href={phoneHref}
           class="page-a-propos__cta-phone"
           data-testid="a-propos-cta-phone"
-          aria-label="Appeler le {phoneDisplay}"
+          aria-label={t('about.cta.callAriaLabel', { phone: phoneDisplay })}
         >
           {phoneDisplay}
         </a>
@@ -273,7 +265,7 @@
           class="page-a-propos__cta-link"
           data-testid="a-propos-cta-contact"
         >
-          Nous joindre
+          {t('about.cta.contact')}
         </a>
       </div>
     </div>
@@ -673,13 +665,13 @@
 </style>
 
 <Seo
-  title="À propos — Auberge du Vieux Pont"
-  description="L'Auberge du Vieux Pont à Saint-Raymond depuis 1972 — un hébergement pensé pour les équipes de foresterie et du secteur hydroélectrique de Portneuf."
+  title={t('about.seo.title')}
+  description={t('about.seo.description')}
   path="/a-propos"
   schema={[
     breadcrumbSchema([
-      { name: 'Accueil', path: '/' },
-      { name: 'À propos', path: '/a-propos' },
+      { name: t('nav.home'), path: '/' },
+      { name: t('nav.a_propos'), path: '/a-propos' },
     ]),
   ]}
 />

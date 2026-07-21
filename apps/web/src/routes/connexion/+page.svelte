@@ -4,6 +4,7 @@
   import { loadAuth } from "$lib/auth.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
+  import { t } from "$lib/i18n.svelte";
 
   // ── Login state ──
   let loginEmail = $state("");
@@ -45,8 +46,8 @@
       // message; only a transport failure is surfaced distinctly.
       loginError =
         result.error === "Réseau indisponible"
-          ? "Connexion impossible. Veuillez réessayer."
-          : "Identifiants invalides";
+          ? t('connexion.login.networkError')
+          : t('connexion.login.error');
       loginStatus = "idle";
     } else {
       // Load the canonical session (with computed effectiveNightlyPrice) into
@@ -74,7 +75,7 @@
     // address exists (no user enumeration). Only a transport failure surfaces;
     // any success swaps the whole zone for a generic confirmation.
     if (isError(result)) {
-      forgotError = "Connexion impossible. Veuillez réessayer.";
+      forgotError = t('connexion.forgot.networkError');
       forgotStatus = "idle";
     } else {
       forgotSent = true;
@@ -89,7 +90,7 @@
     // Client-side length check before hitting the network. The API enforces the
     // same rule server-side; this is only a fast-fail for UX.
     if (regPassword.length < 8) {
-      regError = "Le mot de passe doit contenir au moins 8 caractères.";
+      regError = t('connexion.register.errorPassword');
       return;
     }
 
@@ -105,8 +106,8 @@
     if (isError(result)) {
       regError =
         result.error === "Réseau indisponible"
-          ? "Connexion impossible. Veuillez réessayer."
-          : result.error; // includes "Un compte existe déjà" (409)
+          ? t('connexion.register.errorNetwork')
+          : result.error; // includes server-side messages e.g. "Un compte existe déjà"
       regStatus = "idle";
     } else {
       // Confirm the account was created and a verification email is on its way.
@@ -124,9 +125,9 @@
 
 <div class="connexion">
   <div class="connexion__page-header">
-    <SectionLabel text="Connexion" showHairline={true} />
-    <h1 class="connexion__display">Espace client</h1>
-    <p class="connexion__lead">Accédez à vos réservations ou créez votre espace.</p>
+    <SectionLabel text={t('connexion.label')} showHairline={true} />
+    <h1 class="connexion__display">{t('connexion.heading')}</h1>
+    <p class="connexion__lead">{t('connexion.lead')}</p>
   </div>
 
   <div class="connexion__panels">
@@ -134,19 +135,19 @@
     <section class="connexion__panel" aria-labelledby="login-heading" data-testid="panel-login">
       <header class="connexion__panel-header">
         <span class="connexion__panel-tag" aria-hidden="true">AUTH-01</span>
-        <h2 class="connexion__panel-heading" id="login-heading">Se connecter</h2>
+        <h2 class="connexion__panel-heading" id="login-heading">{t('connexion.login.heading')}</h2>
       </header>
 
       <form
         class="connexion__form"
         id="login-form"
         novalidate
-        aria-label="Formulaire de connexion"
+        aria-label={t('connexion.login.ariaLabel')}
         data-testid="form-login"
         onsubmit={handleLogin}
       >
         <div class="connexion__field">
-          <label class="connexion__label" for="login-email">Courriel</label>
+          <label class="connexion__label" for="login-email">{t('connexion.login.email')}</label>
           <input
             class="connexion__input"
             id="login-email"
@@ -155,12 +156,12 @@
             aria-required="true"
             data-testid="login-email"
             bind:value={loginEmail}
-            placeholder="vous@exemple.com"
+            placeholder={t('connexion.login.emailPlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="login-password">Mot de passe</label>
+          <label class="connexion__label" for="login-password">{t('connexion.login.password')}</label>
           <input
             class="connexion__input"
             id="login-password"
@@ -184,7 +185,7 @@
 
         <div class="connexion__actions">
           <Button type="submit" variant="primary" disabled={loginStatus === "sending"}>
-            {loginStatus === "sending" ? "Connexion…" : "Se connecter"}
+            {loginStatus === "sending" ? t('connexion.login.submitting') : t('connexion.login.submit')}
           </Button>
         </div>
       </form>
@@ -201,7 +202,7 @@
             onclick={toggleForgot}
           >
             <span class="connexion__forgot-chevron" aria-hidden="true">›</span>
-            Mot de passe oublié ?
+            {t('connexion.forgot.trigger')}
           </button>
 
           <!-- Drawer: grid-rows collapse trick; inert removes it from tab order
@@ -211,20 +212,20 @@
             class:is-open={forgotOpen}
             id="forgot-drawer"
             role="region"
-            aria-label="Réinitialisation du mot de passe"
+            aria-label={t('connexion.forgot.drawerAriaLabel')}
             inert={!forgotOpen}
           >
             <div class="connexion__forgot-drawer-inner">
               <form
                 class="connexion__forgot-form"
                 novalidate
-                aria-label="Formulaire de réinitialisation"
+                aria-label={t('connexion.forgot.ariaLabel')}
                 data-testid="forgot-form"
                 onsubmit={handleForgot}
               >
                 <div class="connexion__field">
                   <label class="connexion__label" for="forgot-email">
-                    Votre adresse courriel
+                    {t('connexion.forgot.emailLabel')}
                   </label>
                   <input
                     class="connexion__input"
@@ -234,7 +235,7 @@
                     aria-required="true"
                     data-testid="forgot-email"
                     bind:value={forgotEmail}
-                    placeholder="vous@exemple.com"
+                    placeholder={t('connexion.forgot.emailPlaceholder')}
                   />
                 </div>
 
@@ -250,7 +251,7 @@
 
                 <div class="connexion__actions">
                   <Button type="submit" variant="primary" disabled={forgotStatus === "sending"}>
-                    {forgotStatus === "sending" ? "Envoi…" : "Envoyer"}
+                    {forgotStatus === "sending" ? t('connexion.forgot.submitting') : t('connexion.forgot.submit')}
                   </Button>
                 </div>
               </form>
@@ -261,8 +262,7 @@
         <div class="connexion__forgot-success" data-testid="forgot-success">
           <span class="connexion__forgot-success-icon" aria-hidden="true">✓</span>
           <p class="connexion__forgot-success-text">
-            Si cette adresse est associée à un compte, un administrateur pourra
-            vous transmettre un lien de réinitialisation.
+            {t('connexion.forgot.successText')}
           </p>
         </div>
       {/if}
@@ -276,21 +276,21 @@
     >
       <header class="connexion__panel-header">
         <span class="connexion__panel-tag" aria-hidden="true">AUTH-02</span>
-        <h2 class="connexion__panel-heading" id="register-heading">Créer un compte</h2>
+        <h2 class="connexion__panel-heading" id="register-heading">{t('connexion.register.heading')}</h2>
       </header>
 
       <form
         class="connexion__form"
         id="register-form"
         novalidate
-        aria-label="Formulaire d'inscription"
+        aria-label={t('connexion.register.ariaLabel')}
         data-testid="form-register"
         onsubmit={handleRegister}
       >
         <!-- Name row: first + last side-by-side on ≥480px -->
         <div class="connexion__name-row">
           <div class="connexion__field">
-            <label class="connexion__label" for="reg-first-name">Prénom</label>
+            <label class="connexion__label" for="reg-first-name">{t('connexion.register.firstName')}</label>
             <input
               class="connexion__input"
               id="reg-first-name"
@@ -298,11 +298,11 @@
               autocomplete="given-name"
               data-testid="register-first-name"
               bind:value={regFirstName}
-              placeholder="Ada"
+              placeholder={t('connexion.register.firstNamePlaceholder')}
             />
           </div>
           <div class="connexion__field">
-            <label class="connexion__label" for="reg-last-name">Nom de famille</label>
+            <label class="connexion__label" for="reg-last-name">{t('connexion.register.lastName')}</label>
             <input
               class="connexion__input"
               id="reg-last-name"
@@ -310,13 +310,13 @@
               autocomplete="family-name"
               data-testid="register-last-name"
               bind:value={regLastName}
-              placeholder="Lovelace"
+              placeholder={t('connexion.register.lastNamePlaceholder')}
             />
           </div>
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="reg-email">Courriel</label>
+          <label class="connexion__label" for="reg-email">{t('connexion.register.email')}</label>
           <input
             class="connexion__input"
             id="reg-email"
@@ -325,12 +325,12 @@
             aria-required="true"
             data-testid="register-email"
             bind:value={regEmail}
-            placeholder="vous@exemple.com"
+            placeholder={t('connexion.register.emailPlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
-          <label class="connexion__label" for="reg-password">Mot de passe</label>
+          <label class="connexion__label" for="reg-password">{t('connexion.register.password')}</label>
           <input
             class="connexion__input"
             id="reg-password"
@@ -342,14 +342,14 @@
             bind:value={regPassword}
           />
           <span class="connexion__field-hint" id="reg-password-hint">
-            8 caractères minimum
+            {t('connexion.register.passwordHint')}
           </span>
         </div>
 
         <div class="connexion__field">
           <label class="connexion__label" for="reg-phone">
-            Téléphone
-            <span class="connexion__field-optional" aria-label="optionnel">(optionnel)</span>
+            {t('connexion.register.phone')}
+            <span class="connexion__field-optional" aria-label={t('connexion.register.phoneOptional')}>{t('connexion.register.phoneOptional')}</span>
           </label>
           <input
             class="connexion__input"
@@ -358,14 +358,14 @@
             autocomplete="tel"
             data-testid="register-phone"
             bind:value={regPhone}
-            placeholder="+1 418 555-0100"
+            placeholder={t('connexion.register.phonePlaceholder')}
           />
         </div>
 
         <div class="connexion__field">
           <label class="connexion__label" for="reg-company">
-            Employeur / entreprise
-            <span class="connexion__field-optional" aria-label="optionnel">(optionnel)</span>
+            {t('connexion.register.company')}
+            <span class="connexion__field-optional" aria-label={t('connexion.register.companyOptional')}>{t('connexion.register.companyOptional')}</span>
           </label>
           <input
             class="connexion__input"
@@ -374,7 +374,7 @@
             autocomplete="organization"
             data-testid="register-company"
             bind:value={regCompany}
-            placeholder="Hydro-Québec"
+            placeholder={t('connexion.register.companyPlaceholder')}
           />
         </div>
 
@@ -396,15 +396,14 @@
             data-testid="register-notice"
           >
             <span class="connexion__notice-text">
-              Un courriel de confirmation vous a été envoyé — cliquez le lien pour activer
-              votre compte et retrouver vos réservations.
+              {t('connexion.register.notice')}
             </span>
           </div>
         {/if}
 
         <div class="connexion__actions">
           <Button type="submit" variant="action" disabled={regStatus === "sending"}>
-            {regStatus === "sending" ? "Création…" : "Créer mon compte"}
+            {regStatus === "sending" ? t('connexion.register.submitting') : t('connexion.register.submit')}
           </Button>
         </div>
       </form>
@@ -808,5 +807,5 @@
 </style>
 
 <svelte:head>
-  <title>Connexion — Auberge du Vieux Pont</title>
+  <title>{t('connexion.pageTitle')}</title>
 </svelte:head>

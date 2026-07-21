@@ -6,7 +6,8 @@
   import Footer from "$lib/components/Footer.svelte";
   import MaintenanceBanner from "$lib/components/MaintenanceBanner.svelte";
   import { loadSettings, settings } from "$lib/settings.svelte";
-  import { loadAuth } from "$lib/auth.svelte";
+  import { auth, loadAuth } from "$lib/auth.svelte";
+  import { setLocale, t } from "$lib/i18n.svelte";
 
   // The shell only needs the children snippet. The authenticated user loaded in
   // `+layout.ts` is surfaced as `data.user` for child routes (profil, admin);
@@ -25,6 +26,16 @@
   $effect(() => {
     const px = settings.reservationsEnabled ? "0px" : `${bannerHeight}px`;
     document.documentElement.style.setProperty("--maintenance-h", px);
+  });
+
+  // Sync the locale store whenever the authenticated user changes (login,
+  // session restore). Anonymous visitors keep their cookie/localStorage locale.
+  $effect(() => {
+    const u = auth.user as (typeof auth.user & { locale?: string }) | null;
+    const userLocale = u?.locale;
+    if (userLocale === "fr" || userLocale === "en") {
+      setLocale(userLocale);
+    }
   });
 
   function triggerEnter() {
@@ -56,7 +67,7 @@
 </script>
 
 <a href="#main" class="layout-shell__skip-link" data-testid="skip-link">
-  Passer au contenu principal
+  {t("layout.skip_link")}
 </a>
 
 <Nav />

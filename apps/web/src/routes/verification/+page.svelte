@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { page } from "$app/stores";
   import { verifyEmail, isError } from "$lib/api";
+  import { t } from "$lib/i18n.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Button from "$lib/components/Button.svelte";
   import Contour from "$lib/components/Contour.svelte";
@@ -53,13 +54,13 @@
 
 <main class="verification" data-testid="verification-page">
   <div class="verification__container">
-    <SectionLabel text="Vérification" showHairline={true} />
+    <SectionLabel text={t('verification.label')} showHairline={true} />
 
     {#if viewState === "loading"}
       <div class="verification__loading-state" data-testid="verify-loading-state" aria-busy="true">
         <div class="verification__spinner" aria-hidden="true"></div>
         <p class="verification__loading-body" role="status" aria-live="polite">
-          Confirmation de votre adresse courriel en cours…
+          {t('verification.loading')}
         </p>
       </div>
     {:else if viewState === "success"}
@@ -71,18 +72,16 @@
           </svg>
         </div>
         <h1 class="verification__success-heading" tabindex="-1" bind:this={outcomeHeading}>
-          Adresse confirmée
+          {t('verification.success.heading')}
         </h1>
         <p class="verification__success-body" data-testid="verify-success-body">
           {#if purpose === "change"}
-            Votre nouvelle adresse courriel{confirmedEmail ? ` (${confirmedEmail})` : ""} est
-            maintenant active. Vous l'utiliserez désormais pour vous connecter.
+            {t('verification.success.bodyChange', { email: confirmedEmail ? ` (${confirmedEmail})` : '' })}
           {:else}
-            Votre adresse courriel a été confirmée. Votre compte est maintenant activé et vous
-            retrouvez vos réservations.
+            {t('verification.success.bodyRegister')}
           {/if}
         </p>
-        <Button href="/profil" variant="secondary">Accéder à mon espace</Button>
+        <Button href="/profil" variant="secondary">{t('verification.success.cta')}</Button>
       </div>
     {:else}
       <div class="verification__error-state" role="alert" data-testid="verify-error-state">
@@ -93,14 +92,13 @@
           </svg>
         </div>
         <h1 class="verification__error-heading" tabindex="-1" bind:this={outcomeHeading}>
-          Lien invalide ou expiré
+          {t('verification.error.heading')}
         </h1>
         <p class="verification__error-body">
-          Ce lien de confirmation n'est plus valide ou a déjà été utilisé. Connectez-vous pour
-          demander un nouveau lien.
+          {t('verification.error.body')}
         </p>
         <a href="/connexion" class="verification__back-link" data-testid="verify-back-to-login">
-          Retour à la connexion
+          {t('verification.error.backLink')}
         </a>
       </div>
     {/if}
@@ -324,5 +322,5 @@
 </style>
 
 <svelte:head>
-  <title>Confirmation de votre adresse courriel — Auberge du Vieux Pont</title>
+  <title>{t('verification.pageTitle')}</title>
 </svelte:head>

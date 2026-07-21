@@ -1,9 +1,5 @@
 <script lang="ts">
-  // Presentational, fetch-free status strip shown when reservations are paused.
-  // The single optional `text` prop defaults to the fixed FR maintenance string.
-  let {
-    text = "Réservations en pause — maintenance en cours.",
-  }: { text?: string } = $props();
+  import { t } from "$lib/i18n.svelte";
 </script>
 
 <div
@@ -12,7 +8,7 @@
   aria-live="polite"
   data-testid="maintenance-banner"
 >
-  {text}
+  {t("contact.form.maintenanceNotice")}
 </div>
 
 <style>

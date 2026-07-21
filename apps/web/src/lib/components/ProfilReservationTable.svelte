@@ -1,18 +1,19 @@
 <script lang="ts">
   import { formatDateOnly } from "$lib/utils";
   import type { ReservationRow } from "$lib/api";
+  import { t } from "$lib/i18n.svelte";
 
   let { reservations = [] }: { reservations: ReservationRow[] } = $props();
 </script>
 
 <div class="profil-reservation-table" data-testid="profil-reservation-table">
-  <table role="grid" aria-label="Vos réservations">
+  <table role="grid" aria-label={t("profil.reservations_aria")}>
     <thead>
       <tr>
-        <th scope="col" data-testid="col-arrive">Arrivée</th>
-        <th scope="col" data-testid="col-depart">Départ</th>
-        <th scope="col" data-testid="col-people">Personnes</th>
-        <th scope="col" data-testid="col-room">Chambre</th>
+        <th scope="col" data-testid="col-arrive">{t("profil.col.arrive")}</th>
+        <th scope="col" data-testid="col-depart">{t("profil.col.depart")}</th>
+        <th scope="col" data-testid="col-people">{t("profil.col.people")}</th>
+        <th scope="col" data-testid="col-room">{t("profil.col.room")}</th>
       </tr>
     </thead>
     <tbody>
@@ -28,7 +29,7 @@
   </table>
   {#if reservations.length === 0}
     <p class="profil-reservation-table__empty" data-testid="empty-state">
-      Aucune réservation
+      {t("profil.empty")}
     </p>
   {/if}
 </div>
