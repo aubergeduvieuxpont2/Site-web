@@ -25,7 +25,7 @@ vi.mock("$app/stores", () => ({
 // The settings store is a plain reactive object; stub it so the component reads
 // a deterministic public price without touching the network.
 vi.mock("$lib/settings.svelte", () => ({
-  settings: { nightlyPrice: 89, contactEmail: "x@y.z", marketingRoomCount: 12, publicRoomCount: 12 },
+  settings: { nightlyPrice: 89, contactEmail: "x@y.z", publicRoomCount: 12 },
 }));
 
 // ---------------------------------------------------------------------------

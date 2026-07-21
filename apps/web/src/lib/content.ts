@@ -77,7 +77,6 @@ export const FAQ: Faq[] = [
 export const DEFAULTS = {
   nightlyPrice: 89,
   contactEmail: "info@aubergeduvieuxpont.ca",
-  marketingRoomCount: 12,
   publicRoomCount: 12,
   tps: 5,
   tvq: 9.975,

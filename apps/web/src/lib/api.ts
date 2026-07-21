@@ -94,7 +94,6 @@ export interface PublicSettings {
   nightlyPrice: number;
   contactEmail: string;
   contactPhone: string;
-  marketingRoomCount: number;
   // Live count of publicly-visible rooms, served by GET /api/settings. Kept
   // required client-side: loadSettings seeds it from DEFAULTS (12) so callers
   // always read a number even when the API omits it on a count failure.
@@ -102,25 +101,28 @@ export interface PublicSettings {
   tps: number;
   tvq: number;
   accommodationTax: number;
-  // Weekly rate (default 560) and the global maintenance toggle. Optional on the
-  // wire type so existing settings literals stay valid while the settings/admin
-  // tasks fill them in; the client settings store always seeds concrete defaults.
   weeklyPrice?: number;
   reservationsEnabled?: boolean;
 }
 
-// `publicRoomCount` is a live, computed public field — never part of an admin
-// settings body — so it is excluded from the admin shape.
-export interface AdminSettings extends Omit<PublicSettings, "publicRoomCount"> {
+// Matches the server-side SettingsUpdateSchema exactly. All fields are required;
+// assignableRoomCount is server-derived (read-only display) and accepted but
+// ignored by the server on updates.
+export interface AdminSettings {
+  nightlyPrice: number;
+  weeklyPrice: number;
+  contactEmail: string;
+  contactPhone: string;
+  tps: number;
+  tvq: number;
+  accommodationTax: number;
   assignableRoomCount: number;
-  // Per-email-type automation toggles (default false). Admin-only: these keys are
-  // NOT part of PublicSettings and are never returned by GET /api/settings.
+  reservationsEnabled: boolean;
   emailConfirmationEnabled: boolean;
   emailPasswordResetEnabled: boolean;
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
-  /** Gate for the post-departure review-request email. Default false. */
-  emailReviewRequestEnabled?: boolean;
+  emailReviewRequestEnabled: boolean;
 }
 
 /**

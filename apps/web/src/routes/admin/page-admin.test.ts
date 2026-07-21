@@ -33,9 +33,10 @@ describe("admin page — imports & wiring", () => {
     expect(src).toContain('"disponibilites"');
   });
 
-  it("seeds weeklyPrice and reservationsEnabled in the settings state", () => {
-    expect(src).toContain("weeklyPrice: 560");
-    expect(src).toContain("reservationsEnabled: true");
+  it("keeps assignableRoomCount in page scope so AdminDisponibilitesTab can consume it", () => {
+    // Settings live in AdminParametresTab; the page owns only the bound count.
+    expect(src).toContain("assignableRoomCount");
+    expect(src).toContain("AdminParametresTab");
   });
 
   it("extends the tab keyboard-nav order with disponibilites", () => {
@@ -45,34 +46,16 @@ describe("admin page — imports & wiring", () => {
   });
 });
 
-describe("admin page — settings fields", () => {
-  it("renders the weekly-price input and its error hook", () => {
-    expect(src).toContain('data-testid="input-weekly-price"');
-    expect(src).toContain("bind:value={settings.weeklyPrice}");
-    expect(src).toContain('data-testid="error-weekly-price"');
-  });
-
-  it("renders the assignable-rooms field read-only (derived from public rooms)", () => {
-    expect(src).toContain('data-testid="input-assignable-rooms"');
-    // Derived value: displayed via value=, never two-way bound or editable.
-    expect(src).toContain("value={settings.assignableRoomCount}");
-    expect(src).toContain("readonly");
-    expect(src).not.toContain("bind:value={settings.assignableRoomCount}");
-    // No validation/error hook — the field can't be authored by the user.
-    expect(src).not.toContain('data-testid="error-assignable-rooms"');
-  });
-
-  it("renders the reservations-enabled toggle bound to state", () => {
-    expect(src).toContain('data-testid="toggle-reservations-enabled"');
-    expect(src).toContain("bind:checked={settings.reservationsEnabled}");
-    expect(src).toContain('type="checkbox"');
-  });
-
-  it("validates weeklyPrice as a positive integer and does not validate the derived room count", () => {
-    expect(src).toContain("errors.weeklyPrice");
-    expect(src).toContain("Number.isInteger(weeklyPrice)");
-    // assignableRoomCount is server-derived: no client-side validation.
-    expect(src).not.toContain("errors.assignableRoomCount");
+describe("admin page — settings delegation", () => {
+  it("delegates all settings fields to AdminParametresTab, not inline in the page", () => {
+    // Settings state and fields now live inside AdminParametresTab. The page
+    // renders only the component shell in panel-settings and binds assignableRoomCount.
+    expect(src).toContain("AdminParametresTab");
+    expect(src).toContain("bind:assignableRoomCount");
+    // Individual field testids must NOT appear in the page — they live in the component.
+    expect(src).not.toContain('data-testid="input-weekly-price"');
+    expect(src).not.toContain('data-testid="input-assignable-rooms"');
+    expect(src).not.toContain('data-testid="toggle-reservations-enabled"');
   });
 });
 
@@ -89,9 +72,9 @@ describe("admin page — Disponibilités tab & panel", () => {
     expect(src).toContain('aria-labelledby="tab-disponibilites"');
     expect(src).toContain('hidden={activeTab !== "disponibilites"}');
     expect(src).toContain('{#if activeTab === "disponibilites"}');
-    expect(src).toContain(
-      "<AdminDisponibilitesTab assignableRoomCount={settings.assignableRoomCount ?? 12} />",
-    );
+    // The page binds the server-derived count via the Svelte shorthand prop syntax.
+    expect(src).toContain("AdminDisponibilitesTab");
+    expect(src).toContain("assignableRoomCount");
   });
 });
 
