@@ -20,17 +20,22 @@ export async function createAndFinalizeInvoice(
   stripe: Stripe,
   opts: { customerId: string; amountCad: number; description: string }
 ): Promise<{ invoiceId: string; hostedInvoiceUrl: string | null }> {
-  await stripe.invoiceItems.create({
-    customer: opts.customerId,
-    amount: Math.round(opts.amountCad * 100),
-    currency: "cad",
-    description: opts.description,
-  });
-
+  // Create the invoice FIRST, then attach the line item to it by id. Creating a
+  // "pending" invoice item (no `invoice` param) and relying on invoices.create
+  // to sweep it in does NOT work on current Stripe API versions — the invoice
+  // comes out empty ($0, no description). Attaching explicitly is deterministic.
   const invoice = await stripe.invoices.create({
     customer: opts.customerId,
     collection_method: "send_invoice",
     days_until_due: 30,
+  });
+
+  await stripe.invoiceItems.create({
+    customer: opts.customerId,
+    invoice: invoice.id,
+    amount: Math.round(opts.amountCad * 100),
+    currency: "cad",
+    description: opts.description,
   });
 
   const finalized = await stripe.invoices.finalizeInvoice(invoice.id);
