@@ -18,7 +18,16 @@ export async function findOrCreateCustomer(
 
 export async function createAndFinalizeInvoice(
   stripe: Stripe,
-  opts: { customerId: string; amountCad: number; description: string }
+  opts: {
+    customerId: string;
+    amountCad: number;
+    description: string;
+    // Optional Stripe invoice *rendering* template id (`inrtem_…`). When set,
+    // the generated invoice uses that template's layout/branding. Must belong to
+    // the same Stripe account AND mode (test/live) as the API key, so it is
+    // supplied per-environment via config rather than hardcoded.
+    templateId?: string;
+  }
 ): Promise<{ invoiceId: string; hostedInvoiceUrl: string | null }> {
   // Create the invoice FIRST, then attach the line item to it by id. Creating a
   // "pending" invoice item (no `invoice` param) and relying on invoices.create
@@ -28,6 +37,7 @@ export async function createAndFinalizeInvoice(
     customer: opts.customerId,
     collection_method: "send_invoice",
     days_until_due: 30,
+    ...(opts.templateId ? { rendering: { template: opts.templateId } } : {}),
   });
 
   await stripe.invoiceItems.create({
