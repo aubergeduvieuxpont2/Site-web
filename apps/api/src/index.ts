@@ -88,6 +88,10 @@ type Bindings = {
   RESEND_API_KEY: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  // Optional Stripe invoice rendering template id (`inrtem_…`). Per-environment
+  // (test/live), so it is a Worker var/secret, not committed. Unset → invoices
+  // use the Stripe account default.
+  STRIPE_INVOICE_TEMPLATE_ID?: string;
 };
 
 type MessageRow = {
@@ -2000,6 +2004,7 @@ app.post(
           customerId,
           amountCad: breakdown.amount,
           description: `Facture - Réservation #${reservationId}`,
+          templateId: c.env.STRIPE_INVOICE_TEMPLATE_ID,
         });
         stripeInvoiceId = result.invoiceId;
         hostedInvoiceUrl = result.hostedInvoiceUrl;

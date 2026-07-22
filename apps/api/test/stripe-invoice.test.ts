@@ -69,6 +69,27 @@ describe("createAndFinalizeInvoice", () => {
     });
     expect(calls.invoiceItemsCreate[0].amount).toBe(8901);
   });
+
+  it("applies the rendering template when a templateId is supplied", async () => {
+    const { stripe, calls } = makeStripeStub();
+    await createAndFinalizeInvoice(stripe, {
+      customerId: "cus_x",
+      amountCad: 100,
+      description: "x",
+      templateId: "inrtem_test_abc",
+    });
+    expect(calls.invoicesCreate[0].rendering).toEqual({ template: "inrtem_test_abc" });
+  });
+
+  it("omits rendering when no templateId is supplied", async () => {
+    const { stripe, calls } = makeStripeStub();
+    await createAndFinalizeInvoice(stripe, {
+      customerId: "cus_x",
+      amountCad: 100,
+      description: "x",
+    });
+    expect(calls.invoicesCreate[0].rendering).toBeUndefined();
+  });
 });
 
 describe("findOrCreateCustomer", () => {
