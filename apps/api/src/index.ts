@@ -2004,8 +2004,24 @@ app.post(
         stripeInvoiceId = result.invoiceId;
         hostedInvoiceUrl = result.hostedInvoiceUrl;
       } catch (err) {
-        console.error("stripe_invoice_create_failed", err instanceof Error ? err.message : "unknown");
-        return c.json({ error: "Erreur lors de la création de la facture Stripe." }, 502);
+        // Surface the real Stripe error to the (admin-gated) caller instead of a
+        // generic 502 — an opaque failure here is undiagnosable without worker
+        // logs. Stripe SDK errors carry structured fields (type/code/statusCode)
+        // that pinpoint auth vs permission vs bad-request problems.
+        const e = err as { message?: string; type?: string; code?: string; statusCode?: number };
+        console.error("stripe_invoice_create_failed", e?.type ?? "", e?.code ?? "", e?.message ?? "unknown");
+        return c.json(
+          {
+            error: "Erreur lors de la création de la facture Stripe.",
+            stripeError: {
+              message: e?.message ?? "unknown",
+              type: e?.type ?? null,
+              code: e?.code ?? null,
+              statusCode: e?.statusCode ?? null,
+            },
+          },
+          502
+        );
       }
 
       await sql`
