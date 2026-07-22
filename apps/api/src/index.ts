@@ -2479,6 +2479,27 @@ app.post("/api/webhooks/stripe", async (c) => {
     return c.json({ error: "Invalid signature" }, 400);
   }
 
+  // A failed charge is recorded for admin visibility so a declined payment is
+  // distinguishable from a booking that simply hasn't been paid yet. Stripe
+  // already shows the guest the decline reason on its hosted invoice page and
+  // handles retries/dunning, so nothing is surfaced to the customer here. The
+  // reservation stays `pending` — `status` is deliberately never touched — and
+  // the `!= 'paid'` guard means a late/out-of-order failed event can never
+  // un-pay an already-confirmed booking.
+  if (event.type === "invoice.payment_failed") {
+    const failedInvoiceId = (event.data.object as Record<string, unknown>)["id"] as string | undefined;
+    if (failedInvoiceId) {
+      const sql = neon(c.env.DB_CONN);
+      await sql`
+        UPDATE reservations
+        SET invoice_status = 'payment_failed'
+        WHERE stripe_invoice_id = ${failedInvoiceId}
+          AND (invoice_status IS NULL OR invoice_status != 'paid')
+      `;
+    }
+    return c.json({ received: true });
+  }
+
   const PAID_EVENT_TYPES = new Set([
     "checkout.session.completed",
     "invoice.paid",

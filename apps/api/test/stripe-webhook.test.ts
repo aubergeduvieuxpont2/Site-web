@@ -79,6 +79,13 @@ function makeUnrelatedEvent() {
   };
 }
 
+function makeInvoicePaymentFailedEvent(invoiceId = STRIPE_INVOICE_ID) {
+  return {
+    type: "invoice.payment_failed",
+    data: { object: { id: invoiceId } },
+  };
+}
+
 function webhookRequest(body = "{}") {
   return app.request(
     "http://localhost/api/webhooks/stripe",
@@ -333,5 +340,48 @@ describe("POST /api/webhooks/stripe — idempotency (INV-idempotent-paid)", () =
     await webhookRequest();
 
     expect(capturedQuery).toMatch(/invoice_status.*paid/);
+  });
+});
+
+describe("POST /api/webhooks/stripe — invoice.payment_failed records failure", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("sets invoice_status=payment_failed and never touches status", async () => {
+    stripeHolder.constructEvent = async () => makeInvoicePaymentFailedEvent();
+    let capturedQuery = "";
+    let capturedVals: unknown[] = [];
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+      if (q.includes("UPDATE reservations")) {
+        capturedQuery = q;
+        capturedVals = vals;
+      }
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).received).toBe(true);
+    expect(capturedQuery).toContain("invoice_status = 'payment_failed'");
+    // The reservation must stay pending — a failed charge never confirms it.
+    expect(capturedQuery).not.toContain("status = 'confirmed'");
+    // Bound to the failed invoice id, and guarded so it cannot overwrite 'paid'.
+    expect(capturedVals).toContain(STRIPE_INVOICE_ID);
+    expect(capturedQuery).toContain("invoice_status != 'paid'");
+  });
+
+  it("does not enqueue a confirmation email on a failed payment", async () => {
+    stripeHolder.constructEvent = async () => makeInvoicePaymentFailedEvent();
+    let insertedOutbox = false;
+    neonHolder.sql = (strings: TemplateStringsArray) => {
+      const q = strings.join(" ");
+      if (q.includes("email_outbox")) insertedOutbox = true;
+      return Promise.resolve([]);
+    };
+
+    await webhookRequest();
+
+    expect(insertedOutbox).toBe(false);
   });
 });

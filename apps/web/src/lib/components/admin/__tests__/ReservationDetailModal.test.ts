@@ -139,6 +139,13 @@ describe("ReservationDetailModal", () => {
     expect(badge.className).toContain("rdm__invoice-badge--paid");
   });
 
+  it("shows the invoice status badge with 'Échec du paiement' when invoice_status is payment_failed", () => {
+    render(ReservationDetailModal, { props: props({ invoice_status: "payment_failed" }) });
+    const badge = screen.getByTestId("rdm-invoice-badge");
+    expect(badge.textContent?.trim()).toBe("Échec du paiement");
+    expect(badge.className).toContain("rdm__invoice-badge--payment_failed");
+  });
+
   it("omits the invoice status section when invoice_status is null or absent", () => {
     render(ReservationDetailModal, { props: props({ invoice_status: null }) });
     expect(screen.queryByTestId("rdm-invoice-status")).toBeNull();

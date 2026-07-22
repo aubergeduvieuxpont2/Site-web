@@ -161,7 +161,7 @@
                     class="rdm__invoice-badge rdm__invoice-badge--{row.invoice_status}"
                     data-testid="rdm-invoice-badge"
                   >
-                    {row.invoice_status === 'paid' ? 'Payée' : row.invoice_status === 'open' ? 'Ouverte' : row.invoice_status}
+                    {row.invoice_status === 'paid' ? 'Payée' : row.invoice_status === 'open' ? 'Ouverte' : row.invoice_status === 'payment_failed' ? 'Échec du paiement' : row.invoice_status}
                   </span>
                 </dd>
               </div>
@@ -465,6 +465,11 @@
   .rdm__invoice-badge--paid {
     background: #d4ede0;
     color: #1a5c2d;
+  }
+
+  .rdm__invoice-badge--payment_failed {
+    background: #fbe4e4;
+    color: #8a1c1c;
   }
 
   /* ── Facture button ── */
