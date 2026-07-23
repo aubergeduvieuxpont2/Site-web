@@ -42,7 +42,19 @@ jobs:
         run: npm test --workspaces --if-present
 
       - name: Build web
-        run: npm run build:web
+        # VITE_STRIPE_PUBLISHABLE_KEY is a BUILD-TIME Vite var baked into the
+        # bundle — it must be present here, not at runtime. The publishable key
+        # is public (pk_test_/pk_live_), so it lives as a repo *Variable*
+        # (Settings → Secrets and variables → Actions → Variables), NOT a secret.
+        # Empty → the embedded reservation checkout shows its missing-config
+        # state, so warn loudly rather than ship a keyless bundle silently.
+        env:
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ vars.VITE_STRIPE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$VITE_STRIPE_PUBLISHABLE_KEY" ]; then
+            echo "::warning::VITE_STRIPE_PUBLISHABLE_KEY is empty — the web bundle will build without a Stripe publishable key, and embedded reservation checkout will show its missing-config state. Set it as a repo Variable."
+          fi
+          npm run build:web
 
       - name: Deploy HubSpot gateway
         run: npx wrangler deploy
