@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import Contour from "$lib/components/Contour.svelte";
   import Button from "$lib/components/Button.svelte";
@@ -95,13 +95,17 @@
     return adminCreateInvoice(reservationId, req.type, req.depositPercent);
   }
 
-  async function loadReservations(q?: string) {
-    reservationsLoading = true;
+  // `silent` background refreshes (the auto-poll) don't toggle the loading
+  // spinner or surface transient errors — they just swap in fresh rows so a
+  // status change (e.g. a Stripe webhook confirming a booking) appears without a
+  // manual page refresh.
+  async function loadReservations(q?: string, opts?: { silent?: boolean }) {
+    if (!opts?.silent) reservationsLoading = true;
     reservationsError = null;
     const res = await adminReservations(q);
-    reservationsLoading = false;
+    if (!opts?.silent) reservationsLoading = false;
     if (isError(res)) {
-      reservationsError = res.error;
+      if (!opts?.silent) reservationsError = res.error;
     } else {
       reservations = res.reservations;
     }
@@ -218,6 +222,13 @@
     }
   });
 
+  // Poll the reservations list every 20s so status changes (e.g. a Stripe
+  // webhook confirming a paid booking) surface without a manual refresh. Paused
+  // while the tab is hidden. Cleared on destroy — note an async onMount does NOT
+  // run a returned cleanup in Svelte, so the interval id is cleared via onDestroy.
+  const RESERVATIONS_POLL_MS = 20000;
+  let reservationsPoll: ReturnType<typeof setInterval> | undefined;
+
   // ─── Mount: auth gate ───
   onMount(async () => {
     const me = await getMe();
@@ -229,6 +240,15 @@
     currentUserId = me.user.id;
     loading = false;
     loadReservations();
+
+    reservationsPoll = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      loadReservations(searchQuery.trim() || undefined, { silent: true });
+    }, RESERVATIONS_POLL_MS);
+  });
+
+  onDestroy(() => {
+    if (reservationsPoll) clearInterval(reservationsPoll);
   });
 </script>
 
