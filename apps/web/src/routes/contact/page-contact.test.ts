@@ -22,6 +22,8 @@ vi.mock("$lib/stripe", () => {
   return {
     STRIPE_PUBLISHABLE_KEY: "pk_test_mock_key",
     getStripe: vi.fn().mockResolvedValue(mockStripe),
+    __mockCheckout: mockCheckout, // Export for test inspection
+    __mockStripe: mockStripe, // Export for test inspection
   };
 });
 
@@ -261,7 +263,16 @@ describe("contact form — payment flow", () => {
     expect(getByTestId("payment-countdown")).toBeTruthy();
 
     // The checkout container exists (Stripe mounts into it).
-    expect(getByTestId("embedded-checkout")).toBeTruthy();
+    const checkoutContainer = getByTestId("embedded-checkout");
+    expect(checkoutContainer).toBeTruthy();
+
+    // Verify the embedded-checkout mount was called with the container.
+    const stripeModule = await import("$lib/stripe");
+    const mockCheckout = (stripeModule as any).__mockCheckout;
+    await waitFor(
+      () => expect(mockCheckout.mount).toHaveBeenCalledWith(checkoutContainer),
+      { timeout: 3000 }
+    );
   });
 
   it("shows the expired state when the countdown reaches zero", async () => {
@@ -355,6 +366,51 @@ describe("contact form — payment flow", () => {
     await waitFor(() => expect(getByTestId("contact-form")).toBeTruthy(), {
       timeout: 3000,
     });
+
+    vi.useRealTimers();
+  });
+
+  it("calls destroy on the embedded-checkout instance when leaving the paying state", async () => {
+    vi.useFakeTimers();
+
+    // Set up a hold that expires quickly so we can transition to expired state
+    // and verify the destroy cleanup is called.
+    const holdExpiresAt = new Date(Date.now() + 1000).toISOString();
+    createReservationMock.mockResolvedValue({
+      reservationId: 99,
+      clientSecret: "cs_test_destroy_me",
+      holdExpiresAt,
+    });
+
+    const { container, getByTestId, queryByTestId } = render(Page);
+
+    await fillAndSubmit(container);
+    await vi.advanceTimersByTimeAsync(50);
+
+    // Wait for the payment section to appear.
+    await waitFor(() => expect(getByTestId("contact-payment")).toBeTruthy(), {
+      timeout: 3000,
+    });
+
+    // Get the mock checkout and reset destroy so we can verify it's called after mount.
+    const stripeModule = await import("$lib/stripe");
+    const mockCheckout = (stripeModule as any).__mockCheckout;
+    mockCheckout.destroy.mockClear();
+
+    // Advance past the hold expiry to trigger the expired state transition.
+    // This should cause the $effect cleanup to run and call destroy.
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await waitFor(() => expect(getByTestId("payment-expired")).toBeTruthy(), {
+      timeout: 3000,
+    });
+
+    // Verify destroy was called when the component transitioned out of the paying state.
+    expect(mockCheckout.destroy).toHaveBeenCalled();
+
+    // The payment section should be gone and expired section should be shown.
+    expect(queryByTestId("contact-payment")).toBeNull();
+    expect(getByTestId("payment-expired")).toBeTruthy();
 
     vi.useRealTimers();
   });

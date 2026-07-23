@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import * as fs from "fs";
 import * as path from "path";
+import { render, cleanup } from "@testing-library/svelte";
 
 const pageFile = path.resolve(__dirname, "../reservation-confirmee/+page.svelte");
 const pageTsFile = path.resolve(__dirname, "../reservation-confirmee/+page.ts");
@@ -11,7 +12,51 @@ const enFile = path.resolve(__dirname, "../../lib/messages/en.ts");
 const readFr = () => fs.readFileSync(frFile, "utf-8");
 const readEn = () => fs.readFileSync(enFile, "utf-8");
 
+// Mock the $app/stores to provide a page store with a URL containing session_id.
+vi.mock("$app/stores", () => {
+  const mockPage = {
+    url: new URL("http://localhost/reservation-confirmee?session_id=cs_test_123"),
+  };
+  return {
+    page: {
+      subscribe: (fn: (value: any) => void) => {
+        fn(mockPage);
+        return () => {};
+      },
+    },
+  };
+});
+
+// Partially mock the API module to ensure no API calls are made.
+vi.mock("$lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("$lib/api")>();
+  return {
+    ...actual,
+    getAvailability: vi.fn(),
+    createReservation: vi.fn(),
+    getPublicSettings: vi.fn(),
+  };
+});
+
+import Page from "../reservation-confirmee/+page.svelte";
+import { getAvailability, createReservation, getPublicSettings } from "$lib/api";
+
+const getAvailabilityMock = vi.mocked(getAvailability);
+const createReservationMock = vi.mocked(createReservation);
+const getPublicSettingsMock = vi.mocked(getPublicSettings);
+
 describe("page-reservation-confirmee", () => {
+  beforeEach(() => {
+    getAvailabilityMock.mockReset();
+    createReservationMock.mockReset();
+    getPublicSettingsMock.mockReset();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
   describe("page config", () => {
     it("disables prerender", () => {
       const config = fs.readFileSync(pageTsFile, "utf-8");
@@ -54,6 +99,33 @@ describe("page-reservation-confirmee", () => {
     it("includes a Seo component", () => {
       expect(read()).toContain("import Seo from");
       expect(read()).toContain("<Seo");
+    });
+
+    it("renders the confirmation success copy and displays the session_id", async () => {
+      const { getByTestId, getByText } = render(Page);
+
+      // Assert the root element is present.
+      expect(getByTestId("reservation-confirmee")).toBeTruthy();
+
+      // The confirmation title and body should be rendered.
+      // Note: the actual text comes from the i18n dictionary, so we just check structure.
+      const heading = getByTestId("reservation-confirmee").querySelector(".confirmee__heading");
+      expect(heading).toBeTruthy();
+
+      const body = getByTestId("reservation-confirmee").querySelector(".confirmee__body");
+      expect(body).toBeTruthy();
+
+      // The session_id should be displayed (from the query parameter).
+      expect(getByText(/cs_test_123/)).toBeTruthy();
+    });
+
+    it("does not call any api-client functions", async () => {
+      render(Page);
+
+      // Verify no API calls were made.
+      expect(getAvailabilityMock).not.toHaveBeenCalled();
+      expect(createReservationMock).not.toHaveBeenCalled();
+      expect(getPublicSettingsMock).not.toHaveBeenCalled();
     });
   });
 
