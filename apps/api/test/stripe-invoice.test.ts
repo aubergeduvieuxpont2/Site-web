@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
-import { createAndFinalizeInvoice, findOrCreateCustomer } from "../src/stripe";
+import {
+  createAndFinalizeInvoice,
+  findOrCreateCustomer,
+  createEmbeddedCheckoutSession,
+  refundCheckoutSession,
+} from "../src/stripe";
 
 // Minimal Stripe stub capturing the calls createAndFinalizeInvoice makes, so we
 // can assert the invoice item is ATTACHED to the created invoice (by id) — the
@@ -120,5 +125,145 @@ describe("findOrCreateCustomer", () => {
     const id = await findOrCreateCustomer(stripe, "new@example.com");
     expect(id).toBe("cus_test_123");
     expect(stripe.customers.create).toHaveBeenCalledWith({ email: "new@example.com" });
+  });
+});
+
+describe("createEmbeddedCheckoutSession", () => {
+  it("creates a session with ui_mode embedded and mode payment", async () => {
+    const createSpy = vi.fn(async () => ({
+      id: "cs_test_001",
+      client_secret: "cs_test_001_secret",
+    }));
+    const stripe = {
+      checkout: { sessions: { create: createSpy } },
+    } as any;
+
+    const result = await createEmbeddedCheckoutSession(stripe, {
+      email: "guest@example.com",
+      lineItems: [{ description: "Hébergement", amountCad: 500 }],
+      returnUrl: "https://example.com/confirmation",
+      metadata: { reservation_id: 42 },
+    });
+
+    expect(createSpy).toHaveBeenCalled();
+    const args = createSpy.mock.calls[0][0];
+    expect(args.ui_mode).toBe("embedded");
+    expect(args.mode).toBe("payment");
+    expect(args.customer_email).toBe("guest@example.com");
+    expect(args.return_url).toBe("https://example.com/confirmation");
+    expect(args.metadata.reservation_id).toBe(42);
+    expect(result.sessionId).toBe("cs_test_001");
+    expect(result.clientSecret).toBe("cs_test_001_secret");
+  });
+
+  it("converts line item amounts to integer cents in CAD", async () => {
+    const createSpy = vi.fn(async () => ({
+      id: "cs_test_002",
+      client_secret: "cs_test_002_secret",
+    }));
+    const stripe = { checkout: { sessions: { create: createSpy } } } as any;
+
+    await createEmbeddedCheckoutSession(stripe, {
+      email: "guest@example.com",
+      lineItems: [
+        { description: "Hébergement", amountCad: 500 },
+        { description: "Taxe d'hébergement", amountCad: 17.5 },
+        { description: "TPS", amountCad: 25.88 },
+      ],
+      returnUrl: "https://example.com/confirmation",
+      metadata: {},
+    });
+
+    const args = createSpy.mock.calls[0][0];
+    const amounts = args.line_items.map((item: any) => item.price_data.unit_amount);
+    expect(amounts).toEqual([50000, 1750, 2588]);
+  });
+
+  it("sets one line item per input item with quantity 1", async () => {
+    const createSpy = vi.fn(async () => ({
+      id: "cs_test_003",
+      client_secret: "cs_test_003_secret",
+    }));
+    const stripe = { checkout: { sessions: { create: createSpy } } } as any;
+
+    await createEmbeddedCheckoutSession(stripe, {
+      email: "guest@example.com",
+      lineItems: [
+        { description: "Hébergement", amountCad: 500 },
+        { description: "Taxe d'hébergement", amountCad: 17.5 },
+      ],
+      returnUrl: "https://example.com/confirmation",
+      metadata: {},
+    });
+
+    const args = createSpy.mock.calls[0][0];
+    expect(args.line_items.length).toBe(2);
+    expect(args.line_items.every((item: any) => item.quantity === 1)).toBe(true);
+  });
+
+  it("throws when client_secret is missing from the session", async () => {
+    const createSpy = vi.fn(async () => ({
+      id: "cs_test_004",
+      // No client_secret
+    }));
+    const stripe = { checkout: { sessions: { create: createSpy } } } as any;
+
+    await expect(
+      createEmbeddedCheckoutSession(stripe, {
+        email: "guest@example.com",
+        lineItems: [{ description: "Hébergement", amountCad: 500 }],
+        returnUrl: "https://example.com/confirmation",
+        metadata: {},
+      })
+    ).rejects.toThrow(/client_secret/);
+  });
+});
+
+describe("refundCheckoutSession", () => {
+  it("retrieves the session and issues a full refund against its payment intent", async () => {
+    const retrieveSpy = vi.fn(async () => ({
+      id: "cs_test_001",
+      payment_intent: "pi_test_001",
+    }));
+    const refundSpy = vi.fn(async () => ({ id: "re_test_001" }));
+    const stripe = {
+      checkout: { sessions: { retrieve: retrieveSpy } },
+      refunds: { create: refundSpy },
+    } as any;
+
+    const result = await refundCheckoutSession(stripe, "cs_test_001");
+
+    expect(retrieveSpy).toHaveBeenCalledWith("cs_test_001");
+    expect(refundSpy).toHaveBeenCalledWith({ payment_intent: "pi_test_001" });
+    expect(result.id).toBe("re_test_001");
+  });
+
+  it("handles payment_intent as an expanded object", async () => {
+    const retrieveSpy = vi.fn(async () => ({
+      id: "cs_test_002",
+      payment_intent: { id: "pi_test_002", object: "payment_intent" },
+    }));
+    const refundSpy = vi.fn(async () => ({ id: "re_test_002" }));
+    const stripe = {
+      checkout: { sessions: { retrieve: retrieveSpy } },
+      refunds: { create: refundSpy },
+    } as any;
+
+    await refundCheckoutSession(stripe, "cs_test_002");
+
+    expect(refundSpy).toHaveBeenCalledWith({ payment_intent: "pi_test_002" });
+  });
+
+  it("throws when payment_intent is missing", async () => {
+    const retrieveSpy = vi.fn(async () => ({
+      id: "cs_test_003",
+      // No payment_intent
+    }));
+    const stripe = {
+      checkout: { sessions: { retrieve: retrieveSpy } },
+      refunds: { create: vi.fn() },
+    } as any;
+
+    await expect(refundCheckoutSession(stripe, "cs_test_003")).rejects.toThrow(/payment intent/i);
   });
 });

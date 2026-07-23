@@ -46,7 +46,7 @@ export interface ReservationRow {
   // Reservation lifecycle status. Optional/nullable so legacy rows and existing
   // fixtures created before the column existed stay valid; the UI treats a
   // null/undefined status as "pending".
-  status?: "pending" | "confirmed" | "cancelled" | null;
+  status?: "pending" | "confirmed" | "cancelled" | "held" | "released" | null;
   created_at: string;
   source?: string | null;
   external_ref?: string | null;
@@ -623,6 +623,18 @@ export async function adminSetUserPricing(
 // Guest reservation
 // ---------------------------------------------------------------------------
 
+/**
+ * The response contract for POST /api/reservations (Stream 2 hold-and-pay flow).
+ * The API creates a Stripe PaymentIntent, places a 15-minute hold, and returns
+ * the client secret so the frontend can mount Stripe Embedded Checkout.
+ * Only the publishable key ever appears in the frontend — never the secret key.
+ */
+export interface ReservationHoldResponse {
+  reservationId: number;
+  clientSecret: string;
+  holdExpiresAt: string; // ISO-8601
+}
+
 export async function createReservation(data: {
   firstName: string;
   lastName: string;
@@ -632,8 +644,8 @@ export async function createReservation(data: {
   guests: number;
   roomCount: number;
   message?: string;
-}): Promise<{ reservation: ReservationRow } | ApiError> {
-  return fetchJson<{ reservation: ReservationRow }>("/reservations", {
+}): Promise<ReservationHoldResponse | ApiError> {
+  return fetchJson<ReservationHoldResponse>("/reservations", {
     method: "POST",
     body: JSON.stringify(data),
   });

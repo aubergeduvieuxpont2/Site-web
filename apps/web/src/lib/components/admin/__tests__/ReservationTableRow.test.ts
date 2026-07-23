@@ -42,6 +42,23 @@ describe("ReservationTableRow — source invariants (WS-A)", () => {
   it("no longer ships the removed truncateMessage helper (Message column dropped)", () => {
     expect(rowSrc).not.toContain("truncateMessage");
   });
+
+  it("defines a CSS badge class for held (amber payment-pending)", () => {
+    expect(rowSrc).toContain("status-badge--held");
+  });
+
+  it("defines a CSS badge class for released (muted purple expired)", () => {
+    expect(rowSrc).toContain("status-badge--released");
+  });
+
+  it("does not add held or released to the admin onSetStatus union (system-only transitions)", () => {
+    // The onSetStatus type must remain restricted to the three admin-settable statuses.
+    // A union that included held or released would permit admin clients to set
+    // system-only statuses from the UI, violating INV-status-domain.
+    expect(rowSrc).toContain('"pending" | "confirmed" | "cancelled"');
+    expect(rowSrc).not.toMatch(/onSetStatus.*held/);
+    expect(rowSrc).not.toMatch(/onSetStatus.*released/);
+  });
 });
 
 // ── Pure helpers ─────────────────────────────────────────────────────────────
@@ -88,6 +105,14 @@ describe("statusLabel", () => {
     expect(statusLabel("confirmed")).toBe("Confirmé");
     expect(statusLabel("cancelled")).toBe("Annulé");
     expect(statusLabel("pending")).toBe("En attente");
+  });
+
+  it("maps held to the French payment-pending label", () => {
+    expect(statusLabel("held")).toBe("En attente de paiement");
+  });
+
+  it("maps released to the French expired-hold label", () => {
+    expect(statusLabel("released")).toBe("Expirée");
   });
 
   it("defaults to En attente for null, undefined, or unknown values", () => {
@@ -219,6 +244,34 @@ describe("ReservationTableRow — status cell", () => {
     );
     expect(getByTestId("btn-status-confirm")).not.toBeNull();
     expect(queryByTestId("btn-status-cancel")).toBeNull();
+  });
+
+  it("renders the held badge with the amber payment-pending style and both action buttons", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "held" }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("En attente de paiement");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--held",
+    );
+    expect(badge.getAttribute("aria-label")).toBe("Statut: En attente de paiement");
+    expect(getByTestId("btn-status-confirm")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel")).not.toBeNull();
+  });
+
+  it("renders the released badge with the muted purple expired style and both action buttons", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "released" }),
+    });
+    const badge = getByTestId("row-status-badge");
+    expect(badge.textContent?.trim()).toBe("Expirée");
+    expect(badge.className).toContain(
+      "reservation-table-row__status-badge--released",
+    );
+    expect(badge.getAttribute("aria-label")).toBe("Statut: Expirée");
+    expect(getByTestId("btn-status-confirm")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel")).not.toBeNull();
   });
 
   it("invokes onSetStatus with the row id and target status", async () => {
@@ -401,5 +454,21 @@ describe("ReservationTableRow — icon buttons (SVG)", () => {
     });
     expect(getByTestId("btn-status-confirm").querySelector("svg")).not.toBeNull();
     expect(queryByTestId("btn-status-cancel")).toBeNull();
+  });
+
+  it("per-status visibility: held shows both action buttons (system-only status, no UI suppression)", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "held" }),
+    });
+    expect(getByTestId("btn-status-confirm").querySelector("svg")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel").querySelector("svg")).not.toBeNull();
+  });
+
+  it("per-status visibility: released shows both action buttons (system-only status, no UI suppression)", () => {
+    const { getByTestId } = render(ReservationTableRow, {
+      props: props({ status: "released" }),
+    });
+    expect(getByTestId("btn-status-confirm").querySelector("svg")).not.toBeNull();
+    expect(getByTestId("btn-status-cancel").querySelector("svg")).not.toBeNull();
   });
 });

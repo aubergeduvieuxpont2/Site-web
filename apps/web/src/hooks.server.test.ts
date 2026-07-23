@@ -31,6 +31,27 @@ describe('hooks.server handle', () => {
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
   });
 
+  it('allows Stripe loader script in script-src without adding unsafe directives', async () => {
+    const res = await run();
+    const csp = res.headers.get('Content-Security-Policy');
+    expect(csp).toContain('https://js.stripe.com');
+    // script-src must contain the Stripe host but must not gain unsafe-inline or unsafe-eval
+    const scriptSrc = csp?.split(';').find((d) => d.trim().startsWith('script-src'));
+    expect(scriptSrc).toBeDefined();
+    expect(scriptSrc).toContain('https://js.stripe.com');
+    expect(scriptSrc).not.toContain("'unsafe-inline'");
+    expect(scriptSrc).not.toContain("'unsafe-eval'");
+  });
+
+  it('includes a frame-src directive scoped to Stripe domains', async () => {
+    const res = await run();
+    const csp = res.headers.get('Content-Security-Policy');
+    const frameSrc = csp?.split(';').find((d) => d.trim().startsWith('frame-src'));
+    expect(frameSrc).toBeDefined();
+    expect(frameSrc).toContain('https://js.stripe.com');
+    expect(frameSrc).toContain('https://*.stripe.com');
+  });
+
   it('preserves the resolved response body/status', async () => {
     const res = await run(new Response('payload', { status: 201 }));
     expect(res.status).toBe(201);

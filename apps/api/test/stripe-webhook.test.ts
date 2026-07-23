@@ -22,6 +22,9 @@ const { stripeHolder } = vi.hoisted(() => ({
     constructEvent: null as
       | ((rawBody: string, sig: string, secret: string) => Promise<unknown>)
       | null,
+    refund: null as
+      | (() => Promise<{ id: string }>)
+      | null,
   },
 }));
 vi.mock("../src/stripe", () => ({
@@ -33,6 +36,7 @@ vi.mock("../src/stripe", () => ({
     invoiceId: "inv_mock123",
     hostedInvoiceUrl: "https://invoice.stripe.com/i/acct/mock",
   }),
+  refundCheckoutSession: async (_stripe: any, _sessionId: string) => stripeHolder.refund?.() || { id: "re_mock123" },
 }));
 
 import { app } from "../src/index";
@@ -383,5 +387,308 @@ describe("POST /api/webhooks/stripe — invoice.payment_failed records failure",
     await webhookRequest();
 
     expect(insertedOutbox).toBe(false);
+  });
+});
+
+describe("POST /api/webhooks/stripe — checkout.session.completed for booking reservations", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  function makeBookingCheckoutEvent(sessionId = "cs_test_001", reservationId = 42) {
+    return {
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: sessionId,
+          metadata: { reservation_id: reservationId },
+          // No invoice field for booking checkouts
+        },
+      },
+    };
+  }
+
+  it("confirms a held reservation when all nights are still available", async () => {
+    const SESSION_ID = "cs_booking_001";
+    const RES_ID = 42;
+
+    stripeHolder.constructEvent = async () => makeBookingCheckoutEvent(SESSION_ID, RES_ID);
+
+    let updateQuery = "";
+    let updateVals: unknown[] = [];
+    let selectQuery = "";
+    let callCount = 0;
+
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      callCount++;
+      const q = strings.join(" ");
+
+      // First call: fetch the held reservation
+      if (callCount === 1) {
+        selectQuery = q;
+        if (q.includes("SELECT id, status")) {
+          return Promise.resolve([
+            {
+              id: RES_ID,
+              status: "held",
+              invoice_status: null,
+              arrive: "2026-08-01",
+              depart: "2026-08-03",
+              room_count: 1,
+              email: RESERVATION_ROW.email,
+              name: RESERVATION_ROW.name,
+              people: RESERVATION_ROW.people,
+              room: RESERVATION_ROW.room,
+            },
+          ]);
+        }
+      }
+
+      // Second call: fetch settings
+      if (q.includes("SELECT key, value FROM settings")) {
+        return Promise.resolve([
+          { key: "assignable_room_count", value: "12" },
+          { key: "nightly_price", value: "89" },
+          { key: "email_confirmation_enabled", value: "true" },
+        ]);
+      }
+
+      // Third call: fetch reservations for availability check
+      if (q.includes("SELECT id, arrive, depart, status, room_count, hold_expires_at FROM reservations")) {
+        return Promise.resolve([]);
+      }
+
+      // Fourth call: fetch blackout dates
+      if (q.includes("FROM blackout_dates")) {
+        return Promise.resolve([]);
+      }
+
+      // Fifth call: update reservation to confirmed
+      if (q.includes("UPDATE reservations")) {
+        updateQuery = q;
+        updateVals = vals;
+        return Promise.resolve([
+          {
+            id: RES_ID,
+            status: "confirmed",
+            invoice_status: "paid",
+          },
+        ]);
+      }
+
+      // Email enqueue
+      if (q.includes("email_outbox")) {
+        return Promise.resolve([]);
+      }
+
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).received).toBe(true);
+    expect(updateQuery).toContain("status = 'confirmed'");
+    expect(updateQuery).toContain("invoice_status = 'paid'");
+    expect(updateVals).toContain(RES_ID);
+  });
+
+  it("is idempotent: already-confirmed paid reservations are not re-confirmed", async () => {
+    const SESSION_ID = "cs_booking_003";
+    const RES_ID = 44;
+
+    stripeHolder.constructEvent = async () => makeBookingCheckoutEvent(SESSION_ID, RES_ID);
+
+    let updateCalled = false;
+    neonHolder.sql = (strings: TemplateStringsArray) => {
+      const q = strings.join(" ");
+      if (q.includes("SELECT id, status")) {
+        return Promise.resolve([
+          {
+            id: RES_ID,
+            status: "confirmed",
+            invoice_status: "paid",
+            arrive: "2026-08-01",
+            depart: "2026-08-03",
+            room_count: 1,
+            email: RESERVATION_ROW.email,
+            name: RESERVATION_ROW.name,
+            people: RESERVATION_ROW.people,
+            room: RESERVATION_ROW.room,
+          },
+        ]);
+      }
+      if (q.includes("UPDATE reservations")) {
+        updateCalled = true;
+      }
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).received).toBe(true);
+    expect(updateCalled).toBe(false);
+  });
+
+  it("refunds when dates are no longer available", async () => {
+    const SESSION_ID = "cs_booking_refund";
+    const RES_ID = 45;
+
+    stripeHolder.constructEvent = async () => makeBookingCheckoutEvent(SESSION_ID, RES_ID);
+    stripeHolder.refund = vi.fn().mockResolvedValue({ id: "re_refunded" });
+
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+
+      if (q.includes("SELECT id, status") && !q.includes("FROM")) {
+        // Fetch the held reservation
+        return Promise.resolve([
+          {
+            id: RES_ID,
+            status: "held",
+            invoice_status: null,
+            arrive: "2026-08-01",
+            depart: "2026-08-03",
+            room_count: 1,
+            email: RESERVATION_ROW.email,
+            name: RESERVATION_ROW.name,
+            people: RESERVATION_ROW.people,
+            room: RESERVATION_ROW.room,
+          },
+        ]);
+      }
+
+      if (q.includes("SELECT key, value FROM settings")) {
+        // Fetch settings
+        return Promise.resolve([{ key: "assignable_room_count", value: "12" }]);
+      }
+
+      if (q.includes("SELECT id, arrive, depart, status, room_count, hold_expires_at FROM reservations")) {
+        // Availability check — return blocking reservation so dates are unavailable
+        return Promise.resolve([
+          {
+            id: 100,
+            arrive: "2026-08-01",
+            depart: "2026-08-03",
+            status: "confirmed",
+            room_count: 12,
+            hold_expires_at: null,
+          },
+        ]);
+      }
+
+      if (q.includes("FROM blackout_dates")) {
+        return Promise.resolve([]);
+      }
+
+      if (q.includes("UPDATE reservations")) {
+        return Promise.resolve([]);
+      }
+
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    expect((await res.json() as any).received).toBe(true);
+  });
+
+  it("does not re-refund a redelivered event for an already-released reservation", async () => {
+    const SESSION_ID = "cs_booking_redelivery";
+    const RES_ID = 46;
+
+    stripeHolder.constructEvent = async () => makeBookingCheckoutEvent(SESSION_ID, RES_ID);
+    stripeHolder.refund = vi.fn().mockResolvedValue({ id: "re_redelivery" });
+
+    let refundCount = 0;
+    neonHolder.sql = (strings: TemplateStringsArray) => {
+      const q = strings.join(" ");
+
+      if (q.includes("SELECT id, status") && q.includes("WHERE")) {
+        // On redelivery, reservation is already released
+        return Promise.resolve([
+          {
+            id: RES_ID,
+            status: "released",
+            invoice_status: null,
+            arrive: "2026-08-01",
+            depart: "2026-08-03",
+            room_count: 1,
+            email: RESERVATION_ROW.email,
+            name: RESERVATION_ROW.name,
+            people: RESERVATION_ROW.people,
+            room: RESERVATION_ROW.room,
+          },
+        ]);
+      }
+
+      if (q.includes("SELECT key, value FROM settings")) {
+        return Promise.resolve([{ key: "assignable_room_count", value: "12" }]);
+      }
+
+      if (q.includes("SELECT id, arrive, depart, status, room_count, hold_expires_at FROM reservations")) {
+        // Availability check
+        return Promise.resolve([
+          {
+            id: 100,
+            arrive: "2026-08-01",
+            depart: "2026-08-03",
+            status: "confirmed",
+            room_count: 12,
+            hold_expires_at: null,
+          },
+        ]);
+      }
+
+      if (q.includes("FROM blackout_dates")) {
+        return Promise.resolve([]);
+      }
+
+      if (q.includes("UPDATE reservations SET status = 'released'")) {
+        // Only called if status IS 'held'
+        return Promise.resolve([]);
+      }
+
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    // Refund should not be called since status is already 'released'
+    expect(stripeHolder.refund).not.toHaveBeenCalled();
+  });
+
+  it("falls through to invoice path if no booking reservation matches", async () => {
+    const SESSION_ID = "cs_booking_004";
+
+    stripeHolder.constructEvent = async () => ({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: SESSION_ID,
+          metadata: { reservation_id: 999 }, // Doesn't exist
+          invoice: "inv_fallthrough", // Fallback to invoice path
+        },
+      },
+    });
+
+    let invoiceUpdateQuery = "";
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+      if (q.includes("SELECT id, status")) {
+        return Promise.resolve([]); // No booking reservation found
+      }
+      if (q.includes("UPDATE reservations") && q.includes("stripe_invoice_id")) {
+        invoiceUpdateQuery = q;
+        return Promise.resolve([]);
+      }
+      return Promise.resolve([]);
+    };
+
+    const res = await webhookRequest();
+
+    expect(res.status).toBe(200);
+    expect(invoiceUpdateQuery).toContain("stripe_invoice_id");
   });
 });

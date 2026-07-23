@@ -32,6 +32,8 @@
   export function statusLabel(status: string | null | undefined): string {
     if (status === "confirmed") return "Confirmé";
     if (status === "cancelled") return "Annulé";
+    if (status === "held") return "En attente de paiement";
+    if (status === "released") return "Expirée";
     return "En attente";
   }
 </script>
@@ -310,6 +312,18 @@
   .reservation-table-row__status-badge--cancelled {
     background-color: #fce8e8;
     color: var(--color-error, #ba1a1a);
+  }
+
+  /* held — amber/orange, awaiting payment */
+  .reservation-table-row__status-badge--held {
+    background-color: #fef3cd;
+    color: #7a4f00;
+  }
+
+  /* released — muted grey-purple, expired hold */
+  .reservation-table-row__status-badge--released {
+    background-color: #ede9f4;
+    color: #5c4d7a;
   }
 
   /* ── Status action buttons (in the Actions cell) ─────────────────── */
