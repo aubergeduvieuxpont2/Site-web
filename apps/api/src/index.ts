@@ -547,29 +547,30 @@ app.post(
       SELECT
         ${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}::date, ${data.checkOut}::date, ${data.guests}, ${data.roomCount}, ${data.message}, 'held', now() + (${holdExpiresAtMinutes}::text || ' minutes')::interval
       WHERE NOT EXISTS (
+        -- Insert only if EVERY night in the range has capacity for roomCount.
+        -- Occupancy per night = covering confirmed-or-active-held reservations
+        -- plus that night's blackout rooms_blocked, via two independent
+        -- correlated scalar subqueries (no join, so a blackout can never be
+        -- multiplied by the number of covering reservations).
         SELECT 1
         FROM (
           SELECT generate_series(${data.checkIn}::date, (${data.checkOut}::date - 1), '1 day'::interval)::date AS night
         ) nights
-        WHERE NOT (
-          SELECT ${data.roomCount}::int > COALESCE((
-            SELECT ${adminSettings.assignableRoomCount}::int - COALESCE(SUM(
-              CASE
-                WHEN r.status = 'confirmed' THEN r.room_count
-                WHEN r.status = 'held' AND r.hold_expires_at > now() THEN r.room_count
-                ELSE 0
-              END
-            ), 0) - COALESCE(SUM(b.rooms_blocked), 0)
-            FROM reservations r
-            FULL OUTER JOIN (
-              SELECT date, rooms_blocked FROM blackout_dates
-              WHERE date = nights.night
-            ) b ON true
-            WHERE (r.arrive::date <= nights.night AND r.depart::date > nights.night
-                   AND r.status IN ('confirmed', 'held'))
-              OR b.date IS NOT NULL
-          ), 0)
-        )
+        WHERE (
+          ${adminSettings.assignableRoomCount}::int
+          - COALESCE((
+              SELECT SUM(r.room_count)
+              FROM reservations r
+              WHERE r.arrive::date <= nights.night
+                AND r.depart::date > nights.night
+                AND (r.status = 'confirmed' OR (r.status = 'held' AND r.hold_expires_at > now()))
+            ), 0)
+          - COALESCE((
+              SELECT SUM(b.rooms_blocked)
+              FROM blackout_dates b
+              WHERE b.date = nights.night
+            ), 0)
+        ) < ${data.roomCount}::int
       )
       RETURNING id, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, hold_expires_at
     `) as { id: number; arrive: string; depart: string; hold_expires_at: string }[];
