@@ -1,59 +1,66 @@
 REQ:
   R-BOOK-001:
     actor: Website guest
-    capability: create a payment-gated held reservation and receive an embedded Checkout client secret
-    constraints: hold expires 15 minutes after creation; held insert is race-safe; response carries reservationId, clientSecret, holdExpiresAt
+    capability: create a payment-gated held reservation and receive an embedded Checkout
+      client secret
+    constraints: hold expires 15 minutes after creation; held insert is race-safe;
+      response carries reservationId, clientSecret, holdExpiresAt
     priority: MUST
     tests:
-      - T-BOOK-001a
-      - T-BOOK-001b
+    - T-BOOK-001a
+    - T-BOOK-001b
   R-BOOK-002:
     actor: Website guest
-    capability: be refused a booking when payment is unconfigured before any hold is created
+    capability: be refused a booking when payment is unconfigured before any hold
+      is created
     constraints: STRIPE_SECRET_KEY unset returns 503 and creates no held row
     priority: MUST
     tests:
-      - T-BOOK-002a
+    - T-BOOK-002a
   R-BOOK-003:
     actor: Two concurrent guests
     capability: never both hold the last available room
-    constraints: single guarded SQL statement with advisory lock is authoritative; loser gets 409
+    constraints: single guarded SQL statement with advisory lock is authoritative;
+      loser gets 409
     priority: MUST
     tests:
-      - T-BOOK-003a
+    - T-BOOK-003a
   R-PAY-001:
     actor: Stripe checkout session
     capability: itemized embedded Checkout session for the full stay total in CAD
-    constraints: ui_mode embedded, mode payment, one price_data line per item, cents match admin full invoice to the cent
+    constraints: ui_mode embedded, mode payment, one price_data line per item, cents
+      match admin full invoice to the cent
     priority: MUST
     tests:
-      - T-PAY-001a
-      - T-PAY-001b
+    - T-PAY-001a
+    - T-PAY-001b
   R-PAY-002:
     actor: Stripe refund
     capability: full refund of a checkout session by resolving its payment intent
     constraints: retrieve session, resolve payment_intent, refunds.create
     priority: MUST
     tests:
-      - T-PAY-002a
+    - T-PAY-002a
   R-HOOK-001:
     actor: Stripe webhook
-    capability: confirm a paid booking when its rooms are still available, else refund and release
-    constraints: booking branch selected first; re-check excludes own hold; idempotent on confirmed/paid; existing invoice path untouched
+    capability: confirm a paid booking when its rooms are still available, else refund
+      and release
+    constraints: booking branch selected first; re-check excludes own hold; idempotent
+      on confirmed/paid; existing invoice path untouched
     priority: MUST
     tests:
-      - T-HOOK-001a
-      - T-HOOK-001b
-      - T-HOOK-001c
+    - T-HOOK-001a
+    - T-HOOK-001b
+    - T-HOOK-001c
   R-AVAIL-001:
     actor: Availability engine
     capability: exclude a named reservation from occupancy
-    constraints: optional exclude-reservation-id parameter; AvailabilityResult shape preserved; existing callers unaffected
+    constraints: optional exclude-reservation-id parameter; AvailabilityResult shape
+      preserved; existing callers unaffected
     priority: MUST
     tests:
-      - T-AVAIL-001a
-      - T-AVAIL-001b
-
+    - T-AVAIL-001a
+    - T-AVAIL-001b
 E:
   E-Reservation:
     fields:
@@ -69,10 +76,10 @@ E:
       paid_at: timestamptz (nullable)
     tenancy: single-tenant property
     invariants:
-      - INV-no-oversell
-      - INV-no-unpayable-hold
-      - INV-idempotent-paid
-      - INV-webhook-signed
+    - INV-no-oversell
+    - INV-no-unpayable-hold
+    - INV-idempotent-paid
+    - INV-webhook-signed
   E-CheckoutSession:
     fields:
       id: string
@@ -80,51 +87,85 @@ E:
       payment_intent: string-or-object
     tenancy: external (Stripe)
     invariants: []
-
 OP:
   OP-Reservation.book:
-    input: { firstName: string, lastName: string, email: string, phone: string, room: string, checkIn: date, checkOut: date, guests: integer, roomCount: integer, message: string }
-    auth: [public-rate-limited]
+    input:
+      firstName: string
+      lastName: string
+      email: string
+      phone: string
+      room: string
+      checkIn: date
+      checkOut: date
+      guests: integer
+      roomCount: integer
+      message: string
+    auth:
+    - public-rate-limited
     pre:
-      - reservationsEnabled is true
-      - checkIn and checkOut present and well ordered
-      - checkIn not in the past
-      - STRIPE_SECRET_KEY is set
+    - reservationsEnabled is true
+    - checkIn and checkOut present and well ordered
+    - checkIn not in the past
+    - STRIPE_SECRET_KEY is set
     err:
-      - ERR-DATES-REQUIRED
-      - ERR-PAST-DATE
-      - ERR-PAYMENT-UNAVAILABLE
-      - ERR-DATES-TAKEN
-    out: { reservationId: integer, clientSecret: string, holdExpiresAt: string }
+    - ERR-DATES-REQUIRED
+    - ERR-PAST-DATE
+    - ERR-PAYMENT-UNAVAILABLE
+    - ERR-DATES-TAKEN
+    out:
+      reservationId: integer
+      clientSecret: string
+      holdExpiresAt: string
   OP-Stripe.createEmbeddedCheckoutSession:
-    input: { email: string, lineItems: array, returnUrl: string, metadata: object }
-    auth: [server-only]
+    input:
+      email: string
+      lineItems: array
+      returnUrl: string
+      metadata: object
+    auth:
+    - server-only
     pre:
-      - stripe client configured
+    - stripe client configured
     err: []
-    out: { id: string, clientSecret: string }
+    out:
+      id: string
+      clientSecret: string
   OP-Stripe.refundCheckoutSession:
-    input: { sessionId: string }
-    auth: [server-only]
+    input:
+      sessionId: string
+    auth:
+    - server-only
     pre:
-      - session has a resolvable payment_intent
+    - session has a resolvable payment_intent
     err:
-      - ERR-NO-PAYMENT-INTENT
-    out: { refundId: string }
+    - ERR-NO-PAYMENT-INTENT
+    out:
+      refundId: string
   OP-Webhook.checkoutSessionCompleted:
-    input: { sessionId: string, metadataReservationId: string }
-    auth: [stripe-signature]
+    input:
+      sessionId: string
+      metadataReservationId: string
+    auth:
+    - stripe-signature
     pre:
-      - signature verified
+    - signature verified
     err: []
-    out: { received: true }
+    out:
+      received: true
   OP-Availability.forRange:
-    input: { checkIn: date, checkOut: date, rooms: integer, assignableRoomCount: integer, excludeReservationId: integer-optional }
-    auth: [internal]
+    input:
+      checkIn: date
+      checkOut: date
+      rooms: integer
+      assignableRoomCount: integer
+      excludeReservationId: integer-optional
+    auth:
+    - internal
     pre: []
     err: []
-    out: { nights: array, unavailableNights: array }
-
+    out:
+      nights: array
+      unavailableNights: array
 ERR:
   ERR-DATES-REQUIRED:
     code: 400
@@ -134,226 +175,271 @@ ERR:
     meaning: arrival date is in the past
   ERR-PAYMENT-UNAVAILABLE:
     code: 503
-    meaning: payment is temporarily unavailable (Stripe unconfigured or session creation failed)
+    meaning: payment is temporarily unavailable (Stripe unconfigured or session creation
+      failed)
   ERR-DATES-TAKEN:
     code: 409
     meaning: requested dates are no longer available
   ERR-NO-PAYMENT-INTENT:
     code: 500
     meaning: checkout session has no resolvable payment intent to refund
-
 AUTH:
   public-rate-limited: unauthenticated caller subject to the reservations rate limiter
   server-only: called only from within the Worker, never exposed
   stripe-signature: trust derives solely from a valid Stripe webhook signature
   internal: internal module function, no external auth surface
-
 INV:
-  INV-no-oversell: no confirmed-or-active-held occupancy for any night may exceed assignableRoomCount
-  INV-no-unpayable-hold: a held reservation without a usable Checkout session must not persist (503-before-insert and release-on-failure)
-  INV-idempotent-paid: a reservation already confirmed and paid is never re-confirmed, re-emailed, or re-refunded
+  INV-no-oversell: no confirmed-or-active-held occupancy for any night may exceed
+    assignableRoomCount
+  INV-no-unpayable-hold: a held reservation without a usable Checkout session must
+    not persist (503-before-insert and release-on-failure)
+  INV-idempotent-paid: a reservation already confirmed and paid is never re-confirmed,
+    re-emailed, or re-refunded
   INV-webhook-signed: no side effect occurs before the Stripe signature is verified
-
 API:
   POST /api/reservations:
     input: OP-Reservation.book.input
-    output: { reservationId, clientSecret, holdExpiresAt }
-    errors: [ERR-DATES-REQUIRED, ERR-PAST-DATE, ERR-PAYMENT-UNAVAILABLE, ERR-DATES-TAKEN]
+    output:
+      reservationId: null
+      clientSecret: null
+      holdExpiresAt: null
+    errors:
+    - ERR-DATES-REQUIRED
+    - ERR-PAST-DATE
+    - ERR-PAYMENT-UNAVAILABLE
+    - ERR-DATES-TAKEN
     auth: public-rate-limited
   POST /api/webhooks/stripe:
     input: raw Stripe event body plus stripe-signature header
-    output: { received: true }
+    output:
+      received: true
     errors: []
     auth: stripe-signature
-
 UI: {}
-
 DATA:
-  reservations table: existing columns plus hold_expires_at and stripe_checkout_session_id (added by migration 0043, no new migration in this stream)
-  advisory-lock constant: fixed integer key passed to pg_advisory_xact_lock in the guarded insert CTE
-
+  reservations table: existing columns plus hold_expires_at and stripe_checkout_session_id
+    (added by migration 0043, no new migration in this stream)
+  advisory-lock constant: fixed integer key passed to pg_advisory_xact_lock in the
+    guarded insert CTE
 TEST:
   T-BOOK-001a:
     verifies: R-BOOK-001
-    behaviour: booking with available dates returns 201 with clientSecret, reservationId, holdExpiresAt and inserts a held row with hold_expires_at
+    behaviour: booking with available dates returns 201 with clientSecret, reservationId,
+      holdExpiresAt and inserts a held row with hold_expires_at
     steps:
-      - mock sql so the guarded insert returns a held row and settings are available
-      - mock createEmbeddedCheckoutSession to return a client secret
-      - POST /api/reservations with valid future dates
-      - assert status 201 and body has reservationId, clientSecret, holdExpiresAt
+    - mock sql so the guarded insert returns a held row and settings are available
+    - mock createEmbeddedCheckoutSession to return a client secret
+    - POST /api/reservations with valid future dates
+    - assert status 201 and body has reservationId, clientSecret, holdExpiresAt
   T-BOOK-001b:
     verifies: R-BOOK-001
     behaviour: Stripe session creation failure releases the held row and returns 503
     steps:
-      - mock the guarded insert to return a held row
-      - mock createEmbeddedCheckoutSession to throw
-      - POST /api/reservations
-      - assert status 503 and an update setting the row to released was issued
+    - mock the guarded insert to return a held row
+    - mock createEmbeddedCheckoutSession to throw
+    - POST /api/reservations
+    - assert status 503 and an update setting the row to released was issued
   T-BOOK-002a:
     verifies: R-BOOK-002
     behaviour: STRIPE_SECRET_KEY unset returns 503 with no held insert
     steps:
-      - env without STRIPE_SECRET_KEY
-      - POST /api/reservations with valid dates
-      - assert status 503 and no INSERT into reservations was issued
+    - env without STRIPE_SECRET_KEY
+    - POST /api/reservations with valid dates
+    - assert status 503 and no INSERT into reservations was issued
   T-BOOK-003a:
     verifies: R-BOOK-003
     behaviour: guarded insert returning no row yields 409 with no further work
     steps:
-      - mock the guarded insert to return an empty array
-      - POST /api/reservations
-      - assert status 409 and no Checkout session was created
+    - mock the guarded insert to return an empty array
+    - POST /api/reservations
+    - assert status 409 and no Checkout session was created
   T-PAY-001a:
     verifies: R-PAY-001
-    behaviour: createEmbeddedCheckoutSession builds one CAD price_data line per item, sets ui_mode embedded and mode payment, returns client_secret
+    behaviour: createEmbeddedCheckoutSession builds one CAD price_data line per item,
+      sets ui_mode embedded and mode payment, returns client_secret
     steps:
-      - stub stripe.checkout.sessions.create capturing its argument
-      - call createEmbeddedCheckoutSession with four line items
-      - assert ui_mode embedded, mode payment, four cad price_data lines, returned clientSecret
+    - stub stripe.checkout.sessions.create capturing its argument
+    - call createEmbeddedCheckoutSession with four line items
+    - assert ui_mode embedded, mode payment, four cad price_data lines, returned clientSecret
   T-PAY-001b:
     verifies: R-PAY-001
-    behaviour: the four line-item cent amounts sum to the admin full-invoice total to the cent
+    behaviour: the four line-item cent amounts sum to the admin full-invoice total
+      to the cent
     steps:
-      - compute computeInvoice full on the same public settings and stay
-      - build the line items and sum their cents
-      - assert the sum equals round of breakdown.total times one hundred
+    - compute computeInvoice full on the same public settings and stay
+    - build the line items and sum their cents
+    - assert the sum equals round of breakdown.total times one hundred
   T-PAY-002a:
     verifies: R-PAY-002
-    behaviour: refundCheckoutSession retrieves the session, resolves the payment intent, and issues a full refund
+    behaviour: refundCheckoutSession retrieves the session, resolves the payment intent,
+      and issues a full refund
     steps:
-      - stub sessions.retrieve to return a session with a payment_intent id
-      - stub refunds.create capturing its argument
-      - call refundCheckoutSession
-      - assert refunds.create was called with that payment intent
+    - stub sessions.retrieve to return a session with a payment_intent id
+    - stub refunds.create capturing its argument
+    - call refundCheckoutSession
+    - assert refunds.create was called with that payment intent
   T-HOOK-001a:
     verifies: R-HOOK-001
-    behaviour: completed event with rooms available confirms and enqueues the email when the toggle is on
+    behaviour: completed event with rooms available confirms and enqueues the email
+      when the toggle is on
     steps:
-      - mock signature verification to yield a checkout.session.completed with reservation metadata
-      - mock availability to show rooms available and the toggle enabled
-      - POST /api/webhooks/stripe
-      - assert an update to confirmed/paid and an email_outbox insert
+    - mock signature verification to yield a checkout.session.completed with reservation
+      metadata
+    - mock availability to show rooms available and the toggle enabled
+    - POST /api/webhooks/stripe
+    - assert an update to confirmed/paid and an email_outbox insert
   T-HOOK-001b:
     verifies: R-HOOK-001
-    behaviour: completed event with rooms unavailable refunds and releases without confirming
+    behaviour: completed event with rooms unavailable refunds and releases without
+      confirming
     steps:
-      - mock availability to show a night unavailable
-      - stub refundCheckoutSession
-      - POST /api/webhooks/stripe
-      - assert refund called, status set to released, no confirm
+    - mock availability to show a night unavailable
+    - stub refundCheckoutSession
+    - POST /api/webhooks/stripe
+    - assert refund called, status set to released, no confirm
   T-HOOK-001c:
     verifies: R-HOOK-001
-    behaviour: redelivered completed event for an already confirmed-paid reservation is a no-op
+    behaviour: redelivered completed event for an already confirmed-paid reservation
+      is a no-op
     steps:
-      - mock the reservation row as already confirmed and paid
-      - POST /api/webhooks/stripe with the same event
-      - assert no confirm update, no email, no refund
+    - mock the reservation row as already confirmed and paid
+    - POST /api/webhooks/stripe with the same event
+    - assert no confirm update, no email, no refund
   T-AVAIL-001a:
     verifies: R-AVAIL-001
-    behaviour: availabilityForRange with exclude-reservation-id does not count the excluded reservation
+    behaviour: availabilityForRange with exclude-reservation-id does not count the
+      excluded reservation
     steps:
-      - mock sql to return one held reservation covering the range
-      - call availabilityForRange with excludeReservationId equal to that reservation id
-      - assert the night is available
+    - mock sql to return one held reservation covering the range
+    - call availabilityForRange with excludeReservationId equal to that reservation
+      id
+    - assert the night is available
   T-AVAIL-001b:
     verifies: R-AVAIL-001
-    behaviour: the guarded SQL occupancy and the TypeScript availabilityForRange agree on a shared fixture
+    behaviour: the guarded SQL occupancy and the TypeScript availabilityForRange agree
+      on a shared fixture
     steps:
-      - define a fixture of reservations, blackouts, assignable-room count
-      - compute occupancy via the SQL-guard logic and via availabilityForRange
-      - assert the same available/unavailable decision per night
-
+    - define a fixture of reservations, blackouts, assignable-room count
+    - compute occupancy via the SQL-guard logic and via availabilityForRange
+    - assert the same available/unavailable decision per night
 NFR:
-  typecheck: npm run typecheck green; Stripe ui_mode and client_secret shapes typecheck against the installed SDK
+  typecheck: npm run typecheck green; Stripe ui_mode and client_secret shapes typecheck
+    against the installed SDK
   tests: apps/api and apps/web Vitest green including existing invoice-path tests
-  security: all Stripe secrets stay in the apps/api Worker env; none logged; no side effect before signature verification
+  security: all Stripe secrets stay in the apps/api Worker env; none logged; no side
+    effect before signature verification
   correctness: guest total equals admin full-invoice total to the cent
-
 FILE:
   apps/api/src/stripe.ts: TASK-stripe-helpers
   apps/api/src/availability.ts: TASK-availability
   apps/api/src/index.ts: TASK-endpoints
   apps/api/test/**: TASK-tests
   apps/api/src/**/*.test.ts: TASK-tests
-
 TASK:
   TASK-availability:
     scope:
-      - R-AVAIL-001
-      - OP-Availability.forRange
-      - T-AVAIL-001a
-    files: [apps/api/src/availability.ts]
+    - R-AVAIL-001
+    - OP-Availability.forRange
+    - T-AVAIL-001a
+    files:
+    - apps/api/src/availability.ts
     must_preserve:
-      - INV-no-oversell
-    produce: [code]
-    verifies: [R-AVAIL-001]
+    - INV-no-oversell
+    produce:
+    - code
+    verifies:
+    - R-AVAIL-001
   TASK-stripe-helpers:
     scope:
-      - R-PAY-001
-      - R-PAY-002
-      - OP-Stripe.createEmbeddedCheckoutSession
-      - OP-Stripe.refundCheckoutSession
-      - ERR-NO-PAYMENT-INTENT
-    files: [apps/api/src/stripe.ts]
+    - R-PAY-001
+    - R-PAY-002
+    - OP-Stripe.createEmbeddedCheckoutSession
+    - OP-Stripe.refundCheckoutSession
+    - ERR-NO-PAYMENT-INTENT
+    files:
+    - apps/api/src/stripe.ts
     must_preserve: []
-    produce: [code]
-    verifies: [R-PAY-001, R-PAY-002]
+    produce:
+    - code
+    verifies:
+    - R-PAY-001
+    - R-PAY-002
   TASK-endpoints:
     scope:
-      - R-BOOK-001
-      - R-BOOK-002
-      - R-BOOK-003
-      - R-HOOK-001
-      - OP-Reservation.book
-      - OP-Webhook.checkoutSessionCompleted
-      - ERR-DATES-REQUIRED
-      - ERR-PAST-DATE
-      - ERR-PAYMENT-UNAVAILABLE
-      - ERR-DATES-TAKEN
-      - AUTH
-      - DATA
-    files: [apps/api/src/index.ts]
+    - R-BOOK-001
+    - R-BOOK-002
+    - R-BOOK-003
+    - R-HOOK-001
+    - OP-Reservation.book
+    - OP-Webhook.checkoutSessionCompleted
+    - ERR-DATES-REQUIRED
+    - ERR-PAST-DATE
+    - ERR-PAYMENT-UNAVAILABLE
+    - ERR-DATES-TAKEN
+    files:
+    - apps/api/src/index.ts
     must_preserve:
-      - INV-no-oversell
-      - INV-no-unpayable-hold
-      - INV-idempotent-paid
-      - INV-webhook-signed
-    produce: [code]
-    verifies: [R-BOOK-001, R-BOOK-002, R-BOOK-003, R-HOOK-001]
+    - INV-no-oversell
+    - INV-no-unpayable-hold
+    - INV-idempotent-paid
+    - INV-webhook-signed
+    produce:
+    - code
+    verifies:
+    - R-BOOK-001
+    - R-BOOK-002
+    - R-BOOK-003
+    - R-HOOK-001
   TASK-tests:
     scope:
-      - T-BOOK-001a
-      - T-BOOK-001b
-      - T-BOOK-002a
-      - T-BOOK-003a
-      - T-PAY-001a
-      - T-PAY-001b
-      - T-PAY-002a
-      - T-HOOK-001a
-      - T-HOOK-001b
-      - T-HOOK-001c
-      - T-AVAIL-001a
-      - T-AVAIL-001b
-    files: [apps/api/test/**, apps/api/src/**/*.test.ts]
+    - T-BOOK-001a
+    - T-BOOK-001b
+    - T-BOOK-002a
+    - T-BOOK-003a
+    - T-PAY-001a
+    - T-PAY-001b
+    - T-PAY-002a
+    - T-HOOK-001a
+    - T-HOOK-001b
+    - T-HOOK-001c
+    - T-AVAIL-001a
+    - T-AVAIL-001b
+    files:
+    - apps/api/test/**
+    - apps/api/src/**/*.test.ts
     must_preserve:
-      - INV-idempotent-paid
-    produce: [tests]
-    verifies: [R-BOOK-001, R-BOOK-002, R-BOOK-003, R-PAY-001, R-PAY-002, R-HOOK-001, R-AVAIL-001]
-
+    - INV-idempotent-paid
+    produce:
+    - tests
+    verifies:
+    - R-BOOK-001
+    - R-BOOK-002
+    - R-BOOK-003
+    - R-PAY-001
+    - R-PAY-002
+    - R-HOOK-001
+    - R-AVAIL-001
 STATE:
   ST-01:
     status: locked
-    decision: atomicity via a single guarded SQL statement with pg_advisory_xact_lock (option a); TypeScript availabilityForRange retained as friendly pre-check only
-    rationale: the neon HTTP driver runs each query as its own autocommit transaction, so a cross-call xact lock does not hold; one statement keeps race-safety in a single round trip and preserves the uniform tagged-template pattern
+    decision: atomicity via a single guarded SQL statement with pg_advisory_xact_lock
+      (option a); TypeScript availabilityForRange retained as friendly pre-check only
+    rationale: the neon HTTP driver runs each query as its own autocommit transaction,
+      so a cross-call xact lock does not hold; one statement keeps race-safety in
+      a single round trip and preserves the uniform tagged-template pattern
   ST-02:
     status: locked
     decision: return_url is SITE_ORIGIN + /reservation-confirmee?session_id={CHECKOUT_SESSION_ID}
-    rationale: reuses the existing hardcoded constant like password-reset and verification links; the confirmation path is the agreed contract Stream 3 builds
+    rationale: reuses the existing hardcoded constant like password-reset and verification
+      links; the confirmation path is the agreed contract Stream 3 builds
   ST-03:
     status: locked
-    decision: guest email passed as customer_email; no pre-created Stripe Customer for bookings
+    decision: guest email passed as customer_email; no pre-created Stripe Customer
+      for bookings
     rationale: sufficient for embedded checkout and avoids customer-record churn
   ST-04:
     status: locked
-    decision: booking webhook branch selected first by metadata.reservation_id or stripe_checkout_session_id, falling through to the existing invoice-id path
-    rationale: keeps the invoice-backed path fully intact while adding the booking path additively
+    decision: booking webhook branch selected first by metadata.reservation_id or
+      stripe_checkout_session_id, falling through to the existing invoice-id path
+    rationale: keeps the invoice-backed path fully intact while adding the booking
+      path additively
