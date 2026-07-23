@@ -508,7 +508,12 @@ app.post(
 
     const stripeKey = c.env.STRIPE_SECRET_KEY;
     if (!stripeKey) {
-      return c.json({ error: "Le paiement est temporairement indisponible." }, 503);
+      // Distinct `code` so this (no key configured) is diagnosable apart from a
+      // Stripe API failure below — both return the same guest-facing 503 message.
+      return c.json(
+        { error: "Le paiement est temporairement indisponible.", code: "stripe_not_configured" },
+        503
+      );
     }
 
     const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
@@ -654,12 +659,31 @@ app.post(
         201
       );
     } catch (err) {
-      console.error("stripe_checkout_session_creation_failed", err instanceof Error ? err.message : "unknown");
-      // Release the hold since payment setup failed
+      // This endpoint is PUBLIC, so we do NOT echo the raw Stripe message (it can
+      // contain a masked key). But the Stripe error *type* and *code* are safe
+      // classifiers (e.g. StripePermissionError / StripeAuthenticationError) that
+      // pinpoint the cause without a masked-key leak — surface those + a distinct
+      // `code` so a session-create failure is diagnosable apart from a missing key.
+      const e = err as { type?: string; code?: string; message?: string };
+      console.error(
+        "stripe_checkout_session_creation_failed",
+        e?.type ?? "",
+        e?.code ?? "",
+        e?.message ?? "unknown"
+      );
+      // Release the hold since payment setup failed.
       await sql`
         UPDATE reservations SET status = 'released' WHERE id = ${created.id}
       `;
-      return c.json({ error: "Le paiement est temporairement indisponible." }, 503);
+      return c.json(
+        {
+          error: "Le paiement est temporairement indisponible.",
+          code: "stripe_session_failed",
+          stripeErrorType: e?.type ?? null,
+          stripeErrorCode: e?.code ?? null,
+        },
+        503
+      );
     }
   }
 );

@@ -44,6 +44,9 @@
     // in cookie/localStorage only. Server sync is best-effort: the client-side
     // preference is already applied either way.
     if (auth.user) {
+      // Keep the in-memory user consistent so the layout's account-locale sync
+      // never reverts this toggle, even if the server write is slow or fails.
+      (auth.user as typeof auth.user & { locale?: string }).locale = newLocale;
       await updateLocale(newLocale);
     }
   }
