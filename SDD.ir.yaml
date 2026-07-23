@@ -1,502 +1,252 @@
 REQ:
-  R-I18N-001:
-    actor: Guest visitor
-    capability: view the guest-facing site in French by default and switch to English
-    constraints: switching updates all guest copy live with no page reload and persists
-      across navigation and refresh
+  R-HOLD-001:
+    actor: Booking availability calculator
+    capability: count an active held reservation as occupied inventory
+    constraints: only while hold_expires_at is strictly after the current time; expired or NULL holds do not count
     priority: MUST
     tests:
-    - T-I18N-001a
-    - T-I18N-001b
-  R-I18N-002:
-    actor: Frontend code
-    capability: translate a dot-keyed message with optional named interpolation for
-      the active locale
-    constraints: interpolation uses percent-delimited tokens such as percent-name-percent;
-      a missing key returns the key unchanged
+      - T-HOLD-001a
+      - T-HOLD-001b
+  R-HOLD-002:
+    actor: Availability calculator
+    capability: preserve existing confirmed-occupancy, blackout subtraction, boundary rules, and result shape
+    constraints: per-reservation count, arrive inclusive, depart exclusive, AvailabilityResult shape unchanged
     priority: MUST
     tests:
-    - T-I18N-002a
-    - T-I18N-002b
-  R-I18N-003:
-    actor: Frontend store
-    capability: persist the active locale to a cookie and to localStorage and set
-      the html lang attribute
-    constraints: must no-op without throwing when document or localStorage are unavailable
+      - T-HOLD-002a
+      - T-HOLD-002b
+      - T-HOLD-002c
+  R-HOLD-003:
+    actor: Data model
+    capability: add hold_expires_at and stripe_checkout_session_id columns idempotently
+    constraints: ADD COLUMN IF NOT EXISTS, nullable, own numbered migration file
     priority: MUST
     tests:
-    - T-I18N-003a
-    - T-I18N-003b
-  R-I18N-004:
-    actor: Maintainer
-    capability: keep French and English dictionaries with identical key sets
-    constraints: only guest-facing display strings move; structural fields stay in
-      content
+      - T-HOLD-003a
+  R-HOLD-004:
+    actor: Reservation status domain
+    capability: recognise held and released as valid statuses
+    constraints: Zod enum accepts held and released and rejects unknown values
     priority: MUST
     tests:
-    - T-I18N-004a
-  R-LOC-001:
-    actor: Registering guest
-    capability: submit a preferred locale at registration and have it persisted on
-      the user record
-    constraints: allowed values are the strings fr and en; absent means fr
+      - T-HOLD-004a
+  R-HOLD-005:
+    actor: Cron scheduled handler
+    capability: retire expired holds to released
+    constraints: UPDATE where status held and hold_expires_at before now; called in the existing waitUntil block
     priority: MUST
     tests:
-    - T-LOC-001a
-  R-LOC-002:
-    actor: Logged-in guest
-    capability: update the stored locale through a dedicated endpoint when flipping
-      the toggle
-    constraints: authentication-gated; anonymous flips stay in cookie and localStorage
-      only
+      - T-HOLD-005a
+      - T-HOLD-005b
+  R-HOLD-006:
+    actor: Admin reservation list
+    capability: display held and released with French labels and styled badges
+    constraints: held shows En attente de paiement, released shows Expiree; distinct badge classes; admin action union unchanged
     priority: MUST
     tests:
-    - T-LOC-002a
-    - T-LOC-002b
-  R-LOC-003:
-    actor: Login and session endpoints
-    capability: return the stored user locale so the frontend can initialize the store
-    constraints: locale included in the login and session user objects
-    priority: MUST
-    tests:
-    - T-LOC-003a
-  R-MAIL-001:
-    actor: Email sender code
-    capability: resolve a recipient locale by user id or email with a safe French
-      fallback
-    constraints: missing row, unknown email, null or invalid value all resolve to
-      fr
-    priority: MUST
-    tests:
-    - T-MAIL-001a
-  R-MAIL-002:
-    actor: Email sender code
-    capability: pass a resolved locale into each in-file email enqueue call
-    constraints: registration verification uses the submitted register locale; reservation
-      flows resolve by reservation user id then fall back to fr
-    priority: MUST
-    tests:
-    - T-MAIL-002a
-  R-ADMIN-001:
-    actor: Admin user
-    capability: keep the admin panel and admin routes in French
-    constraints: no admin route or admin component is modified by this stream
-    priority: MUST
-    tests:
-    - T-ADMIN-001a
+      - T-HOLD-006a
+
 E:
-  E-User:
+  E-Reservation:
     fields:
-      id: bigint identity primary key
-      email: text
-      locale: text not null default the string fr
-    tenancy: single tenant
+      status: text
+      arrive: date
+      depart: date
+      hold_expires_at: timestamptz nullable
+      stripe_checkout_session_id: text nullable
+    tenancy: single-tenant
     invariants:
-    - INV-locale-valid
-  E-LocaleStore:
+      - INV-hold-expiry-frees-inventory
+      - INV-status-domain
+  E-BlackoutDate:
     fields:
-      locale: string fr or en
-    tenancy: client per session
-    invariants:
-    - INV-locale-valid
-    - INV-store-noop-safe
+      date: date
+      rooms_blocked: integer
+    tenancy: single-tenant
+
 OP:
-  OP-Locale.set:
-    input:
-      locale: string fr or en
-    auth:
-    - anonymous-allowed
-    pre: []
-    err:
-    - ERR-BADLOCALE
-    out:
-      persisted: cookie and localStorage updated and html lang set
-  OP-Locale.update:
-    input:
-      locale: string fr or en
-    auth:
-    - user-authenticated
-    pre:
-    - a valid session cookie is present
-    err:
-    - ERR-BADLOCALE
-    - ERR-UNAUTH
-    out:
-      ok: boolean true
-      locale: the stored locale string
-  OP-Register.withLocale:
-    input:
-      email: string
-      password: string
-      locale: optional string fr or en defaulting to fr
-    auth:
-    - anonymous-allowed
-    pre: []
-    err:
-    - ERR-BADLOCALE
-    out:
-      user: the created user including locale
-  OP-Mail.resolveLocale:
-    input:
-      selector: a numeric user id or an email address
-    auth:
-    - internal
+  OP-Availability.forRange:
+    input: { checkIn: string, checkOut: string, rooms: integer, assignableRoomCount: integer }
+    auth: []
     pre: []
     err: []
-    out:
-      locale: the stored locale when valid otherwise fr
-AUTH:
-  anonymous-allowed: any visitor may set the client locale with no session
-  user-authenticated: a valid session cookie identifies the acting user
-  internal: server-internal helper not exposed over HTTP
+    out: { nights: array, unavailableNights: array }
+  OP-Holds.releaseExpired:
+    input: { sql: function }
+    auth: []
+    pre: []
+    err: []
+    out: { released_count: integer }
+
 INV:
-  INV-locale-valid: a persisted locale is always one of the strings fr or en
-  INV-store-noop-safe: the locale store never throws when document or localStorage
-    are absent
-  INV-admin-french: admin routes and admin components are never converted and remain
-    French
-  INV-key-parity: the French and English dictionaries always expose identical dot-key
-    sets
-ERR:
-  ERR-BADLOCALE:
-    code: 400
-    meaning: the supplied locale is not one of the strings fr or en
-  ERR-UNAUTH:
-    code: 401
-    meaning: the request has no valid session
+  INV-hold-expiry-frees-inventory: a held reservation counts against availability only while hold_expires_at is strictly in the future; the moment it lapses it stops counting, independent of the cron
+  INV-status-domain: reservation status is one of pending, confirmed, cancelled, held, released
+  INV-count-semantics: each covering active reservation contributes exactly one to a date occupancy, matching the prior COUNT-star behaviour
+
+AUTH:
+  system-only-status: held and released are set only by the booking flow and the cron, never by an admin manual transition
+
 API:
-  POST /api/auth/register:
-    input: email and password and optional locale
-    output: E-User
-    errors:
-    - ERR-BADLOCALE
-    auth: anonymous-allowed
-  POST /api/auth/login:
-    input: email and password
-    output: E-User including locale
+  no-http-contract-change:
+    input: none
+    output: none
     errors: []
-    auth: anonymous-allowed
-  GET /api/auth/me:
-    input: session cookie
-    output: E-User including locale
-    errors: []
-    auth: anonymous-allowed
-  POST /api/profile/locale:
-    input: locale one of the strings fr or en
-    output: ok true and the stored locale
-    errors:
-    - ERR-BADLOCALE
-    - ERR-UNAUTH
-    auth: user-authenticated
+    auth: none
+
 UI:
-  screen-header-nav:
-    actions:
-    - flip locale to fr
-    - flip locale to en
-    state:
-    - active-locale-fr
-    - active-locale-en
-  screen-guest-pages:
-    actions:
-    - render translated copy for the active locale
-    state:
-    - localized
+  screen-admin-reservations-row:
+    actions: []
+    state: { held, released, pending, confirmed, cancelled }
+
 DATA:
-  migration 0042_users_locale.sql: adds users.locale as text not null default the
-    string fr using ADD COLUMN IF NOT EXISTS
-  users table: gains the locale column; existing rows backfill to fr from the default
+  migration 0043_reservations_hold.sql: ALTER TABLE reservations ADD COLUMN IF NOT EXISTS hold_expires_at timestamptz; ALTER TABLE reservations ADD COLUMN IF NOT EXISTS stripe_checkout_session_id text
+  reservations table: existing plus hold_expires_at timestamptz nullable, stripe_checkout_session_id text nullable
+  blackout_dates table: existing date and rooms_blocked used for subtraction
+
 TEST:
-  T-I18N-001a:
-    verifies: R-I18N-001
-    behaviour: clicking the header EN toggle switches guest copy to English with no
-      reload
+  T-HOLD-001a:
+    verifies: R-HOLD-001
+    behaviour: an active held reservation covering a night reduces that night available by one
     steps:
-    - render a guest surface with the default locale
-    - assert a known string renders in French
-    - invoke the store setter for English
-    - assert the same string now renders in English
-  T-I18N-001b:
-    verifies: R-I18N-001
-    behaviour: the chosen locale survives a simulated refresh by reading persisted
-      storage
+      - mock sql returns one reservation status held with hold_expires_at in the future covering the night
+      - call availabilityForRange with assignableRoomCount 12 and rooms 1
+      - assert the covered night available equals 11
+  T-HOLD-001b:
+    verifies: R-HOLD-001
+    behaviour: an expired held reservation does not reduce availability
     steps:
-    - set the locale to English through the store setter
-    - read the persisted cookie and localStorage values
-    - assert both hold English
-  T-I18N-002a:
-    verifies: R-I18N-002
-    behaviour: the translate helper interpolates a named token
+      - mock sql returns one reservation status held with hold_expires_at in the past covering the night
+      - call availabilityForRange with assignableRoomCount 12 and rooms 1
+      - assert the covered night available equals 12
+  T-HOLD-002a:
+    verifies: R-HOLD-002
+    behaviour: a confirmed reservation reduces a covered night by one
     steps:
-    - define a greeting message containing a name placeholder as a percent-delimited
-      token
-    - call the translate helper with a name value
-    - assert the returned string contains the supplied name and no leftover percent-delimited
-      token
-  T-I18N-002b:
-    verifies: R-I18N-002
-    behaviour: a missing key returns the key unchanged
+      - mock sql returns one reservation status confirmed covering the night
+      - assert the covered night available equals 11
+  T-HOLD-002b:
+    verifies: R-HOLD-002
+    behaviour: a blackout rooms_blocked subtracts from availability
     steps:
-    - call the translate helper with a key that is absent from the dictionary
-    - assert the returned value equals the key string
-  T-I18N-003a:
-    verifies: R-I18N-003
-    behaviour: setting the locale sets the html lang attribute
+      - mock sql returns one blackout row rooms_blocked 2 on a night
+      - assert that night available is reduced by 2
+  T-HOLD-002c:
+    verifies: R-HOLD-002
+    behaviour: arrive inclusive depart exclusive boundary
     steps:
-    - set the locale to English through the store setter
-    - assert the html element lang attribute equals English
-  T-I18N-003b:
-    verifies: R-I18N-003
-    behaviour: the store is a clean no-op when browser globals are absent
+      - reservation arrive 2026-08-01 depart 2026-08-03 confirmed
+      - assert 2026-08-01 and 2026-08-02 are occupied and 2026-08-03 is not
+  T-HOLD-003a:
+    verifies: R-HOLD-003
+    behaviour: migration is idempotent and adds both columns
     steps:
-    - evaluate the store initializer in an environment without document or localStorage
-    - assert no error is thrown and the locale defaults to French
-  T-I18N-004a:
-    verifies: R-I18N-004
-    behaviour: the French and English dictionaries have identical key sets
+      - file contains two ADD COLUMN IF NOT EXISTS statements for hold_expires_at and stripe_checkout_session_id
+  T-HOLD-004a:
+    verifies: R-HOLD-004
+    behaviour: Zod status enum accepts held and released and rejects unknown
     steps:
-    - flatten the French dictionary to a sorted array of dot keys
-    - flatten the English dictionary to a sorted array of dot keys
-    - assert the two arrays are deeply equal
-  T-LOC-001a:
-    verifies: R-LOC-001
-    behaviour: a register request carrying English persists an English locale
+      - parse status held succeeds
+      - parse status released succeeds
+      - parse status unknown fails
+  T-HOLD-005a:
+    verifies: R-HOLD-005
+    behaviour: releaseExpiredHolds marks an expired held reservation released
     steps:
-    - post a register request whose body includes the locale English
-    - assert the users INSERT captures the English locale value
-  T-LOC-002a:
-    verifies: R-LOC-002
-    behaviour: an authenticated locale update writes the users locale column
+      - mock sql captures the UPDATE statement
+      - assert it sets status released where status held and hold_expires_at before now
+  T-HOLD-005b:
+    verifies: R-HOLD-005
+    behaviour: releaseExpiredHolds leaves an active held reservation untouched
     steps:
-    - post to the profile locale endpoint with English and a valid session
-    - assert the response reports ok true with English and the stored column is English
-  T-LOC-002b:
-    verifies: R-LOC-002
-    behaviour: an invalid or unauthenticated locale update is rejected
+      - assert the UPDATE predicate excludes future-dated holds
+  T-HOLD-006a:
+    verifies: R-HOLD-006
+    behaviour: statusLabel returns the French strings for held and released
     steps:
-    - post to the profile locale endpoint with an invalid value and assert status
-      400
-    - post to the profile locale endpoint with no session and assert status 401
-  T-LOC-003a:
-    verifies: R-LOC-003
-    behaviour: login and session responses include the stored locale
-    steps:
-    - log in as a user whose stored locale is English
-    - assert the returned user object includes the English locale
-  T-MAIL-001a:
-    verifies: R-MAIL-001
-    behaviour: the locale resolver returns the stored locale or falls back to French
-    steps:
-    - resolve the locale for a user whose stored locale is English and assert English
-    - resolve the locale for a missing user or unknown email and assert French
-  T-MAIL-002a:
-    verifies: R-MAIL-002
-    behaviour: an English recipient selects the English template at enqueue
-    steps:
-    - trigger an email whose recipient has an English stored locale
-    - assert the enqueue receives the English locale and the English template is selected
-  T-ADMIN-001a:
-    verifies: R-ADMIN-001
-    behaviour: admin surfaces remain French
-    steps:
-    - inspect the admin routes and admin components after the stream
-    - assert none were modified and their copy remains French
+      - statusLabel held returns En attente de paiement
+      - statusLabel released returns Expiree
+
 NFR:
-  typecheck: npm run typecheck passes across workspaces
-  tests: the apps/api and apps/web Vitest suites pass
-  responsiveness: the header toggle has no horizontal overflow at a 360 pixel viewport
-    width
-  security: no secrets are introduced into apps/web
-  idempotency: the 0042 migration is safe to apply repeatedly
+  correctness: availability correctness must not depend on the cron having run
+  bounded-reads: reservation and blackout fetches are bounded to the requested range
+  typecheck: npm run typecheck green
+  tests: apps/api and apps/web vitest green
+
 FILE:
-  apps/web/src/lib/i18n.svelte.ts: TASK-i18n-core
-  apps/web/src/lib/messages/fr.ts: TASK-i18n-core
-  apps/web/src/lib/messages/en.ts: TASK-i18n-core
-  apps/web/src/lib/content.ts: TASK-i18n-core
-  apps/web/src/lib/components/Nav.svelte: TASK-web-shell
-  apps/web/src/lib/components/Footer.svelte: TASK-web-shell
-  apps/web/src/lib/components/ReviewsStrip.svelte: TASK-web-shell
-  apps/web/src/lib/components/ProfilReservationTable.svelte: TASK-web-shell
-  apps/web/src/lib/components/MaintenanceBanner.svelte: TASK-web-shell
-  apps/web/src/routes/+layout.svelte: TASK-web-shell
-  apps/web/src/app.html: TASK-web-shell
-  apps/web/src/routes/+page.svelte: TASK-web-pages
-  apps/web/src/routes/le-site/+page.svelte: TASK-web-pages
-  apps/web/src/routes/a-propos/+page.svelte: TASK-web-pages
-  apps/web/src/routes/contact/+page.svelte: TASK-web-pages
-  apps/web/src/routes/avis/+page.svelte: TASK-web-pages
-  apps/web/src/routes/avis/nouveau/+page.svelte: TASK-web-pages
-  apps/web/src/routes/connexion/+page.svelte: TASK-web-pages
-  apps/web/src/routes/profil/+page.svelte: TASK-web-pages
-  apps/web/src/routes/reinitialisation/+page.svelte: TASK-web-pages
-  apps/web/src/routes/verification/+page.svelte: TASK-web-pages
-  apps/web/src/routes/confidentialite/+page.svelte: TASK-web-pages
-  apps/web/src/routes/politiques/+page.svelte: TASK-web-pages
-  apps/web/src/lib/api.ts: TASK-web-api-client
-  apps/api/migrations/0042_users_locale.sql: TASK-api-locale
-  apps/api/src/index.ts: TASK-api-locale
-  apps/api/src/emailLocale.ts: TASK-api-locale
-  apps/web/src/lib/__tests__/i18n.test.ts: TASK-tests
-  apps/web/src/lib/__tests__/i18n-parity.test.ts: TASK-tests
-  apps/api/test/register-locale.test.ts: TASK-tests
-  apps/api/test/email-locale.test.ts: TASK-tests
+  apps/api/migrations/0043_reservations_hold.sql: TASK-migration
+  apps/api/src/availability.ts: TASK-availability
+  apps/api/src/holds.ts: TASK-cron
+  apps/api/src/index.ts: TASK-cron
+  apps/api/test/availability.test.ts: TASK-availability
+  apps/api/test/holds.test.ts: TASK-cron
+  apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-frontend
+  apps/web/src/lib/api.ts: TASK-frontend
+
 TASK:
-  TASK-i18n-core:
+  TASK-migration:
     scope:
-    - R-I18N-002
-    - R-I18N-003
-    - R-I18N-004
-    - OP-Locale.set
-    - INV-locale-valid
-    - INV-store-noop-safe
-    - INV-key-parity
-    files:
-    - apps/web/src/lib/i18n.svelte.ts
-    - apps/web/src/lib/messages/fr.ts
-    - apps/web/src/lib/messages/en.ts
-    - apps/web/src/lib/content.ts
+      - R-HOLD-003
+      - DATA
+      - T-HOLD-003a
+    files: [apps/api/migrations/0043_reservations_hold.sql]
     must_preserve:
-    - INV-key-parity
-    - INV-store-noop-safe
-    produce:
-    - code
-    verifies:
-    - R-I18N-002
-    - R-I18N-003
-    - R-I18N-004
-  TASK-web-shell:
+      - INV-status-domain
+    produce: [migrations]
+    verifies: [R-HOLD-003]
+  TASK-availability:
     scope:
-    - R-I18N-001
-    - R-LOC-002
-    - INV-admin-french
-    files:
-    - apps/web/src/lib/components/Nav.svelte
-    - apps/web/src/lib/components/Footer.svelte
-    - apps/web/src/lib/components/ReviewsStrip.svelte
-    - apps/web/src/lib/components/ProfilReservationTable.svelte
-    - apps/web/src/lib/components/MaintenanceBanner.svelte
-    - apps/web/src/routes/+layout.svelte
-    - apps/web/src/app.html
+      - R-HOLD-001
+      - R-HOLD-002
+      - OP-Availability.forRange
+      - T-HOLD-001a
+      - T-HOLD-001b
+      - T-HOLD-002a
+      - T-HOLD-002b
+      - T-HOLD-002c
+    files: [apps/api/src/availability.ts, apps/api/test/availability.test.ts]
     must_preserve:
-    - INV-admin-french
-    produce:
-    - code
-    verifies:
-    - R-I18N-001
-  TASK-web-pages:
+      - INV-hold-expiry-frees-inventory
+      - INV-count-semantics
+    produce: [code, tests]
+    verifies: [R-HOLD-001, R-HOLD-002]
+  TASK-cron:
     scope:
-    - R-I18N-001
-    - INV-admin-french
-    files:
-    - apps/web/src/routes/+page.svelte
-    - apps/web/src/routes/le-site/+page.svelte
-    - apps/web/src/routes/a-propos/+page.svelte
-    - apps/web/src/routes/contact/+page.svelte
-    - apps/web/src/routes/avis/+page.svelte
-    - apps/web/src/routes/avis/nouveau/+page.svelte
-    - apps/web/src/routes/connexion/+page.svelte
-    - apps/web/src/routes/profil/+page.svelte
-    - apps/web/src/routes/reinitialisation/+page.svelte
-    - apps/web/src/routes/verification/+page.svelte
-    - apps/web/src/routes/confidentialite/+page.svelte
-    - apps/web/src/routes/politiques/+page.svelte
+      - R-HOLD-004
+      - R-HOLD-005
+      - OP-Holds.releaseExpired
+      - T-HOLD-004a
+      - T-HOLD-005a
+      - T-HOLD-005b
+    files: [apps/api/src/holds.ts, apps/api/src/index.ts, apps/api/test/holds.test.ts]
     must_preserve:
-    - INV-admin-french
-    produce:
-    - code
-    verifies:
-    - R-I18N-001
-  TASK-web-api-client:
+      - INV-status-domain
+    produce: [code, tests]
+    verifies: [R-HOLD-004, R-HOLD-005]
+  TASK-frontend:
     scope:
-    - R-LOC-001
-    - R-LOC-002
-    - R-LOC-003
-    files:
-    - apps/web/src/lib/api.ts
+      - R-HOLD-006
+      - UI
+      - T-HOLD-006a
+    files: [apps/web/src/lib/components/admin/ReservationTableRow.svelte, apps/web/src/lib/api.ts]
     must_preserve:
-    - INV-locale-valid
-    produce:
-    - code
-    verifies:
-    - R-LOC-002
-    - R-LOC-003
-  TASK-api-locale:
-    scope:
-    - R-LOC-001
-    - R-LOC-002
-    - R-LOC-003
-    - R-MAIL-001
-    - R-MAIL-002
-    - OP-Locale.update
-    - OP-Register.withLocale
-    - OP-Mail.resolveLocale
-    - ERR-BADLOCALE
-    - ERR-UNAUTH
-    files:
-    - apps/api/migrations/0042_users_locale.sql
-    - apps/api/src/index.ts
-    - apps/api/src/emailLocale.ts
-    must_preserve:
-    - INV-locale-valid
-    produce:
-    - code
-    - migrations
-    verifies:
-    - R-LOC-001
-    - R-LOC-002
-    - R-LOC-003
-    - R-MAIL-001
-    - R-MAIL-002
-  TASK-tests:
-    scope:
-    - T-I18N-002a
-    - T-I18N-002b
-    - T-I18N-003a
-    - T-I18N-003b
-    - T-I18N-004a
-    - T-LOC-001a
-    - T-MAIL-001a
-    - T-MAIL-002a
-    files:
-    - apps/web/src/lib/__tests__/i18n.test.ts
-    - apps/web/src/lib/__tests__/i18n-parity.test.ts
-    - apps/api/test/register-locale.test.ts
-    - apps/api/test/email-locale.test.ts
-    must_preserve:
-    - INV-key-parity
-    produce:
-    - tests
-    verifies:
-    - R-I18N-002
-    - R-I18N-003
-    - R-I18N-004
-    - R-LOC-001
-    - R-MAIL-001
-    - R-MAIL-002
+      - AUTH
+    produce: [code]
+    verifies: [R-HOLD-006]
+
 STATE:
   ST-01:
     status: locked
-    decision: use a lightweight custom rune-based i18n store with no new dependency
-    rationale: the site copy is small and static so a full i18n framework is unwarranted
+    decision: Availability correctness is keyed on hold_expires_at greater than now, not on the cron
+    rationale: inventory frees the instant a hold lapses, independent of cron cadence
   ST-02:
     status: locked
-    decision: interpolation placeholders are percent-delimited tokens such as percent-name-percent
-    rationale: keeps dictionaries as plain data and the translate helper trivial with
-      no template compiler
+    decision: Occupancy counts one per covering reservation, preserving prior COUNT-star semantics
+    rationale: keeps both existing callers behaviourally identical except that active holds now count
   ST-03:
     status: locked
-    decision: the server users.locale is the source of truth on login and session
-      restore while anonymous choices live only in cookie and localStorage
-    rationale: authenticated preference should follow the account across devices while
-      anonymous visitors need no server record
+    decision: held and released are added to the Zod validation enum and display labels but not to the admin action-button union
+    rationale: they are system-only statuses with no manual admin transition
   ST-04:
     status: locked
-    decision: email locale is resolved at send time from the users table with a French
-      fallback
-    rationale: reuses the pipeline existing locale support and safely covers anonymous
-      bookings and lookup failures
-  ST-05:
-    status: locked
-    decision: only email enqueue call sites inside apps/api/src/index.ts are threaded;
-      review-request and OTA-welcome senders keep the French default
-    rationale: the task scopes email locale to the index call sites and those other
-      senders are out of scope for this stream
+    decision: both hold columns ship in one numbered migration 0043
+    rationale: the design spec lists them as one logical change; idempotent via ADD COLUMN IF NOT EXISTS
