@@ -39,8 +39,7 @@
 
       {#if sessionId}
         <p class="confirmee__ref">
-          <span>{t('confirmation.sessionLabel')}</span>
-          <span> {sessionId}</span>
+          <span>{t('confirmation.sessionLabel', { session_id: sessionId })}</span>
         </p>
       {/if}
     </div>
