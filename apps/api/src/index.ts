@@ -2000,10 +2000,33 @@ app.post(
       try {
         const stripe = createStripeClient(stripeKey);
         const customerId = await findOrCreateCustomer(stripe, res[0].email);
+        // Full invoices itemize base + each tax so the hosted invoice/PDF shows
+        // them line by line (base × 1.035 × 1.05 × 1.09975 cascade). A deposit
+        // bills a percentage of the total, which does not split cleanly across
+        // tax lines, so it stays a single "Acompte" line.
+        const nightsLabel = `${nights} nuit${nights > 1 ? "s" : ""}`;
+        const roomsLabel =
+          res[0].room_count && res[0].room_count > 1 ? ` × ${res[0].room_count} chambres` : "";
+        const invoiceLineItems =
+          data.type === "deposit"
+            ? [
+                {
+                  description: `Acompte (${data.depositPercent ?? 30} %) — Réservation #${reservationId}`,
+                  amountCad: breakdown.amount,
+                },
+              ]
+            : [
+                { description: `Hébergement — ${nightsLabel}${roomsLabel}`, amountCad: breakdown.base },
+                {
+                  description: `Taxe d'hébergement (${adminSettings.accommodationTax} %)`,
+                  amountCad: breakdown.accommodationTax,
+                },
+                { description: `TPS (${adminSettings.tps} %)`, amountCad: breakdown.tps },
+                { description: `TVQ (${adminSettings.tvq} %)`, amountCad: breakdown.tvq },
+              ];
         const result = await createAndFinalizeInvoice(stripe, {
           customerId,
-          amountCad: breakdown.amount,
-          description: `Facture - Réservation #${reservationId}`,
+          lineItems: invoiceLineItems,
           templateId: c.env.STRIPE_INVOICE_TEMPLATE_ID,
         });
         stripeInvoiceId = result.invoiceId;

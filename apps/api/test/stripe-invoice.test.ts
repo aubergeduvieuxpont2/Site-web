@@ -41,8 +41,7 @@ describe("createAndFinalizeInvoice", () => {
 
     const result = await createAndFinalizeInvoice(stripe, {
       customerId: "cus_test_123",
-      amountCad: 106.38,
-      description: "Facture - Réservation #8",
+      lineItems: [{ description: "Facture - Réservation #8", amountCad: 106.38 }],
     });
 
     // Invoice created before the item, and the item carries the invoice id.
@@ -60,12 +59,29 @@ describe("createAndFinalizeInvoice", () => {
     expect(result.hostedInvoiceUrl).toBe("https://invoice.stripe.com/i/test");
   });
 
-  it("rounds the CAD amount to whole cents", async () => {
+  it("creates one Stripe line item per entry, each attached to the invoice", async () => {
     const { stripe, calls } = makeStripeStub();
     await createAndFinalizeInvoice(stripe, {
       customerId: "cus_x",
-      amountCad: 89.005,
-      description: "x",
+      lineItems: [
+        { description: "Hébergement — 5 nuits", amountCad: 500 },
+        { description: "Taxe d'hébergement (3.5 %)", amountCad: 17.5 },
+        { description: "TPS (5 %)", amountCad: 25.88 },
+        { description: "TVQ (9.975 %)", amountCad: 54.29 },
+      ],
+    });
+    expect(calls.invoiceItemsCreate.length).toBe(4);
+    // Every line attaches to the created invoice, in cents.
+    expect(calls.invoiceItemsCreate.every((i: any) => i.invoice === "in_test_123")).toBe(true);
+    expect(calls.invoiceItemsCreate.map((i: any) => i.amount)).toEqual([50000, 1750, 2588, 5429]);
+    expect(calls.invoiceItemsCreate[2].description).toBe("TPS (5 %)");
+  });
+
+  it("rounds each line's CAD amount to whole cents", async () => {
+    const { stripe, calls } = makeStripeStub();
+    await createAndFinalizeInvoice(stripe, {
+      customerId: "cus_x",
+      lineItems: [{ description: "x", amountCad: 89.005 }],
     });
     expect(calls.invoiceItemsCreate[0].amount).toBe(8901);
   });
@@ -74,8 +90,7 @@ describe("createAndFinalizeInvoice", () => {
     const { stripe, calls } = makeStripeStub();
     await createAndFinalizeInvoice(stripe, {
       customerId: "cus_x",
-      amountCad: 100,
-      description: "x",
+      lineItems: [{ description: "x", amountCad: 100 }],
       templateId: "inrtem_test_abc",
     });
     expect(calls.invoicesCreate[0].rendering).toEqual({ template: "inrtem_test_abc" });
@@ -85,8 +100,7 @@ describe("createAndFinalizeInvoice", () => {
     const { stripe, calls } = makeStripeStub();
     await createAndFinalizeInvoice(stripe, {
       customerId: "cus_x",
-      amountCad: 100,
-      description: "x",
+      lineItems: [{ description: "x", amountCad: 100 }],
     });
     expect(calls.invoicesCreate[0].rendering).toBeUndefined();
   });
