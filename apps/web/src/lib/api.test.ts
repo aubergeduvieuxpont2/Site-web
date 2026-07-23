@@ -412,6 +412,26 @@ describe("adminSetReservationStatus", () => {
     expect(calls.length).toBe(0);
   });
 
+  it("rejects held as a status (system-only, not admin-settable) without calling fetch", async () => {
+    const { calls } = stubFetch({ reservation: {} });
+    const res = await adminSetReservationStatus(
+      7,
+      "held" as unknown as "confirmed",
+    );
+    expect(res).toEqual({ error: "Statut invalide" });
+    expect(calls.length).toBe(0);
+  });
+
+  it("rejects released as a status (system-only, not admin-settable) without calling fetch", async () => {
+    const { calls } = stubFetch({ reservation: {} });
+    const res = await adminSetReservationStatus(
+      7,
+      "released" as unknown as "confirmed",
+    );
+    expect(res).toEqual({ error: "Statut invalide" });
+    expect(calls.length).toBe(0);
+  });
+
   it("maps a 404 to an error body", async () => {
     stubFetch({ error: "Introuvable" }, 404);
     const res = await adminSetReservationStatus(999, "confirmed");
@@ -492,6 +512,36 @@ describe("createReservation", () => {
     });
     expect(isError(res)).toBe(true);
     expect(res).toEqual({ error: "email invalide" });
+  });
+});
+
+describe("ReservationRow status domain (INV-status-domain)", () => {
+  it("accepts held and released in the status field without type error", () => {
+    // TypeScript compile-time check — if the union in api.ts omits held or
+    // released, this assignment fails at typecheck time.
+    const heldRow: import("./api").ReservationRow = {
+      id: 1,
+      name: "Test",
+      first_name: null,
+      last_name: null,
+      email: "a@b.ca",
+      phone: null,
+      room: null,
+      arrive: "2026-08-01",
+      depart: "2026-08-03",
+      people: 1,
+      room_count: 1,
+      message: null,
+      status: "held",
+      created_at: "2026-07-23",
+    };
+    expect(heldRow.status).toBe("held");
+
+    const releasedRow: import("./api").ReservationRow = {
+      ...heldRow,
+      status: "released",
+    };
+    expect(releasedRow.status).toBe("released");
   });
 });
 

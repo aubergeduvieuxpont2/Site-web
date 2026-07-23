@@ -5,6 +5,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
+import { releaseExpiredHolds } from "./holds";
 import { resolveLocale } from "./emailLocale";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
@@ -115,7 +116,9 @@ type ReservationRow = {
   room_count: number | null;
   message: string | null;
   created_at: string;
-  status?: "pending" | "confirmed" | "cancelled";
+  status?: "pending" | "confirmed" | "cancelled" | "held" | "released";
+  hold_expires_at?: string | null;
+  stripe_checkout_session_id?: string | null;
   source?: string | null;
   external_ref?: string | null;
   user_id?: number | null;
@@ -244,7 +247,15 @@ const RoleSchema = z.object({
   role: z.enum(["guest", "admin"]),
 });
 
-const ReservationStatusSchema = z.object({
+// Full status domain — all valid reservation states including system-only ones.
+// Exported for use in tests and downstream validators.
+export const ReservationStatusSchema = z.object({
+  status: z.enum(["pending", "confirmed", "cancelled", "held", "released"]),
+});
+
+// Admin manual-transition schema: held and released are set only by the booking
+// flow and the cron, never by an admin action.
+const AdminStatusUpdateSchema = z.object({
   status: z.enum(["pending", "confirmed", "cancelled"]),
 });
 
@@ -2217,7 +2228,7 @@ app.patch(
     }
     await next();
   },
-  zValidator("json", ReservationStatusSchema),
+  zValidator("json", AdminStatusUpdateSchema),
   async (c) => {
     const reservationId = parseIdParam(c.req.param("id"));
     if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
@@ -2625,6 +2636,7 @@ export default {
     // the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
     ctx.waitUntil((async () => {
       await enqueueReviewRequests(neon(env.DB_CONN));
+      await releaseExpiredHolds(neon(env.DB_CONN));
       await drainEmailOutbox(env);
     })());
   },
