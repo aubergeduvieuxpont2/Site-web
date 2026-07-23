@@ -11,6 +11,7 @@ export interface AvailabilityResult {
 }
 
 interface ReservationRow {
+  id: number;
   arrive: string; // "YYYY-MM-DD"
   depart: string; // "YYYY-MM-DD"
   status: string;
@@ -39,7 +40,8 @@ export async function availabilityForRange(
   checkIn: string,
   checkOut: string,
   rooms: number,
-  assignableRoomCount: number
+  assignableRoomCount: number,
+  excludeReservationId?: number
 ): Promise<AvailabilityResult> {
   const now = new Date();
 
@@ -50,6 +52,7 @@ export async function availabilityForRange(
   const [reservations, blackouts] = (await Promise.all([
     sql`
       SELECT
+        id,
         to_char(arrive::date, 'YYYY-MM-DD') AS arrive,
         to_char(depart::date, 'YYYY-MM-DD') AS depart,
         status,
@@ -79,6 +82,8 @@ export async function availabilityForRange(
   const nights: AvailabilityNight[] = dates.map((date) => {
     let occupied = 0;
     for (const r of reservations) {
+      // Skip the excluded reservation if provided
+      if (excludeReservationId != null && r.id === excludeReservationId) continue;
       // arrive-inclusive, depart-exclusive boundary
       if (r.arrive > date || r.depart <= date) continue;
       const roomCount = Number(r.room_count ?? 1);

@@ -6,6 +6,69 @@ export function createStripeClient(secretKey: string): Stripe {
   });
 }
 
+export interface EmbeddedCheckoutSessionOptions {
+  email: string;
+  lineItems: { description: string; amountCad: number }[];
+  returnUrl: string;
+  metadata: Record<string, string | number>;
+}
+
+export async function createEmbeddedCheckoutSession(
+  stripe: Stripe,
+  options: EmbeddedCheckoutSessionOptions
+): Promise<{ sessionId: string; clientSecret: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const session = await (stripe.checkout.sessions.create as any)({
+    ui_mode: "embedded",
+    mode: "payment",
+    customer_email: options.email,
+    line_items: options.lineItems.map((item) => ({
+      price_data: {
+        currency: "cad",
+        product_data: {
+          name: item.description,
+        },
+        unit_amount: Math.round(item.amountCad * 100),
+      },
+      quantity: 1,
+    })),
+    return_url: options.returnUrl,
+    metadata: options.metadata,
+  });
+
+  const clientSecret = session.client_secret;
+  if (!clientSecret) {
+    throw new Error("Failed to create embedded checkout session: missing client_secret");
+  }
+
+  return {
+    sessionId: session.id,
+    clientSecret,
+  };
+}
+
+export async function refundCheckoutSession(
+  stripe: Stripe,
+  sessionId: string
+): Promise<Stripe.Refund> {
+  const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+  const paymentIntentId =
+    typeof session.payment_intent === "string"
+      ? session.payment_intent
+      : session.payment_intent?.id;
+
+  if (!paymentIntentId) {
+    throw new Error("Checkout session has no payment intent");
+  }
+
+  const refund = await stripe.refunds.create({
+    payment_intent: paymentIntentId,
+  });
+
+  return refund;
+}
+
 export async function findOrCreateCustomer(
   stripe: Stripe,
   email: string

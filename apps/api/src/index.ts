@@ -70,6 +70,8 @@ import {
   findOrCreateCustomer,
   createAndFinalizeInvoice,
   constructStripeEvent,
+  createEmbeddedCheckoutSession,
+  refundCheckoutSession,
 } from "./stripe";
 import {
   AssignRoomSchema,
@@ -149,6 +151,8 @@ const MessageRequestSchema = z.object({
 // L2: shown when a submitted password is found in the HIBP breach corpus.
 const BREACHED_PASSWORD_ERROR =
   "Ce mot de passe figure dans une fuite de données connue. Veuillez en choisir un autre.";
+
+const HOLD_MINUTES = 15;
 
 const trimToNull = z
   .string()
@@ -494,25 +498,23 @@ app.post(
   async (c) => {
     const data = c.req.valid("json");
 
-    // L5: dates are mandatory on this path. A date-less booking would otherwise
-    // skip the availability gate below and land as a `pending` row that silently
-    // oversells the property — so reject it with a 400.
     if (!data.checkIn || !data.checkOut) {
       return c.json({ error: "Les dates d'arrivée et de départ sont requises." }, 400);
     }
 
-    // L5: no reservations that start in the past.
     if (data.checkIn < todayISODate()) {
       return c.json({ error: "La date d'arrivée ne peut pas être dans le passé." }, 400);
     }
 
-    // Derived value for the NOT NULL `name` column; the split first/last are
-    // persisted alongside it.
-    const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
+    const stripeKey = c.env.STRIPE_SECRET_KEY;
+    if (!stripeKey) {
+      return c.json({ error: "Le paiement est temporairement indisponible." }, 503);
+    }
 
+    const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
     const sql = neon(c.env.DB_CONN);
 
-    // Check availability before inserting (dates are guaranteed present above).
+    // Friendly pre-check availability
     {
       const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
       const adminSettings = rowsToAdminSettings(settingsRows);
@@ -530,19 +532,55 @@ app.post(
       }
     }
 
+    // Authoritative guarded insert with advisory lock and holds-aware occupancy check
+    const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+    const adminSettings = rowsToAdminSettings(settingsRows);
+
+    const holdExpiresAtMinutes = HOLD_MINUTES;
     const rows = (await sql`
-      INSERT INTO reservations (name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, status)
-      VALUES (${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}, ${data.checkOut}, ${data.guests}, ${data.roomCount}, ${data.message}, 'pending')
-      RETURNING id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, created_at
-    `) as ReservationRow[];
+      WITH _lock AS (
+        SELECT pg_advisory_xact_lock(12345)
+      )
+      INSERT INTO reservations (
+        name, first_name, last_name, email, phone, room, arrive, depart, people, room_count, message, status, hold_expires_at
+      )
+      SELECT
+        ${name}, ${data.firstName}, ${data.lastName}, ${data.email}, ${data.phone}, ${data.room}, ${data.checkIn}::date, ${data.checkOut}::date, ${data.guests}, ${data.roomCount}, ${data.message}, 'held', now() + (${holdExpiresAtMinutes}::text || ' minutes')::interval
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM (
+          SELECT generate_series(${data.checkIn}::date, (${data.checkOut}::date - 1), '1 day'::interval)::date AS night
+        ) nights
+        WHERE NOT (
+          SELECT ${data.roomCount}::int > COALESCE((
+            SELECT ${adminSettings.assignableRoomCount}::int - COALESCE(SUM(
+              CASE
+                WHEN r.status = 'confirmed' THEN r.room_count
+                WHEN r.status = 'held' AND r.hold_expires_at > now() THEN r.room_count
+                ELSE 0
+              END
+            ), 0) - COALESCE(SUM(b.rooms_blocked), 0)
+            FROM reservations r
+            FULL OUTER JOIN (
+              SELECT date, rooms_blocked FROM blackout_dates
+              WHERE date = nights.night
+            ) b ON true
+            WHERE (r.arrive::date <= nights.night AND r.depart::date > nights.night
+                   AND r.status IN ('confirmed', 'held'))
+              OR b.date IS NOT NULL
+          ), 0)
+        )
+      )
+      RETURNING id, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, hold_expires_at
+    `) as { id: number; arrive: string; depart: string; hold_expires_at: string }[];
 
     const created = rows[0];
     if (!created) {
-      return c.json({ error: "Failed to create reservation" }, 500);
+      return c.json({ error: "Ces dates ne sont plus disponibles." }, 409);
     }
 
-    // Assign a human-facing code if the column exists and the row lacks one.
-    if (created.code == null) {
+    // Assign a human-facing code
+    if (true) {
       try {
         await insertReservationCode(sql, created.id);
       } catch (err) {
@@ -550,62 +588,78 @@ app.post(
       }
     }
 
-    c.executionCtx.waitUntil(
-      (async () => {
-        try {
-          if (!created.arrive || !created.depart) return;
-          const confirmSettingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
-          const confirmSettings = rowsToAdminSettings(confirmSettingsRows);
-          const invoice = computeInvoice({
-            nights: nightsBetween(created.arrive, created.depart),
-            roomCount: created.room_count ?? 1,
-            effectiveNightly: confirmSettings.nightlyPrice,
-            weeklyRate: confirmSettings.weeklyPrice,
-            tps: confirmSettings.tps,
-            tvq: confirmSettings.tvq,
-            accommodationTax: confirmSettings.accommodationTax,
-            type: "full",
-          });
-          const data = buildReservationConfirmationData(created, invoice, {
-            accommodationTax: confirmSettings.accommodationTax,
-            tps: confirmSettings.tps,
-            tvq: confirmSettings.tvq,
-          });
-          if (data) {
-            const resLocale = await resolveLocale(sql, created.email);
-            await enqueueEmail(sql, {
-              template: "reservation-confirmation",
-              to: created.email,
-              locale: resLocale,
-              payload: data as unknown as Record<string, unknown>,
-            });
-          }
-        } catch (err) {
-          console.error("confirmation email enqueue failed", err);
-        }
-      })()
-    );
+    // Compute invoice and create Stripe checkout session
+    try {
+      const invoice = computeInvoice({
+        nights: nightsBetween(created.arrive, created.depart),
+        roomCount: data.roomCount,
+        effectiveNightly: adminSettings.nightlyPrice,
+        weeklyRate: adminSettings.weeklyPrice,
+        tps: adminSettings.tps,
+        tvq: adminSettings.tvq,
+        accommodationTax: adminSettings.accommodationTax,
+        type: "full",
+      });
 
-    c.executionCtx.waitUntil(
-      enqueueHubspotOps(
-        c.env.HUBSPOT,
-        buildReservationHubspotOps({
+      const lineItems = [
+        { description: "Hébergement", amountCad: invoice.base },
+        { description: "Taxe d'hébergement", amountCad: invoice.accommodationTax },
+        { description: "TPS", amountCad: invoice.tps },
+        { description: "TVQ", amountCad: invoice.tvq },
+      ];
+
+      const returnUrl = `${SITE_ORIGIN}/reservation-confirmee?session_id={CHECKOUT_SESSION_ID}`;
+      const stripe = createStripeClient(stripeKey);
+      const session = await createEmbeddedCheckoutSession(stripe, {
+        email: data.email,
+        lineItems,
+        returnUrl,
+        metadata: { reservation_id: created.id },
+      });
+
+      // Persist stripe_checkout_session_id
+      await sql`
+        UPDATE reservations
+        SET stripe_checkout_session_id = ${session.sessionId}
+        WHERE id = ${created.id}
+      `;
+
+      // HubSpot enqueue for future reference (fire-and-forget)
+      c.executionCtx.waitUntil(
+        enqueueHubspotOps(
+          c.env.HUBSPOT,
+          buildReservationHubspotOps({
+            reservationId: created.id,
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            checkIn: data.checkIn,
+            checkOut: data.checkOut,
+            room: data.room,
+            guests: data.guests,
+            roomCount: data.roomCount,
+            description: data.message,
+          }),
+          c.env.GATEWAY_AUTH_SECRET,
+        )
+      );
+
+      return c.json(
+        {
           reservationId: created.id,
-          email: data.email,
-          firstName: data.firstName,
-          lastName: data.lastName,
-          checkIn: data.checkIn,
-          checkOut: data.checkOut,
-          room: data.room,
-          guests: data.guests,
-          roomCount: data.roomCount,
-          description: data.message,
-        }),
-        c.env.GATEWAY_AUTH_SECRET,
-      )
-    );
-
-    return c.json({ reservation: created }, 201);
+          clientSecret: session.clientSecret,
+          holdExpiresAt: created.hold_expires_at,
+        },
+        201
+      );
+    } catch (err) {
+      console.error("stripe_checkout_session_creation_failed", err instanceof Error ? err.message : "unknown");
+      // Release the hold since payment setup failed
+      await sql`
+        UPDATE reservations SET status = 'released' WHERE id = ${created.id}
+      `;
+      return c.json({ error: "Le paiement est temporairement indisponible." }, 503);
+    }
   }
 );
 
@@ -2534,6 +2588,107 @@ app.post("/api/webhooks/stripe", async (c) => {
     return c.json({ error: "Invalid signature" }, 400);
   }
 
+  const sql = neon(c.env.DB_CONN);
+
+  // Booking branch: handle checkout.session.completed for held reservations
+  if (event.type === "checkout.session.completed") {
+    const obj = event.data.object as Record<string, unknown>;
+    const sessionId = (obj.id as string) ?? null;
+    const metadata = (obj.metadata as Record<string, unknown>) ?? {};
+    const reservationIdFromMetadata = metadata.reservation_id as number | undefined;
+
+    if (sessionId && reservationIdFromMetadata) {
+      // Try to match by metadata.reservation_id or stripe_checkout_session_id
+      const reservationRows = (await sql`
+        SELECT id, status, invoice_status, arrive, depart, room_count, email, name, people, room
+        FROM reservations
+        WHERE (id = ${reservationIdFromMetadata} OR stripe_checkout_session_id = ${sessionId})
+        LIMIT 1
+      `) as ReservationRow[];
+
+      if (reservationRows.length > 0) {
+        const res = reservationRows[0];
+
+        // Idempotency guard: if already confirmed, do nothing
+        if (res.status === "confirmed" && res.invoice_status === "paid") {
+          return c.json({ received: true });
+        }
+
+        // Re-check availability excluding this reservation's own hold
+        const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
+        const adminSettings = rowsToAdminSettings(settingsRows);
+
+        if (res.arrive && res.depart) {
+          const availability = await availabilityForRange(
+            sql,
+            res.arrive,
+            res.depart,
+            res.room_count ?? 1,
+            adminSettings.assignableRoomCount,
+            res.id
+          );
+
+          if (availability.unavailableNights.length === 0) {
+            // All nights still available: confirm the reservation
+            const updatedRows = (await sql`
+              UPDATE reservations
+              SET status = 'confirmed', invoice_status = 'paid', paid_at = now()
+              WHERE id = ${res.id} AND (invoice_status IS NULL OR invoice_status != 'paid')
+              RETURNING id, name, email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room, room_count
+            `) as { id: number; name: string; email: string; arrive: string | null; depart: string | null; people: number; room: string | null; room_count: number | null }[];
+
+            if (updatedRows.length > 0) {
+              const updated = updatedRows[0];
+              try {
+                const webhookLocale = await resolveLocale(sql, updated.email);
+                await enqueueEmail(sql, {
+                  template: "reservation-confirmation",
+                  to: updated.email,
+                  locale: webhookLocale,
+                  payload: {
+                    confirmationCode: `RES-${updated.id}`,
+                    name: updated.name,
+                    checkIn: updated.arrive ?? "",
+                    checkOut: updated.depart ?? "",
+                    guests: updated.people,
+                    roomLabel: updated.room ?? "À déterminer",
+                  } as Record<string, unknown>,
+                });
+              } catch (err) {
+                console.error(
+                  "webhook_confirmation_email_failed",
+                  err instanceof Error ? err.message : "unknown"
+                );
+              }
+            }
+          } else {
+            // Dates no longer available: refund (if still held) and mark released
+            if (res.status === "held") {
+              try {
+                const stripe = createStripeClient(stripeKey);
+                await refundCheckoutSession(stripe, sessionId);
+              } catch (refundErr) {
+                console.error(
+                  "checkout_session_refund_failed",
+                  refundErr instanceof Error ? refundErr.message : "unknown"
+                );
+              }
+            }
+
+            // Mark as released if not already
+            await sql`
+              UPDATE reservations
+              SET status = 'released'
+              WHERE id = ${res.id} AND status = 'held'
+            `;
+          }
+        }
+
+        return c.json({ received: true });
+      }
+    }
+  }
+
   // A failed charge is recorded for admin visibility so a declined payment is
   // distinguishable from a booking that simply hasn't been paid yet. Stripe
   // already shows the guest the decline reason on its hosted invoice page and
@@ -2544,7 +2699,6 @@ app.post("/api/webhooks/stripe", async (c) => {
   if (event.type === "invoice.payment_failed") {
     const failedInvoiceId = (event.data.object as Record<string, unknown>)["id"] as string | undefined;
     if (failedInvoiceId) {
-      const sql = neon(c.env.DB_CONN);
       await sql`
         UPDATE reservations
         SET invoice_status = 'payment_failed'
@@ -2577,8 +2731,6 @@ app.post("/api/webhooks/stripe", async (c) => {
   if (!stripeInvoiceId) {
     return c.json({ received: true });
   }
-
-  const sql = neon(c.env.DB_CONN);
 
   // INV-idempotent-paid: WHERE invoice_status != 'paid' prevents double-apply.
   const updated = (await sql`
