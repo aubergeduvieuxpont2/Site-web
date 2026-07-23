@@ -1,68 +1,79 @@
 REQ:
   R-PAY-001:
     actor: Guest
-    capability: pay the full stay total in an embedded Stripe Checkout mounted on the reservation page after a successful booking
-    constraints: Stripe loaded lazily only when a client secret is present; publishable key read from build-time env var; secret key never in the bundle
+    capability: pay the full stay total in an embedded Stripe Checkout mounted on
+      the reservation page after a successful booking
+    constraints: Stripe loaded lazily only when a client secret is present; publishable
+      key read from build-time env var; secret key never in the bundle
     priority: MUST
     tests:
-      - T-PAY-001a
-      - T-PAY-001b
+    - T-PAY-001a
+    - T-PAY-001b
   R-PAY-002:
     actor: Guest
-    capability: see a fifteen-minute hold message with a live countdown derived from the hold expiry timestamp
-    constraints: countdown is cosmetic; server hold is authoritative; percent-delimited interpolation
+    capability: see a fifteen-minute hold message with a live countdown derived from
+      the hold expiry timestamp
+    constraints: countdown is cosmetic; server hold is authoritative; percent-delimited
+      interpolation
     priority: MUST
     tests:
-      - T-PAY-001a
+    - T-PAY-001a
   R-PAY-003:
     actor: Guest
-    capability: see an expired-reservation state with a path back to the form when the countdown reaches zero
-    constraints: embedded checkout instance destroyed on the transition to avoid a dangling iframe
+    capability: see an expired-reservation state with a path back to the form when
+      the countdown reaches zero
+    constraints: embedded checkout instance destroyed on the transition to avoid a
+      dangling iframe
     priority: MUST
     tests:
-      - T-PAY-002a
-      - T-PAY-002b
+    - T-PAY-002a
+    - T-PAY-002b
   R-PAY-004:
     actor: Guest
-    capability: see a clear missing-configuration message instead of a crash when the publishable key or client secret is absent
+    capability: see a clear missing-configuration message instead of a crash when
+      the publishable key or client secret is absent
     constraints: no silent fallback
     priority: MUST
     tests: []
   R-CONF-001:
     actor: Guest
-    capability: land on a success confirmation page after Stripe redirects, optionally showing the session id
-    constraints: not prerendered; reads session_id query param for display only; makes no API call
+    capability: land on a success confirmation page after Stripe redirects, optionally
+      showing the session id
+    constraints: not prerendered; reads session_id query param for display only; makes
+      no API call
     priority: MUST
     tests:
-      - T-CONF-001a
+    - T-CONF-001a
   R-API-001:
     actor: Frontend
     capability: receive the new reservations contract from the api-client helper
-    constraints: createReservation success type is reservationId, clientSecret, holdExpiresAt; request unchanged
+    constraints: createReservation success type is reservationId, clientSecret, holdExpiresAt;
+      request unchanged
     priority: MUST
     tests:
-      - T-API-001a
+    - T-API-001a
   R-CSP-001:
     actor: Browser
     capability: load Stripe.js and mount the embedded-checkout iframe under the Content-Security-Policy
-    constraints: script-src adds js.stripe.com; frame-src added for js.stripe.com and *.stripe.com; no other broadening
+    constraints: script-src adds js.stripe.com; frame-src added for js.stripe.com
+      and *.stripe.com; no other broadening
     priority: MUST
     tests:
-      - T-CSP-001a
+    - T-CSP-001a
   R-I18N-001:
     actor: Guest
     capability: read every new payment and confirmation string in the active locale
     constraints: identical key sets in fr and en; rendered via the t helper
     priority: MUST
     tests:
-      - T-I18N-001a
+    - T-I18N-001a
   R-CFG-001:
     actor: Operator
-    capability: configure the publishable key via a documented build-time env var and the stripe browser dependency
+    capability: configure the publishable key via a documented build-time env var
+      and the stripe browser dependency
     constraints: publishable key public and safe in the bundle; documented in .dev.env.example
     priority: MUST
     tests: []
-
 E:
   E-ReservationHoldResponse:
     fields:
@@ -71,140 +82,162 @@ E:
       holdExpiresAt: string (ISO-8601)
     tenancy: none
     invariants:
-      - INV-publishable-key-only
+    - INV-publishable-key-only
   E-StripeLoader:
     fields:
       STRIPE_PUBLISHABLE_KEY: string or undefined
       getStripe: function returning Promise of Stripe or null
     tenancy: none
     invariants:
-      - INV-single-stripe-seam
-      - INV-no-dangling-iframe
-
+    - INV-single-stripe-seam
+    - INV-no-dangling-iframe
 OP:
   OP-Contact.submit:
-    input: { booking form fields }
+    input:
+      booking form fields: null
     auth: []
     pre:
-      - client validation passes
-      - availability not blocked
+    - client validation passes
+    - availability not blocked
     err:
-      - ERR-RESERVATION
-    out: { status transitions to paying or misconfigured on success }
+    - ERR-RESERVATION
+    out:
+      status transitions to paying or misconfigured on success: null
   OP-Payment.mount:
-    input: { clientSecret: string, container: element }
+    input:
+      clientSecret: string
+      container: element
     auth: []
     pre:
-      - status is paying
-      - publishable key present
+    - status is paying
+    - publishable key present
     err:
-      - ERR-MISCONFIG
-    out: { embedded checkout mounted into container }
+    - ERR-MISCONFIG
+    out:
+      embedded checkout mounted into container: null
   OP-Payment.expire:
-    input: { holdExpiresAt: string }
+    input:
+      holdExpiresAt: string
     auth: []
     pre:
-      - status is paying
-      - remaining time reaches zero
+    - status is paying
+    - remaining time reaches zero
     err: []
-    out: { status transitions to expired; instance destroyed }
-
+    out:
+      status transitions to expired; instance destroyed: null
 ERR:
   ERR-RESERVATION:
     code: 0
-    meaning: reservations POST failed or returned an error; inline banner shown, form retained
+    meaning: reservations POST failed or returned an error; inline banner shown, form
+      retained
   ERR-MISCONFIG:
     code: 0
-    meaning: publishable key or client secret absent; missing-configuration message shown
-
+    meaning: publishable key or client secret absent; missing-configuration message
+      shown
 AUTH:
   guest-public: contact and confirmation pages are public; no auth required
-
 INV:
-  INV-publishable-key-only: no secret key or webhook secret appears anywhere under apps/web
+  INV-publishable-key-only: no secret key or webhook secret appears anywhere under
+    apps/web
   INV-single-stripe-seam: only lib/stripe.ts imports the stripe browser SDK
-  INV-no-dangling-iframe: the embedded checkout instance is destroyed on every exit from the paying state
-  INV-key-parity: fr and en dictionaries expose identical dot-key sets, all string leaves
-  INV-csp-stripe-scope: CSP additions are scoped exactly to Stripe hosts; script-src gains no unsafe directives
-
+  INV-no-dangling-iframe: the embedded checkout instance is destroyed on every exit
+    from the paying state
+  INV-key-parity: fr and en dictionaries expose identical dot-key sets, all string
+    leaves
+  INV-csp-stripe-scope: CSP additions are scoped exactly to Stripe hosts; script-src
+    gains no unsafe directives
 API:
   POST /api/reservations:
-    input: booking body (firstName, lastName, email, checkIn, checkOut, guests, roomCount, message)
+    input: booking body (firstName, lastName, email, checkIn, checkOut, guests, roomCount,
+      message)
     output: E-ReservationHoldResponse
-    errors: [ERR-RESERVATION]
+    errors:
+    - ERR-RESERVATION
     auth: guest-public
-
 UI:
   screen-contact-payment:
-    actions: [submit, pay, back-to-form]
-    state: { idle, sending, paying, expired, misconfigured, error }
+    actions:
+    - submit
+    - pay
+    - back-to-form
+    state:
+      idle: null
+      sending: null
+      paying: null
+      expired: null
+      misconfigured: null
+      error: null
   screen-reservation-confirmee:
-    actions: [back-home]
-    state: { success }
-
+    actions:
+    - back-home
+    state:
+      success: null
 DATA:
   none: no schema or migration changes
-
 TEST:
   T-API-001a:
     verifies: R-API-001
-    behaviour: "createReservation success type is ReservationHoldResponse with reservationId, clientSecret, holdExpiresAt"
+    behaviour: createReservation success type is ReservationHoldResponse with reservationId,
+      clientSecret, holdExpiresAt
     steps:
-      - typecheck the helper return type
-      - contact-page test mock resolves the new shape and the page consumes it
+    - typecheck the helper return type
+    - contact-page test mock resolves the new shape and the page consumes it
   T-PAY-001a:
     verifies: R-PAY-001
-    behaviour: "after a valid submit the payment section renders with the hold message and a countdown and the form is gone"
+    behaviour: after a valid submit the payment section renders with the hold message
+      and a countdown and the form is gone
     steps:
-      - mock the stripe loader module and createReservation success shape
-      - submit valid form
-      - assert data-testid contact-payment present, contact-form absent, hold message and countdown shown
+    - mock the stripe loader module and createReservation success shape
+    - submit valid form
+    - assert data-testid contact-payment present, contact-form absent, hold message
+      and countdown shown
   T-PAY-001b:
     verifies: R-PAY-001
-    behaviour: "embedded checkout mount is called with the container"
+    behaviour: embedded checkout mount is called with the container
     steps:
-      - submit valid form
-      - assert the mocked initEmbeddedCheckout mount spy was called with the bound container
+    - submit valid form
+    - assert the mocked initEmbeddedCheckout mount spy was called with the bound container
   T-PAY-002a:
     verifies: R-PAY-003
-    behaviour: "advancing past holdExpiresAt while paying shows the expired copy and a back-to-form control"
+    behaviour: advancing past holdExpiresAt while paying shows the expired copy and
+      a back-to-form control
     steps:
-      - use fake timers
-      - submit valid form with a near holdExpiresAt
-      - advance timers past expiry
-      - assert expired copy and data-testid payment-back present
+    - use fake timers
+    - submit valid form with a near holdExpiresAt
+    - advance timers past expiry
+    - assert expired copy and data-testid payment-back present
   T-PAY-002b:
     verifies: R-PAY-003
-    behaviour: "the embedded checkout instance is destroyed when leaving the paying state"
+    behaviour: the embedded checkout instance is destroyed when leaving the paying
+      state
     steps:
-      - submit valid form then trigger expiry or back-to-form
-      - assert the destroy spy was called
+    - submit valid form then trigger expiry or back-to-form
+    - assert the destroy spy was called
   T-CONF-001a:
     verifies: R-CONF-001
-    behaviour: "reservation-confirmee with a session_id renders success copy and the id and calls no API"
+    behaviour: reservation-confirmee with a session_id renders success copy and the
+      id and calls no API
     steps:
-      - stub the page store with session_id cs_test_123
-      - render the route
-      - assert success copy and cs_test_123 rendered and no api-client function called
+    - stub the page store with session_id cs_test_123
+    - render the route
+    - assert success copy and cs_test_123 rendered and no api-client function called
   T-CSP-001a:
     verifies: R-CSP-001
-    behaviour: "CSP contains js.stripe.com in script-src and a Stripe frame-src"
+    behaviour: CSP contains js.stripe.com in script-src and a Stripe frame-src
     steps:
-      - run handle and read Content-Security-Policy
-      - assert script-src has js.stripe.com and a frame-src with js.stripe.com is present
+    - run handle and read Content-Security-Policy
+    - assert script-src has js.stripe.com and a frame-src with js.stripe.com is present
   T-I18N-001a:
     verifies: R-I18N-001
-    behaviour: "the new payment and confirmation keys exist in both fr and en"
+    behaviour: the new payment and confirmation keys exist in both fr and en
     steps:
-      - assert contact.payment keys and confirmation keys present in fr and en
-      - existing i18n-parity test passes
-
+    - assert contact.payment keys and confirmation keys present in fr and en
+    - existing i18n-parity test passes
 NFR:
   security: publishable key only in the bundle; CSP scoped to Stripe hosts
   responsiveness: no horizontal overflow at mobile widths
   i18n: full fr and en key parity with string leaves
   typecheck: svelte-check green; apps/web and apps/api vitest green
-
 FILE:
   apps/web/package.json: TASK-config
   .dev.env.example: TASK-config
@@ -220,110 +253,132 @@ FILE:
   apps/web/src/routes/contact/page-contact.test.ts: TASK-contact-page
   apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts: TASK-confirmation
   apps/web/src/lib/__tests__/payment-i18n.test.ts: TASK-i18n
-
 TASK:
   TASK-config:
     scope:
-      - R-CFG-001
-      - E-StripeLoader
+    - R-CFG-001
+    - E-StripeLoader
     files:
-      - apps/web/package.json
-      - .dev.env.example
+    - apps/web/package.json
+    - .dev.env.example
     must_preserve:
-      - INV-publishable-key-only
-    produce: [config]
-    verifies: [R-CFG-001]
+    - INV-publishable-key-only
+    produce:
+    - config
+    verifies:
+    - R-CFG-001
   TASK-api-client:
     scope:
-      - R-API-001
-      - R-PAY-004
-      - E-ReservationHoldResponse
-      - E-StripeLoader
-      - OP-Payment.mount
-      - ERR-MISCONFIG
-      - T-API-001a
+    - R-API-001
+    - R-PAY-004
+    - E-ReservationHoldResponse
+    - E-StripeLoader
+    - OP-Payment.mount
+    - ERR-MISCONFIG
+    - T-API-001a
     files:
-      - apps/web/src/lib/api.ts
-      - apps/web/src/lib/stripe.ts
+    - apps/web/src/lib/api.ts
+    - apps/web/src/lib/stripe.ts
     must_preserve:
-      - INV-publishable-key-only
-      - INV-single-stripe-seam
-    produce: [code]
-    verifies: [R-API-001, R-PAY-004]
+    - INV-publishable-key-only
+    - INV-single-stripe-seam
+    produce:
+    - code
+    verifies:
+    - R-API-001
+    - R-PAY-004
   TASK-contact-page:
     scope:
-      - R-PAY-001
-      - R-PAY-002
-      - R-PAY-003
-      - R-PAY-004
-      - OP-Contact.submit
-      - OP-Payment.mount
-      - OP-Payment.expire
-      - ERR-RESERVATION
-      - ERR-MISCONFIG
-      - UI
-      - T-PAY-001a
-      - T-PAY-001b
-      - T-PAY-002a
-      - T-PAY-002b
+    - R-PAY-001
+    - R-PAY-002
+    - R-PAY-003
+    - R-PAY-004
+    - OP-Contact.submit
+    - OP-Payment.mount
+    - OP-Payment.expire
+    - ERR-RESERVATION
+    - ERR-MISCONFIG
+    - T-PAY-001a
+    - T-PAY-001b
+    - T-PAY-002a
+    - T-PAY-002b
     files:
-      - apps/web/src/routes/contact/+page.svelte
-      - apps/web/src/routes/contact/page-contact.test.ts
+    - apps/web/src/routes/contact/+page.svelte
+    - apps/web/src/routes/contact/page-contact.test.ts
     must_preserve:
-      - INV-no-dangling-iframe
-      - INV-single-stripe-seam
-    produce: [code, tests]
-    verifies: [R-PAY-001, R-PAY-002, R-PAY-003, R-PAY-004]
+    - INV-no-dangling-iframe
+    - INV-single-stripe-seam
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-PAY-001
+    - R-PAY-002
+    - R-PAY-003
+    - R-PAY-004
   TASK-confirmation:
     scope:
-      - R-CONF-001
-      - T-CONF-001a
+    - R-CONF-001
+    - T-CONF-001a
     files:
-      - apps/web/src/routes/reservation-confirmee/+page.svelte
-      - apps/web/src/routes/reservation-confirmee/+page.ts
-      - apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts
+    - apps/web/src/routes/reservation-confirmee/+page.svelte
+    - apps/web/src/routes/reservation-confirmee/+page.ts
+    - apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts
     must_preserve:
-      - INV-publishable-key-only
-    produce: [code, tests]
-    verifies: [R-CONF-001]
+    - INV-publishable-key-only
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-CONF-001
   TASK-csp:
     scope:
-      - R-CSP-001
-      - T-CSP-001a
+    - R-CSP-001
+    - T-CSP-001a
     files:
-      - apps/web/src/hooks.server.ts
-      - apps/web/src/hooks.server.test.ts
+    - apps/web/src/hooks.server.ts
+    - apps/web/src/hooks.server.test.ts
     must_preserve:
-      - INV-csp-stripe-scope
-    produce: [code, tests]
-    verifies: [R-CSP-001]
+    - INV-csp-stripe-scope
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-CSP-001
   TASK-i18n:
     scope:
-      - R-I18N-001
-      - T-I18N-001a
+    - R-I18N-001
+    - T-I18N-001a
     files:
-      - apps/web/src/lib/messages/fr.ts
-      - apps/web/src/lib/messages/en.ts
-      - apps/web/src/lib/__tests__/payment-i18n.test.ts
+    - apps/web/src/lib/messages/fr.ts
+    - apps/web/src/lib/messages/en.ts
+    - apps/web/src/lib/__tests__/payment-i18n.test.ts
     must_preserve:
-      - INV-key-parity
-    produce: [code, tests]
-    verifies: [R-I18N-001]
-
+    - INV-key-parity
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-I18N-001
 STATE:
   ST-01:
     status: locked
-    decision: All stripe browser SDK access goes through lib/stripe.ts, mocked in tests
-    rationale: single seam keeps remote script and real iframe out of jsdom tests and localizes the publishable-key read
+    decision: All stripe browser SDK access goes through lib/stripe.ts, mocked in
+      tests
+    rationale: single seam keeps remote script and real iframe out of jsdom tests
+      and localizes the publishable-key read
   ST-02:
     status: locked
-    decision: Countdown is cosmetic, derived from holdExpiresAt, driving only the paying-to-expired transition
+    decision: Countdown is cosmetic, derived from holdExpiresAt, driving only the
+      paying-to-expired transition
     rationale: server hold and webhook are authoritative
   ST-03:
     status: locked
-    decision: createReservation success type changes in apps/web only as the frontend contract seam, not a backend change
+    decision: createReservation success type changes in apps/web only as the frontend
+      contract seam, not a backend change
     rationale: the reservations endpoint already returns this shape from Stream 2
   ST-04:
     status: locked
-    decision: VITE_STRIPE_PUBLISHABLE_KEY is documented in .dev.env.example per task instruction
+    decision: VITE_STRIPE_PUBLISHABLE_KEY is documented in .dev.env.example per task
+      instruction
     rationale: task explicitly names that file for documentation of the public key
