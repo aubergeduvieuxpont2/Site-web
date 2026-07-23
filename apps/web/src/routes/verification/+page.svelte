@@ -21,7 +21,7 @@
 
   // Which flow the confirmed token belonged to, plus the confirmed address when
   // the API reports one. Both only drive display copy — never reflected as HTML.
-  let purpose = $state<"register" | "change" | null>(null);
+  let purpose = $state<"register" | "change" | "change_authorize" | null>(null);
   let confirmedEmail = $state<string | null>(null);
 
   // Move keyboard focus to the outcome heading when the state resolves, so
@@ -77,6 +77,8 @@
         <p class="verification__success-body" data-testid="verify-success-body">
           {#if purpose === "change"}
             {t('verification.success.body.change', { email: confirmedEmail ? ` (${confirmedEmail})` : '' })}
+          {:else if purpose === "change_authorize"}
+            {t('verification.success.body.change_authorize', { email: confirmedEmail ? ` (${confirmedEmail})` : '' })}
           {:else}
             {t('verification.success.body.register')}
           {/if}

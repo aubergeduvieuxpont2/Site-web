@@ -703,6 +703,14 @@ export const en: Messages = {
       email: 'Email',
       role: 'Role',
       rate: 'Your rate',
+      firstName: 'First name',
+      lastName: 'Last name',
+      phone: 'Phone',
+      company: 'Company',
+      addressStreet: 'Street address',
+      addressCity: 'City',
+      addressProvince: 'Province',
+      addressPostalCode: 'Postal code',
     },
     rate: {
       unit: '$/night',
@@ -711,6 +719,22 @@ export const en: Messages = {
     },
     admin: {
       link: 'Dashboard →',
+    },
+    contact: {
+      heading: 'Contact information',
+      edit: 'Edit',
+      save: 'Save',
+      cancel: 'Cancel',
+      saving: 'Saving…',
+      success: 'Profile updated.',
+      errors: {
+        generic: 'An error occurred. Please try again.',
+      },
+    },
+    locale: {
+      heading: 'Preferred language',
+      fr: 'Français',
+      en: 'English',
     },
     reservations: {
       heading: 'My reservations',
@@ -724,7 +748,7 @@ export const en: Messages = {
     },
     empty: 'No reservations',
     password: {
-      heading: 'Change password',
+      heading: 'Password',
       current: 'Current password',
       new: 'New password',
       hint: '(minimum 8 characters)',
@@ -735,17 +759,21 @@ export const en: Messages = {
       submitAriaLabel: 'Change password',
       submitting: 'Changing…',
       submit: 'Change password',
+      resetBtn: 'Send a password reset link',
+      resetSending: 'Sending…',
+      resetSuccess: 'A reset link has been sent.',
     },
     email: {
       heading: "Change email address",
       currentPrefix: 'Current address: ',
       formAriaLabel: "Change email address",
       new: 'New email address',
+      step1Hint: 'A confirmation link will be sent to your current address to authorize the change.',
       success:
-        "A confirmation link has been sent to your new address — click it to activate the change.",
-      submitAriaLabel: "Change email address",
-      submitting: 'Changing…',
-      submit: "Change email address",
+        "A link has been sent to your current address. Click it to proceed to the next step.",
+      submitAriaLabel: "Request email change",
+      submitting: 'Sending…',
+      submit: "Request change",
     },
   },
 
@@ -812,6 +840,8 @@ export const en: Messages = {
           'Your email address has been confirmed. Your account is now active and you can access your reservations.',
         change:
           "Your new email address%email% is now active. You will use it to log in from now on.",
+        change_authorize:
+          "A verification link has been sent to your new address%email%. Click it to complete the change.",
       },
       cta: 'Access my area',
     },
@@ -827,5 +857,10 @@ export const en: Messages = {
     body: 'Your payment has been received and your reservation is confirmed. You will receive a confirmation email shortly.',
     sessionLabel: 'Reference: %session_id%',
     backHome: 'Back to home',
+  },
+
+  admin: {
+    invoiceLink: 'View invoice',
+    invoiceLinkAriaLabel: 'View invoice (opens in new tab)',
   },
 };

@@ -16,14 +16,18 @@ vi.mock("$app/navigation", () => ({
 const getMe = vi.fn();
 const getProfile = vi.fn();
 const logout = vi.fn();
-const changePassword = vi.fn();
+const forgotPassword = vi.fn();
 const changeProfileEmail = vi.fn();
+const updateLocale = vi.fn();
+const updateContactProfile = vi.fn();
 vi.mock("$lib/api", () => ({
   getMe: (...a: unknown[]) => getMe(...a),
   getProfile: (...a: unknown[]) => getProfile(...a),
   logout: (...a: unknown[]) => logout(...a),
-  changePassword: (...a: unknown[]) => changePassword(...a),
+  forgotPassword: (...a: unknown[]) => forgotPassword(...a),
   changeProfileEmail: (...a: unknown[]) => changeProfileEmail(...a),
+  updateLocale: (...a: unknown[]) => updateLocale(...a),
+  updateContactProfile: (...a: unknown[]) => updateContactProfile(...a),
   isError: (r: unknown): r is ApiError =>
     typeof r === "object" && r !== null && "error" in r && typeof (r as ApiError).error === "string",
 }));
@@ -67,14 +71,18 @@ beforeEach(() => {
   getMe.mockReset();
   getProfile.mockReset();
   logout.mockReset();
-  changePassword.mockReset();
+  forgotPassword.mockReset();
   changeProfileEmail.mockReset();
+  updateLocale.mockReset();
+  updateContactProfile.mockReset();
   // Sensible defaults; individual tests override.
   getMe.mockResolvedValue({ user: GUEST });
   getProfile.mockResolvedValue(profile());
   logout.mockResolvedValue({ ok: true });
-  changePassword.mockResolvedValue({ ok: true });
+  forgotPassword.mockResolvedValue({ ok: true });
   changeProfileEmail.mockResolvedValue({ ok: true, pending: true });
+  updateLocale.mockResolvedValue({ ok: true, locale: "fr" as const });
+  updateContactProfile.mockResolvedValue({ user: GUEST });
 });
 
 afterEach(() => {
@@ -141,12 +149,22 @@ describe("page-profil user card", () => {
     expect((await findByTestId("profil-title")).textContent).toContain("guest@example.com");
   });
 
-  it("redirects an admin to /admin and never fetches the guest profile", async () => {
+  it("loads the profile page for an admin and shows the admin dashboard shortcut", async () => {
     getMe.mockResolvedValue({ user: ADMIN });
-    render(Page);
-    await waitFor(() => expect(goto).toHaveBeenCalledWith("/admin"));
-    // Admins manage everything in /admin; the profil profile is never loaded.
-    expect(getProfile).not.toHaveBeenCalled();
+    getProfile.mockResolvedValue(profile({ user: ADMIN }));
+    const { findByTestId, queryByTestId } = render(Page);
+    // Admins see the full profile — no redirect to /admin.
+    expect(await findByTestId("profil-content")).toBeTruthy();
+    // Profile IS fetched — admin uses the same unified page.
+    await waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
+    // Admin shortcut link is present.
+    const adminLink = await findByTestId("profil-admin-link");
+    expect(adminLink.getAttribute("href")).toBe("/admin");
+    // No accidental redirect to /admin.
+    expect(goto).not.toHaveBeenCalledWith("/admin");
+    // Guest-only profil-role-badge still renders but with admin label.
+    const badge = queryByTestId("profil-role-badge");
+    expect(badge?.textContent).toContain("Administrateur");
   });
 });
 
@@ -245,69 +263,46 @@ describe("page-profil reservations", () => {
   });
 });
 
-describe("page-profil change password", () => {
-  async function fillAndSubmit(
-    findByTestId: (id: string) => Promise<HTMLElement>,
-    current: string,
-    next: string,
-  ): Promise<void> {
-    const cur = (await findByTestId("profil-pwd-current-input")) as HTMLInputElement;
-    const nw = (await findByTestId("profil-pwd-new-input")) as HTMLInputElement;
-    await fireEvent.input(cur, { target: { value: current } });
-    await fireEvent.input(nw, { target: { value: next } });
-    await fireEvent.submit(await findByTestId("profil-pwd-form"));
-  }
-
-  it("renders the change-password form with both fields once loaded", async () => {
+describe("page-profil password reset", () => {
+  it("renders the password reset button (not an old two-field form)", async () => {
     const utils = render(Page);
     expect(await utils.findByTestId("profil-pwd-heading")).toBeTruthy();
-    expect(await utils.findByTestId("profil-pwd-current-input")).toBeTruthy();
-    expect(await utils.findByTestId("profil-pwd-new-input")).toBeTruthy();
-    // The removed HubSpot section leaves no trace.
-    expect(utils.queryByTestId("profil-hs-heading")).toBeNull();
+    const btn = await utils.findByTestId("profil-pwd-reset-btn");
+    expect(btn).toBeTruthy();
+    expect(btn.tagName).toBe("BUTTON");
+    // The old two-field password-change form must no longer exist.
+    expect(utils.queryByTestId("profil-pwd-form")).toBeNull();
+    expect(utils.queryByTestId("profil-pwd-current-input")).toBeNull();
+    expect(utils.queryByTestId("profil-pwd-new-input")).toBeNull();
   });
 
-  it("rejects a too-short new password client-side without calling the API", async () => {
+  it("clicking the reset button calls forgotPassword with the current user email", async () => {
     const utils = render(Page);
-    await fillAndSubmit(utils.findByTestId, "current-pass", "short");
-    const err = await utils.findByTestId("profil-pwd-error");
-    expect(err.getAttribute("role")).toBe("alert");
-    expect(err.textContent).toContain("au moins 8 caractères");
-    expect(changePassword).not.toHaveBeenCalled();
-  });
-
-  it("submits valid input and shows a success confirmation", async () => {
-    const utils = render(Page);
-    await fillAndSubmit(utils.findByTestId, "current-pass", "brand-new-pass");
+    await fireEvent.click(await utils.findByTestId("profil-pwd-reset-btn"));
     await waitFor(() =>
-      expect(changePassword).toHaveBeenCalledWith("current-pass", "brand-new-pass"),
+      expect(forgotPassword).toHaveBeenCalledWith("guest@example.com"),
     );
-    const ok = await utils.findByTestId("profil-pwd-success");
+  });
+
+  it("shows the generic success message after clicking — button disappears", async () => {
+    const utils = render(Page);
+    await fireEvent.click(await utils.findByTestId("profil-pwd-reset-btn"));
+    const ok = await utils.findByTestId("profil-pwd-reset-success");
     expect(ok.getAttribute("role")).toBe("status");
-    expect(ok.textContent).toContain("Mot de passe modifié avec succès");
-    // Fields are cleared on success.
-    const cur = (await utils.findByTestId("profil-pwd-current-input")) as HTMLInputElement;
-    const nw = (await utils.findByTestId("profil-pwd-new-input")) as HTMLInputElement;
-    expect(cur.value).toBe("");
-    expect(nw.value).toBe("");
+    expect(ok.textContent).toContain("réinitialisation");
+    // Button is hidden after success (fire-and-forget single-click UX).
+    await waitFor(() =>
+      expect(utils.queryByTestId("profil-pwd-reset-btn")).toBeNull(),
+    );
   });
 
-  it("surfaces the API error and does not show success", async () => {
-    changePassword.mockResolvedValue({ error: "Mot de passe actuel incorrect." });
+  it("shows success even when forgotPassword returns an error (INV-no-enumeration)", async () => {
+    // The server always responds 200; client never reveals whether address exists.
+    forgotPassword.mockResolvedValue({ error: "quelconque" });
     const utils = render(Page);
-    await fillAndSubmit(utils.findByTestId, "wrong-pass", "brand-new-pass");
-    const err = await utils.findByTestId("profil-pwd-error");
-    expect(err.textContent).toContain("Mot de passe actuel incorrect.");
-    expect(utils.queryByTestId("profil-pwd-success")).toBeNull();
-  });
-
-  it("renders the API error as text, never as HTML", async () => {
-    changePassword.mockResolvedValue({ error: "<img src=x onerror=alert(1)>" });
-    const utils = render(Page);
-    await fillAndSubmit(utils.findByTestId, "current-pass", "brand-new-pass");
-    const err = await utils.findByTestId("profil-pwd-error");
-    expect(err.textContent).toContain("<img src=x onerror=alert(1)>");
-    expect(err.querySelector("img")).toBeNull();
+    await fireEvent.click(await utils.findByTestId("profil-pwd-reset-btn"));
+    const ok = await utils.findByTestId("profil-pwd-reset-success");
+    expect(ok.getAttribute("role")).toBe("status");
   });
 });
 
@@ -342,7 +337,8 @@ describe("page-profil change email", () => {
     );
     const ok = await utils.findByTestId("profil-email-success");
     expect(ok.getAttribute("role")).toBe("status");
-    expect(ok.textContent).toContain("lien de confirmation");
+    // Step 1 done: confirmation link sent to the CURRENT (old) address.
+    expect(ok.textContent).toContain("adresse actuelle");
     // The change is pending — the displayed email + current-address hint must
     // NOT switch to the new address until the link is followed.
     expect((await utils.findByTestId("profil-user-email")).textContent).toContain(
@@ -448,5 +444,233 @@ describe("page-profil logout", () => {
     const { findByTestId } = render(Page);
     await fireEvent.click(await findByTestId("profil-logout-btn"));
     await waitFor(() => expect(goto).toHaveBeenCalledWith("/"));
+  });
+});
+
+// ── Contact info (OP-Profile.updateContact) ───────────────────────────────
+
+describe("page-profil contact section", () => {
+  const RICH_GUEST: User = {
+    ...GUEST,
+    first_name: "Marie",
+    last_name: "Dupont",
+    phone: "418-555-0001",
+    company: "ACME Corp",
+    address_street: "123 Rue Principale",
+    address_city: "Saint-Raymond",
+    address_province: "QC",
+    address_postal_code: "G3L 1A1",
+  };
+
+  it("renders contact fields in display mode by default", async () => {
+    getProfile.mockResolvedValue(profile({ user: RICH_GUEST }));
+    const utils = render(Page);
+    expect(await utils.findByTestId("profil-contact-display")).toBeTruthy();
+    expect((await utils.findByTestId("profil-contact-firstName")).textContent).toBe("Marie");
+    expect((await utils.findByTestId("profil-contact-lastName")).textContent).toBe("Dupont");
+    expect((await utils.findByTestId("profil-contact-phone")).textContent).toBe("418-555-0001");
+    expect((await utils.findByTestId("profil-contact-company")).textContent).toBe("ACME Corp");
+    expect((await utils.findByTestId("profil-contact-addressStreet")).textContent).toBe(
+      "123 Rue Principale",
+    );
+    // Edit form not visible in display mode.
+    expect(utils.queryByTestId("profil-contact-form")).toBeNull();
+  });
+
+  it("shows — for null contact fields in display mode", async () => {
+    const utils = render(Page);
+    expect((await utils.findByTestId("profil-contact-firstName")).textContent).toBe("—");
+    expect((await utils.findByTestId("profil-contact-phone")).textContent).toBe("—");
+    expect((await utils.findByTestId("profil-contact-addressStreet")).textContent).toBe("—");
+    expect((await utils.findByTestId("profil-contact-addressCity")).textContent).toBe("—");
+    expect((await utils.findByTestId("profil-contact-addressPostalCode")).textContent).toBe("—");
+  });
+
+  it("clicking Edit opens the inline edit form and hides display mode", async () => {
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    expect(await utils.findByTestId("profil-contact-form")).toBeTruthy();
+    expect(utils.queryByTestId("profil-contact-display")).toBeNull();
+  });
+
+  it("clicking Cancel returns to display mode without calling the API", async () => {
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    await utils.findByTestId("profil-contact-form");
+    await fireEvent.click(utils.getByTestId("profil-contact-cancel-btn"));
+    expect(await utils.findByTestId("profil-contact-display")).toBeTruthy();
+    expect(utils.queryByTestId("profil-contact-form")).toBeNull();
+    expect(updateContactProfile).not.toHaveBeenCalled();
+  });
+
+  it("edit form renders all eight contact fields including address", async () => {
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    expect(await utils.findByTestId("profil-edit-firstName")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-lastName")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-phone")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-company")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-addressStreet")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-addressCity")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-addressProvince")).toBeTruthy();
+    expect(await utils.findByTestId("profil-edit-addressPostalCode")).toBeTruthy();
+  });
+
+  it("submitting the form calls updateContactProfile with trimmed values", async () => {
+    const updatedUser: User = { ...GUEST, first_name: "Jean", last_name: "Martin" };
+    updateContactProfile.mockResolvedValue({ user: updatedUser });
+
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+
+    const firstInput = (await utils.findByTestId("profil-edit-firstName")) as HTMLInputElement;
+    await fireEvent.input(firstInput, { target: { value: "  Jean  " } });
+    const lastInput = (await utils.findByTestId("profil-edit-lastName")) as HTMLInputElement;
+    await fireEvent.input(lastInput, { target: { value: "Martin" } });
+
+    await fireEvent.submit(utils.getByTestId("profil-contact-form"));
+
+    await waitFor(() =>
+      expect(updateContactProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ firstName: "Jean", lastName: "Martin" }),
+      ),
+    );
+    // Returns to display mode on success.
+    expect(await utils.findByTestId("profil-contact-display")).toBeTruthy();
+    expect(utils.queryByTestId("profil-contact-form")).toBeNull();
+  });
+
+  it("shows success confirmation after a successful save", async () => {
+    updateContactProfile.mockResolvedValue({ user: GUEST });
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    await fireEvent.submit(await utils.findByTestId("profil-contact-form"));
+    const ok = await utils.findByTestId("profil-contact-success");
+    expect(ok.getAttribute("role")).toBe("status");
+    expect(ok.textContent).toContain("mis à jour");
+  });
+
+  it("shows API error in the form and stays in edit mode on failure", async () => {
+    updateContactProfile.mockResolvedValue({ error: "Erreur de mise à jour." });
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    await fireEvent.submit(await utils.findByTestId("profil-contact-form"));
+    const err = await utils.findByTestId("profil-contact-error");
+    expect(err.getAttribute("role")).toBe("alert");
+    expect(err.textContent).toContain("Erreur de mise à jour.");
+    // Stays in edit mode.
+    expect(utils.queryByTestId("profil-contact-form")).toBeTruthy();
+  });
+
+  it("renders error message as text, never as HTML (XSS guard)", async () => {
+    updateContactProfile.mockResolvedValue({ error: "<img src=x onerror=alert(1)>" });
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    await fireEvent.submit(await utils.findByTestId("profil-contact-form"));
+    const err = await utils.findByTestId("profil-contact-error");
+    expect(err.textContent).toContain("<img src=x onerror=alert(1)>");
+    expect(err.querySelector("img")).toBeNull();
+  });
+
+  it("empty string inputs are sent as null (clear the field)", async () => {
+    updateContactProfile.mockResolvedValue({ user: GUEST });
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    // All fields start empty → trim → null.
+    await fireEvent.submit(await utils.findByTestId("profil-contact-form"));
+    await waitFor(() =>
+      expect(updateContactProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          firstName: null,
+          lastName: null,
+          phone: null,
+          company: null,
+          addressStreet: null,
+        }),
+      ),
+    );
+  });
+
+  it("INV-contact-whitelist: updateContactProfile is never called with email, role, or locale", async () => {
+    updateContactProfile.mockResolvedValue({ user: GUEST });
+    const utils = render(Page);
+    await utils.findByTestId("profil-contact-display");
+    await fireEvent.click(utils.getByTestId("profil-contact-edit-btn"));
+    await fireEvent.submit(await utils.findByTestId("profil-contact-form"));
+    await waitFor(() => expect(updateContactProfile).toHaveBeenCalledTimes(1));
+    const [arg] = updateContactProfile.mock.calls[0] as [Record<string, unknown>];
+    expect(arg).not.toHaveProperty("email");
+    expect(arg).not.toHaveProperty("role");
+    expect(arg).not.toHaveProperty("locale");
+    expect(arg).not.toHaveProperty("password");
+  });
+});
+
+// ── Language (locale) selector ────────────────────────────────────────────
+
+describe("page-profil locale selector", () => {
+  it("renders the language selector with FR and EN buttons", async () => {
+    const utils = render(Page);
+    expect(await utils.findByTestId("profil-locale-selector")).toBeTruthy();
+    expect(await utils.findByTestId("profil-locale-fr")).toBeTruthy();
+    expect(await utils.findByTestId("profil-locale-en")).toBeTruthy();
+  });
+
+  it("FR button has aria-pressed=true by default (default locale is fr)", async () => {
+    const utils = render(Page);
+    const frBtn = await utils.findByTestId("profil-locale-fr");
+    expect(frBtn.getAttribute("aria-pressed")).toBe("true");
+    const enBtn = await utils.findByTestId("profil-locale-en");
+    expect(enBtn.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("clicking EN calls updateLocale with 'en'", async () => {
+    const utils = render(Page);
+    await fireEvent.click(await utils.findByTestId("profil-locale-en"));
+    await waitFor(() =>
+      expect(updateLocale).toHaveBeenCalledWith("en"),
+    );
+  });
+
+  it("clicking FR calls updateLocale with 'fr'", async () => {
+    const utils = render(Page);
+    await fireEvent.click(await utils.findByTestId("profil-locale-fr"));
+    await waitFor(() =>
+      expect(updateLocale).toHaveBeenCalledWith("fr"),
+    );
+  });
+});
+
+// ── Two-step email change messaging ──────────────────────────────────────
+
+describe("page-profil two-step email hint (INV-authorize-before-new)", () => {
+  it("shows step-1 hint explaining a link goes to the current address", async () => {
+    const utils = render(Page);
+    const hint = await utils.findByTestId("profil-email-step-hint");
+    // Hint must mention the OLD address authorizing the change (INV-authorize-before-new).
+    expect(hint.textContent).toContain("adresse actuelle");
+    expect(hint.textContent).toContain("autoriser");
+  });
+
+  it("success banner after step-1 says link was sent to current address, not new address", async () => {
+    const utils = render(Page);
+    const em = (await utils.findByTestId("profil-email-new-input")) as HTMLInputElement;
+    const pw = (await utils.findByTestId("profil-email-password-input")) as HTMLInputElement;
+    await fireEvent.input(em, { target: { value: "new@example.com" } });
+    await fireEvent.input(pw, { target: { value: "pass" } });
+    await fireEvent.submit(await utils.findByTestId("profil-email-form"));
+    const ok = await utils.findByTestId("profil-email-success");
+    // Step 1 success: link sent to old address, NOT to new address yet.
+    expect(ok.textContent).toContain("adresse actuelle");
+    // The new address must NOT appear in the success message (INV-authorize-before-new).
+    expect(ok.textContent).not.toContain("new@example.com");
   });
 });

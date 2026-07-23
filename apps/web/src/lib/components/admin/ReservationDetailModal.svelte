@@ -7,6 +7,7 @@
   } from './InvoiceCreator.svelte';
   import type { ReservationRow } from '$lib/api';
   import { formatDateOnly, displayNameOf, statusLabel } from './ReservationTableRow.svelte';
+  import { t } from '$lib/i18n.svelte';
 
   interface Props {
     open: boolean;
@@ -181,6 +182,22 @@
                 <dt class="rdm__dt">Facture Stripe</dt>
                 <dd class="rdm__dd" data-testid="rdm-stripe-invoice-id">
                   <span class="rdm__dd--mono">{row.stripe_invoice_id}</span>
+                </dd>
+              </div>
+            {/if}
+
+            {#if row.hosted_invoice_url}
+              <div class="rdm__dl-row">
+                <dt class="rdm__dt">Lien facture</dt>
+                <dd class="rdm__dd">
+                  <a
+                    href={row.hosted_invoice_url}
+                    class="rdm__invoice-link"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label={t('admin.invoiceLinkAriaLabel')}
+                    data-testid="rdm-hosted-invoice-url"
+                  >{t('admin.invoiceLink')}</a>
                 </dd>
               </div>
             {/if}
@@ -415,6 +432,24 @@
   }
 
   .rdm__email-link:focus-visible {
+    outline: 2px solid #7b4628;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  .rdm__invoice-link {
+    color: #7b4628;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .rdm__invoice-link:hover {
+    color: #6a3a20;
+  }
+
+  .rdm__invoice-link:focus-visible {
     outline: 2px solid #7b4628;
     outline-offset: 2px;
     border-radius: 2px;

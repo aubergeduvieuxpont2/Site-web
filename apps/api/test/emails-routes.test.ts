@@ -23,7 +23,7 @@ describe("Email routes", () => {
 
       expect(res.status).toBe(200);
       const data = await res.json();
-      expect(data.templates).toHaveLength(10);
+      expect(data.templates).toHaveLength(11);
       expect(data.templates[0]).toHaveProperty("key");
       expect(data.templates[0]).toHaveProperty("name");
       expect(data.templates[0]).toHaveProperty("subject");

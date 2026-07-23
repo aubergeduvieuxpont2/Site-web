@@ -126,6 +126,7 @@ type ReservationRow = {
   user_id?: number | null;
   stripe_invoice_id?: string | null;
   invoice_status?: string | null;
+  hosted_invoice_url?: string | null;
   paid_at?: string | null;
 };
 
@@ -278,6 +279,17 @@ const BlackoutRangeCreateSchema = z.object({
 export const ProfileEmailSchema = z.object({
   newEmail: z.string().trim().email("email invalide"),
   currentPassword: z.string().min(1, "mot de passe requis"),
+});
+
+export const ProfileContactSchema = z.object({
+  firstName: trimToNull,
+  lastName: trimToNull,
+  phone: trimToNull,
+  company: trimToNull,
+  addressStreet: trimToNull,
+  addressCity: trimToNull,
+  addressProvince: trimToNull,
+  addressPostalCode: trimToNull,
 });
 
 const authHook = (result: any, c: any) =>
@@ -1338,6 +1350,57 @@ app.post(
       return c.json({ ok: true, purpose: "change", email: newEmail }, 200);
     }
 
+    // Step 2 of two-step email change: the OLD address clicks the authorize link.
+    // Consume this token, then create a change token and email the NEW address.
+    if (row.purpose === "change_authorize") {
+      const newEmail = row.new_email;
+      if (!newEmail) {
+        return c.json({ error: "Lien invalide ou expiré." }, 400);
+      }
+
+      // Re-check uniqueness before contacting the new address.
+      const taken = (await sql`
+        SELECT id FROM users WHERE lower(email) = lower(${newEmail}) AND id != ${row.user_id}
+      `) as { id: number }[];
+      if (taken.length > 0) {
+        return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
+      }
+
+      const userRows = (await sql`
+        SELECT first_name, name, locale FROM users WHERE id = ${row.user_id}
+      `) as { first_name: string | null; name: string | null; locale: string }[];
+
+      // Consume the authorize token first (single-use invariant).
+      await sql`UPDATE email_verification_tokens SET used_at = now() WHERE token_hash = ${tokenHash}`;
+
+      // Issue a change token bound to the new address and email the new address.
+      try {
+        const rawChangeToken = generateToken();
+        const changeTokenHash = await sha256hex(rawChangeToken);
+        const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+        await sql`
+          INSERT INTO email_verification_tokens (token_hash, user_id, purpose, new_email, expires_at)
+          VALUES (${changeTokenHash}, ${row.user_id}, 'change', ${newEmail}, ${expiresAt})
+        `;
+        const firstName = userRows[0]?.first_name ?? userRows[0]?.name ?? "client";
+        const locale = userRows[0]?.locale === "en" ? "en" : "fr";
+        await enqueueEmail(sql, {
+          template: "email-verification",
+          to: newEmail,
+          locale,
+          payload: {
+            firstName,
+            verifyUrl: `${SITE_ORIGIN}/verification?token=${rawChangeToken}`,
+            expiryHours: 24,
+          },
+        });
+      } catch (err) {
+        console.error("email-change step-2 enqueue failed", err);
+      }
+
+      return c.json({ ok: true, purpose: "change_authorize", email: newEmail }, 200);
+    }
+
     // Unknown purpose — treat as invalid, no enumeration.
     return c.json({ error: "Lien invalide ou expiré." }, 400);
   }
@@ -1351,6 +1414,24 @@ app.get("/api/profile", async (c) => {
   }
 
   const sql = neon(c.env.DB_CONN);
+
+  const userRows = (await sql`
+    SELECT id, email, name, role, hubspot_contact_id, first_name, last_name, phone, company, locale, pending_email,
+           address_street, address_city, address_province, address_postal_code
+    FROM users WHERE id = ${user.id}
+  `) as {
+    id: number; email: string; name: string | null; role: string;
+    hubspot_contact_id: string | null; first_name: string | null; last_name: string | null;
+    phone: string | null; company: string | null; locale: string; pending_email: string | null;
+    address_street: string | null; address_city: string | null;
+    address_province: string | null; address_postal_code: string | null;
+  }[];
+
+  const ur = userRows[0];
+  if (!ur) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
   const reservations = (await sql`
     SELECT id, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, created_at
     FROM reservations
@@ -1359,15 +1440,86 @@ app.get("/api/profile", async (c) => {
   `) as ReservationRow[];
 
   const userResponse = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-    hubspotContactId: user.hubspot_contact_id || null,
+    id: ur.id,
+    email: ur.email,
+    name: ur.name,
+    role: ur.role,
+    hubspotContactId: ur.hubspot_contact_id || null,
+    firstName: ur.first_name,
+    lastName: ur.last_name,
+    phone: ur.phone,
+    company: ur.company,
+    locale: ur.locale === "en" ? "en" : "fr",
+    pendingEmail: ur.pending_email || null,
+    addressStreet: ur.address_street || null,
+    addressCity: ur.address_city || null,
+    addressProvince: ur.address_province || null,
+    addressPostalCode: ur.address_postal_code || null,
   };
 
   return c.json({ user: userResponse, reservations });
 });
+
+// Self-service contact info update (INV-contact-whitelist: never touches email/locale/password/role)
+app.patch(
+  "/api/profile/contact",
+  authRateLimiter,
+  zValidator("json", ProfileContactSchema, authHook),
+  async (c) => {
+    const user = await getAuthUser(c);
+    if (!user) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+    const data = c.req.valid("json");
+    const sql = neon(c.env.DB_CONN);
+
+    const rows = (await sql`
+      UPDATE users SET
+        first_name = ${data.firstName ?? null},
+        last_name = ${data.lastName ?? null},
+        phone = ${data.phone ?? null},
+        company = ${data.company ?? null},
+        address_street = ${data.addressStreet ?? null},
+        address_city = ${data.addressCity ?? null},
+        address_province = ${data.addressProvince ?? null},
+        address_postal_code = ${data.addressPostalCode ?? null}
+      WHERE id = ${user.id}
+      RETURNING id, email, name, role, hubspot_contact_id, first_name, last_name, phone, company, locale, pending_email,
+                address_street, address_city, address_province, address_postal_code
+    `) as {
+      id: number; email: string; name: string | null; role: string;
+      hubspot_contact_id: string | null; first_name: string | null; last_name: string | null;
+      phone: string | null; company: string | null; locale: string; pending_email: string | null;
+      address_street: string | null; address_city: string | null;
+      address_province: string | null; address_postal_code: string | null;
+    }[];
+
+    const ur = rows[0];
+    if (!ur) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    return c.json({
+      user: {
+        id: ur.id,
+        email: ur.email,
+        name: ur.name,
+        role: ur.role,
+        hubspotContactId: ur.hubspot_contact_id || null,
+        firstName: ur.first_name,
+        lastName: ur.last_name,
+        phone: ur.phone,
+        company: ur.company,
+        locale: ur.locale === "en" ? "en" : "fr",
+        pendingEmail: ur.pending_email || null,
+        addressStreet: ur.address_street || null,
+        addressCity: ur.address_city || null,
+        addressProvince: ur.address_province || null,
+        addressPostalCode: ur.address_postal_code || null,
+      },
+    });
+  }
+);
 
 app.post(
   "/api/profile/email",
@@ -1405,46 +1557,38 @@ app.post(
       return c.json({ error: "Cette adresse courriel est déjà utilisée." }, 409);
     }
 
-    // Do NOT change the email yet (M10): stage it as pending_email and require
-    // the new address to be confirmed before it takes effect. The actual
-    // UPDATE users SET email, reservation re-link and HubSpot sync all happen
-    // in POST /api/auth/verify-email once the new address is proven owned.
+    // Two-step email change (INV-authorize-before-new):
+    // Step 1 — stage pending_email and send a change_authorize token to the OLD
+    // (current) address. The new address is not contacted until the old address
+    // authorizes the change via POST /api/auth/verify-email.
     const firstName = userRow[0].first_name ?? user.name ?? "client";
 
     await sql`
       UPDATE users SET pending_email = ${newEmail} WHERE id = ${user.id}
     `;
 
-    // Best-effort: a mail-enqueue failure must not 500 the request. The pending
-    // change is recorded and can be re-triggered.
     try {
       const rawToken = generateToken();
       const tokenHash = await sha256hex(rawToken);
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       await sql`
         INSERT INTO email_verification_tokens (token_hash, user_id, purpose, new_email, expires_at)
-        VALUES (${tokenHash}, ${user.id}, 'change', ${newEmail}, ${expiresAt})
+        VALUES (${tokenHash}, ${user.id}, 'change_authorize', ${newEmail}, ${expiresAt})
       `;
-      // Confirmation link to the NEW address…
       const profileLocale = userRow[0].locale === "en" ? "en" : "fr";
-      await enqueueEmail(sql, {
-        template: "email-verification",
-        to: newEmail,
-        locale: profileLocale,
-        payload: {
-          firstName,
-          verifyUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
-          expiryHours: 24,
-        },
+      // email-change-confirm is security-critical (INV-authorize-before-new) and
+      // must always send regardless of the notification toggles, so it is inserted
+      // directly rather than going through the toggle-gated enqueueEmail path.
+      const confirmPayload = JSON.stringify({
+        firstName,
+        newEmail,
+        confirmUrl: `${SITE_ORIGIN}/verification?token=${rawToken}`,
+        expiryHours: 24,
       });
-      // …and an alert to the OLD address so a hijacked session can't silently
-      // move the account's email.
-      await enqueueEmail(sql, {
-        template: "email-change-alert",
-        to: user.email,
-        locale: profileLocale,
-        payload: { firstName, newEmail },
-      });
+      await sql`
+        INSERT INTO email_outbox (to_email, template, locale, payload)
+        VALUES (${user.email}, ${"email-change-confirm"}, ${profileLocale}, ${confirmPayload}::jsonb)
+      `;
     } catch (err) {
       console.error("email-change verification enqueue failed", err);
     }
@@ -1482,7 +1626,7 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
+    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, hosted_invoice_url, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
     FROM reservations
     WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
     ORDER BY created_at DESC
@@ -2144,7 +2288,7 @@ app.post(
 
       await sql`
         UPDATE reservations
-        SET stripe_invoice_id = ${stripeInvoiceId}, invoice_status = 'open'
+        SET stripe_invoice_id = ${stripeInvoiceId}, invoice_status = 'open', hosted_invoice_url = ${hostedInvoiceUrl}
         WHERE id = ${reservationId}
       `;
     }

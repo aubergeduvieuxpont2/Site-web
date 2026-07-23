@@ -87,5 +87,31 @@ describe("page-verification", () => {
       const { findByTestId } = render(Page);
       expect(await findByTestId("verify-error-state")).toBeTruthy();
     });
+
+    it("shows step-2 messaging for change_authorize: link sent to new address", async () => {
+      // change_authorize = old address confirmed; now a change-token is issued and
+      // emailed to the NEW address (INV-authorize-before-new: new address only
+      // contacted after the old address token is consumed).
+      verifyEmail.mockResolvedValue({
+        ok: true,
+        purpose: "change_authorize",
+        email: "new@example.com",
+      });
+      const { findByTestId } = render(Page);
+      const body = await findByTestId("verify-success-body");
+      // Must tell the user a link was sent to the NEW address.
+      expect(body.textContent).toContain("nouvelle adresse");
+      expect(body.textContent).toContain("new@example.com");
+      // Must guide them to finalise — not claim the change is done.
+      expect(body.textContent).toContain("finaliser");
+    });
+
+    it("shows step-2 messaging for change_authorize even without email in payload", async () => {
+      verifyEmail.mockResolvedValue({ ok: true, purpose: "change_authorize" });
+      const { findByTestId } = render(Page);
+      const body = await findByTestId("verify-success-body");
+      expect(body.textContent).toContain("nouvelle adresse");
+      expect(body.textContent).toContain("finaliser");
+    });
   });
 });
