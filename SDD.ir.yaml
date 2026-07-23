@@ -2,50 +2,54 @@ REQ:
   R-HOLD-001:
     actor: Booking availability calculator
     capability: count an active held reservation as occupied inventory
-    constraints: only while hold_expires_at is strictly after the current time; expired or NULL holds do not count
+    constraints: only while hold_expires_at is strictly after the current time; expired
+      or NULL holds do not count
     priority: MUST
     tests:
-      - T-HOLD-001a
-      - T-HOLD-001b
+    - T-HOLD-001a
+    - T-HOLD-001b
   R-HOLD-002:
     actor: Availability calculator
-    capability: preserve existing confirmed-occupancy, blackout subtraction, boundary rules, and result shape
-    constraints: per-reservation count, arrive inclusive, depart exclusive, AvailabilityResult shape unchanged
+    capability: preserve existing confirmed-occupancy, blackout subtraction, boundary
+      rules, and result shape
+    constraints: per-reservation count, arrive inclusive, depart exclusive, AvailabilityResult
+      shape unchanged
     priority: MUST
     tests:
-      - T-HOLD-002a
-      - T-HOLD-002b
-      - T-HOLD-002c
+    - T-HOLD-002a
+    - T-HOLD-002b
+    - T-HOLD-002c
   R-HOLD-003:
     actor: Data model
     capability: add hold_expires_at and stripe_checkout_session_id columns idempotently
     constraints: ADD COLUMN IF NOT EXISTS, nullable, own numbered migration file
     priority: MUST
     tests:
-      - T-HOLD-003a
+    - T-HOLD-003a
   R-HOLD-004:
     actor: Reservation status domain
     capability: recognise held and released as valid statuses
     constraints: Zod enum accepts held and released and rejects unknown values
     priority: MUST
     tests:
-      - T-HOLD-004a
+    - T-HOLD-004a
   R-HOLD-005:
     actor: Cron scheduled handler
     capability: retire expired holds to released
-    constraints: UPDATE where status held and hold_expires_at before now; called in the existing waitUntil block
+    constraints: UPDATE where status held and hold_expires_at before now; called in
+      the existing waitUntil block
     priority: MUST
     tests:
-      - T-HOLD-005a
-      - T-HOLD-005b
+    - T-HOLD-005a
+    - T-HOLD-005b
   R-HOLD-006:
     actor: Admin reservation list
     capability: display held and released with French labels and styled badges
-    constraints: held shows En attente de paiement, released shows Expiree; distinct badge classes; admin action union unchanged
+    constraints: held shows En attente de paiement, released shows Expiree; distinct
+      badge classes; admin action union unchanged
     priority: MUST
     tests:
-      - T-HOLD-006a
-
+    - T-HOLD-006a
 E:
   E-Reservation:
     fields:
@@ -56,122 +60,139 @@ E:
       stripe_checkout_session_id: text nullable
     tenancy: single-tenant
     invariants:
-      - INV-hold-expiry-frees-inventory
-      - INV-status-domain
+    - INV-hold-expiry-frees-inventory
+    - INV-status-domain
   E-BlackoutDate:
     fields:
       date: date
       rooms_blocked: integer
     tenancy: single-tenant
-
 OP:
   OP-Availability.forRange:
-    input: { checkIn: string, checkOut: string, rooms: integer, assignableRoomCount: integer }
+    input:
+      checkIn: string
+      checkOut: string
+      rooms: integer
+      assignableRoomCount: integer
     auth: []
     pre: []
     err: []
-    out: { nights: array, unavailableNights: array }
+    out:
+      nights: array
+      unavailableNights: array
   OP-Holds.releaseExpired:
-    input: { sql: function }
+    input:
+      sql: function
     auth: []
     pre: []
     err: []
-    out: { released_count: integer }
-
+    out:
+      released_count: integer
 INV:
-  INV-hold-expiry-frees-inventory: a held reservation counts against availability only while hold_expires_at is strictly in the future; the moment it lapses it stops counting, independent of the cron
-  INV-status-domain: reservation status is one of pending, confirmed, cancelled, held, released
-  INV-count-semantics: each covering active reservation contributes exactly one to a date occupancy, matching the prior COUNT-star behaviour
-
+  INV-hold-expiry-frees-inventory: a held reservation counts against availability
+    only while hold_expires_at is strictly in the future; the moment it lapses it
+    stops counting, independent of the cron
+  INV-status-domain: reservation status is one of pending, confirmed, cancelled, held,
+    released
+  INV-count-semantics: each covering active reservation contributes exactly one to
+    a date occupancy, matching the prior COUNT-star behaviour
 AUTH:
-  system-only-status: held and released are set only by the booking flow and the cron, never by an admin manual transition
-
+  system-only-status: held and released are set only by the booking flow and the cron,
+    never by an admin manual transition
 API:
   no-http-contract-change:
     input: none
     output: none
     errors: []
     auth: none
-
 UI:
   screen-admin-reservations-row:
     actions: []
-    state: { held, released, pending, confirmed, cancelled }
-
+    state:
+      held: null
+      released: null
+      pending: null
+      confirmed: null
+      cancelled: null
 DATA:
-  migration 0043_reservations_hold.sql: ALTER TABLE reservations ADD COLUMN IF NOT EXISTS hold_expires_at timestamptz; ALTER TABLE reservations ADD COLUMN IF NOT EXISTS stripe_checkout_session_id text
-  reservations table: existing plus hold_expires_at timestamptz nullable, stripe_checkout_session_id text nullable
+  migration 0043_reservations_hold.sql: ALTER TABLE reservations ADD COLUMN IF NOT
+    EXISTS hold_expires_at timestamptz; ALTER TABLE reservations ADD COLUMN IF NOT
+    EXISTS stripe_checkout_session_id text
+  reservations table: existing plus hold_expires_at timestamptz nullable, stripe_checkout_session_id
+    text nullable
   blackout_dates table: existing date and rooms_blocked used for subtraction
-
 TEST:
   T-HOLD-001a:
     verifies: R-HOLD-001
-    behaviour: an active held reservation covering a night reduces that night available by one
+    behaviour: an active held reservation covering a night reduces that night available
+      by one
     steps:
-      - mock sql returns one reservation status held with hold_expires_at in the future covering the night
-      - call availabilityForRange with assignableRoomCount 12 and rooms 1
-      - assert the covered night available equals 11
+    - mock sql returns one reservation status held with hold_expires_at in the future
+      covering the night
+    - call availabilityForRange with assignableRoomCount 12 and rooms 1
+    - assert the covered night available equals 11
   T-HOLD-001b:
     verifies: R-HOLD-001
     behaviour: an expired held reservation does not reduce availability
     steps:
-      - mock sql returns one reservation status held with hold_expires_at in the past covering the night
-      - call availabilityForRange with assignableRoomCount 12 and rooms 1
-      - assert the covered night available equals 12
+    - mock sql returns one reservation status held with hold_expires_at in the past
+      covering the night
+    - call availabilityForRange with assignableRoomCount 12 and rooms 1
+    - assert the covered night available equals 12
   T-HOLD-002a:
     verifies: R-HOLD-002
     behaviour: a confirmed reservation reduces a covered night by one
     steps:
-      - mock sql returns one reservation status confirmed covering the night
-      - assert the covered night available equals 11
+    - mock sql returns one reservation status confirmed covering the night
+    - assert the covered night available equals 11
   T-HOLD-002b:
     verifies: R-HOLD-002
     behaviour: a blackout rooms_blocked subtracts from availability
     steps:
-      - mock sql returns one blackout row rooms_blocked 2 on a night
-      - assert that night available is reduced by 2
+    - mock sql returns one blackout row rooms_blocked 2 on a night
+    - assert that night available is reduced by 2
   T-HOLD-002c:
     verifies: R-HOLD-002
     behaviour: arrive inclusive depart exclusive boundary
     steps:
-      - reservation arrive 2026-08-01 depart 2026-08-03 confirmed
-      - assert 2026-08-01 and 2026-08-02 are occupied and 2026-08-03 is not
+    - reservation arrive 2026-08-01 depart 2026-08-03 confirmed
+    - assert 2026-08-01 and 2026-08-02 are occupied and 2026-08-03 is not
   T-HOLD-003a:
     verifies: R-HOLD-003
     behaviour: migration is idempotent and adds both columns
     steps:
-      - file contains two ADD COLUMN IF NOT EXISTS statements for hold_expires_at and stripe_checkout_session_id
+    - file contains two ADD COLUMN IF NOT EXISTS statements for hold_expires_at and
+      stripe_checkout_session_id
   T-HOLD-004a:
     verifies: R-HOLD-004
     behaviour: Zod status enum accepts held and released and rejects unknown
     steps:
-      - parse status held succeeds
-      - parse status released succeeds
-      - parse status unknown fails
+    - parse status held succeeds
+    - parse status released succeeds
+    - parse status unknown fails
   T-HOLD-005a:
     verifies: R-HOLD-005
     behaviour: releaseExpiredHolds marks an expired held reservation released
     steps:
-      - mock sql captures the UPDATE statement
-      - assert it sets status released where status held and hold_expires_at before now
+    - mock sql captures the UPDATE statement
+    - assert it sets status released where status held and hold_expires_at before
+      now
   T-HOLD-005b:
     verifies: R-HOLD-005
     behaviour: releaseExpiredHolds leaves an active held reservation untouched
     steps:
-      - assert the UPDATE predicate excludes future-dated holds
+    - assert the UPDATE predicate excludes future-dated holds
   T-HOLD-006a:
     verifies: R-HOLD-006
     behaviour: statusLabel returns the French strings for held and released
     steps:
-      - statusLabel held returns En attente de paiement
-      - statusLabel released returns Expiree
-
+    - statusLabel held returns En attente de paiement
+    - statusLabel released returns Expiree
 NFR:
   correctness: availability correctness must not depend on the cron having run
   bounded-reads: reservation and blackout fetches are bounded to the requested range
   typecheck: npm run typecheck green
   tests: apps/api and apps/web vitest green
-
 FILE:
   apps/api/migrations/0043_reservations_hold.sql: TASK-migration
   apps/api/src/availability.ts: TASK-availability
@@ -181,72 +202,92 @@ FILE:
   apps/api/test/holds.test.ts: TASK-cron
   apps/web/src/lib/components/admin/ReservationTableRow.svelte: TASK-frontend
   apps/web/src/lib/api.ts: TASK-frontend
-
 TASK:
   TASK-migration:
     scope:
-      - R-HOLD-003
-      - DATA
-      - T-HOLD-003a
-    files: [apps/api/migrations/0043_reservations_hold.sql]
+    - R-HOLD-003
+    - T-HOLD-003a
+    files:
+    - apps/api/migrations/0043_reservations_hold.sql
     must_preserve:
-      - INV-status-domain
-    produce: [migrations]
-    verifies: [R-HOLD-003]
+    - INV-status-domain
+    produce:
+    - migrations
+    verifies:
+    - R-HOLD-003
   TASK-availability:
     scope:
-      - R-HOLD-001
-      - R-HOLD-002
-      - OP-Availability.forRange
-      - T-HOLD-001a
-      - T-HOLD-001b
-      - T-HOLD-002a
-      - T-HOLD-002b
-      - T-HOLD-002c
-    files: [apps/api/src/availability.ts, apps/api/test/availability.test.ts]
+    - R-HOLD-001
+    - R-HOLD-002
+    - OP-Availability.forRange
+    - T-HOLD-001a
+    - T-HOLD-001b
+    - T-HOLD-002a
+    - T-HOLD-002b
+    - T-HOLD-002c
+    files:
+    - apps/api/src/availability.ts
+    - apps/api/test/availability.test.ts
     must_preserve:
-      - INV-hold-expiry-frees-inventory
-      - INV-count-semantics
-    produce: [code, tests]
-    verifies: [R-HOLD-001, R-HOLD-002]
+    - INV-hold-expiry-frees-inventory
+    - INV-count-semantics
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-HOLD-001
+    - R-HOLD-002
   TASK-cron:
     scope:
-      - R-HOLD-004
-      - R-HOLD-005
-      - OP-Holds.releaseExpired
-      - T-HOLD-004a
-      - T-HOLD-005a
-      - T-HOLD-005b
-    files: [apps/api/src/holds.ts, apps/api/src/index.ts, apps/api/test/holds.test.ts]
+    - R-HOLD-004
+    - R-HOLD-005
+    - OP-Holds.releaseExpired
+    - T-HOLD-004a
+    - T-HOLD-005a
+    - T-HOLD-005b
+    files:
+    - apps/api/src/holds.ts
+    - apps/api/src/index.ts
+    - apps/api/test/holds.test.ts
     must_preserve:
-      - INV-status-domain
-    produce: [code, tests]
-    verifies: [R-HOLD-004, R-HOLD-005]
+    - INV-status-domain
+    produce:
+    - code
+    - tests
+    verifies:
+    - R-HOLD-004
+    - R-HOLD-005
   TASK-frontend:
     scope:
-      - R-HOLD-006
-      - UI
-      - T-HOLD-006a
-    files: [apps/web/src/lib/components/admin/ReservationTableRow.svelte, apps/web/src/lib/api.ts]
-    must_preserve:
-      - AUTH
-    produce: [code]
-    verifies: [R-HOLD-006]
-
+    - R-HOLD-006
+    - T-HOLD-006a
+    files:
+    - apps/web/src/lib/components/admin/ReservationTableRow.svelte
+    - apps/web/src/lib/api.ts
+    must_preserve: []
+    produce:
+    - code
+    verifies:
+    - R-HOLD-006
 STATE:
   ST-01:
     status: locked
-    decision: Availability correctness is keyed on hold_expires_at greater than now, not on the cron
+    decision: Availability correctness is keyed on hold_expires_at greater than now,
+      not on the cron
     rationale: inventory frees the instant a hold lapses, independent of cron cadence
   ST-02:
     status: locked
-    decision: Occupancy counts one per covering reservation, preserving prior COUNT-star semantics
-    rationale: keeps both existing callers behaviourally identical except that active holds now count
+    decision: Occupancy counts one per covering reservation, preserving prior COUNT-star
+      semantics
+    rationale: keeps both existing callers behaviourally identical except that active
+      holds now count
   ST-03:
     status: locked
-    decision: held and released are added to the Zod validation enum and display labels but not to the admin action-button union
+    decision: held and released are added to the Zod validation enum and display labels
+      but not to the admin action-button union
     rationale: they are system-only statuses with no manual admin transition
   ST-04:
     status: locked
     decision: both hold columns ship in one numbered migration 0043
-    rationale: the design spec lists them as one logical change; idempotent via ADD COLUMN IF NOT EXISTS
+    rationale: the design spec lists them as one logical change; idempotent via ADD
+      COLUMN IF NOT EXISTS
