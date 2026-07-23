@@ -1,155 +1,174 @@
 ## Global Design Strategy
 
-**Aesthetic Direction: "Auberge Raffinée" — Provincial Heritage Meets Payment Trust**
+This stream extends the site's established **"Industrial Zen"** language into the reservation payment flow — no new design vocabulary is introduced. The payment section and confirmation page inherit the cool-light `--color-surface` palette, IBM Plex type stack, terracotta/ember accent system, `tech-label` utility, and hairline structural borders already in use across the site.
 
-The Auberge du Vieux-Pont context — a heritage inn on a Quebec river — dictates the visual and architectural language: aged stone, cedar warmth, hand-crafted precision. For a payment backend, the dominant virtue is *trust*. Every design decision (colour, type, spacing) answers: does this feel like a place someone would hand their credit card to? The answer should be an unambiguous yes: warm but meticulous, artisanal but correct to the cent.
-
-The unforgettable quality: **brass-on-linen typography** paired with **deep cedar green** — like the brass placard on an old inn door. No gradients, no glow. Weight and stillness.
+**New visual treatments introduced:**
+- **Hold-indicator strip** — a depleting progress bar beneath the countdown, cycling from `--color-ember` (plentiful time) → `--color-terracotta-bright` (under 3 min) → `--color-terracotta` (under 1 min), driven by a CSS custom property updated each second.
+- **Countdown numeral block** — IBM Plex Mono at 2.5rem, centred, with `aria-live="polite"`. The numeral shifts colour class with the hold-indicator.
+- **Stripe mount frame** — a pure-white container (`#ffffff`) with 1px `--color-hairline` border, `--radius-lg` corners, and a subtle 0 4px 16px shadow. Prevents the Stripe iframe from appearing to float on the grey surface.
+- **Expired/misconfigured mute treatment** — the entire card desaturates to `--color-ink-mute`/`--color-surface-3` tones; a centred icon (SVG clock with slash) precedes the expired copy.
+- **Confirmation success badge** — `--color-forest` (#1a5c2d) filled circle with a white checkmark SVG, reusing the forest/forest-surface tokens already present in the design system.
 
 ### Colour Palette
-- `--color-surface`: #F7F4EF (aged linen — warm white, evokes trust)
-- `--color-surface-raised`: #FFFFFF (pure white for elevated cards)
-- `--color-surface-deep`: #EDE8DF (pressed linen — table rows, alt rows)
-- `--color-primary`: #3B5E4B (cedar green — WCAG AA on linen: 4.9:1 ✓)
-- `--color-primary-dark`: #2D4A3E (deep cedar — hover states)
-- `--color-accent`: #B5874A (aged brass — decorative only, large text only)
-- `--color-accent-text`: #7A5530 (darkened brass for body text — WCAG AA on linen: 5.3:1 ✓)
-- `--color-text`: #1E1E1C (near-black, warm — primary text)
-- `--color-text-muted`: #6B6560 (warm ash — secondary text, WCAG AA: 5.1:1 ✓)
-- `--color-border`: #D4C9B8 (warm stone — dividers, input borders)
-- `--color-error`: #9B2335 (claret — payment errors, 409/503)
-- `--color-success`: #2E7D52 (forest — confirmed status)
-- `--color-held`: #7A5530 (brass-text — held/pending status)
-- `--color-released`: #6B6560 (ash — released/expired status)
+
+Entirely inherited — no new tokens required:
+
+| Role | Token | Hex |
+|---|---|---|
+| surface | `--color-surface` | #f7f9fb |
+| card surface | `--color-surface-container-lowest` | #ffffff |
+| ink | `--color-ink` | #191c1e |
+| ink-soft | `--color-ink-soft` | #45464d |
+| ink-mute | `--color-ink-mute` | #76777d |
+| hold/countdown (ample) | `--color-ember` | #ffb690 |
+| hold/countdown (low) | `--color-terracotta-bright` | #fd761a |
+| hold/countdown (urgent) | `--color-terracotta` | #9d4300 |
+| expired mute | `--color-surface-3` + `--color-ink-mute` | #eceef0 / #76777d |
+| success | `--color-forest` | #1a5c2d |
+| success surface | `--color-forest-surface` | #d4ede0 |
+| hairline | `--color-hairline-2` | #e0e3e5 |
+| error | `--color-error` | #ba1a1a |
+
+All foreground/background pairs meet WCAG AA (4.5:1) against their respective surfaces.
 
 ### Typography
-- `--font-display`: 'Cormorant Garamond', Georgia, serif — for headings, status labels, inn identity; French baroque elegance
-- `--font-body`: 'Jost', 'Trebuchet MS', sans-serif — clean modern legibility for all body text and UI
-- `--font-mono`: 'DM Mono', 'Courier New', monospace — reservation IDs, session IDs, amounts, timestamps
-- `base-size`: 15px; `line-height`: 1.65
-- `h1`: 28px / Cormorant Garamond 500; `h2`: 20px; `h3`: 16px Jost 600
-- `label`: 11px Jost 700 uppercase letter-spacing 0.08em (brass-text colour)
+
+Fully inherited from the design system:
+
+- **Body / labels:** `--font-sans` (IBM Plex Sans, 400–700)
+- **Countdown numerals / session ID:** `--font-mono` (IBM Plex Mono) — the `tech-label` utility handles uppercase mono labels; countdown numerals use mono at 2.5rem/bold
+- **Heading scale:** h2 = 1.25rem/600 (matches existing form-card headings), h3 = 1rem/600
+- **Tech labels:** `font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.18em; font-size: 0.6875rem; font-weight: 500` — reuse `.tech-label` utility
 
 ### Spacing
-- base unit: 4px
-- scale: xs=4px sm=8px md=12px lg=16px xl=24px 2xl=32px 3xl=48px 4xl=64px
-- border-radius: 2px (panels), 4px (inputs, buttons) — heritage precision, not soft consumer product
+
+Fully inherited — `--space-xs` through `--space-2xl`. The payment card uses `--space-md` (1.25rem) internal padding matching the existing form card, with `--space-sm` (0.75rem) between the countdown and the Stripe mount frame.
 
 ### Accessibility
-- Minimum contrast ratio: 4.5:1 (WCAG AA) — all palette entries verified above
-- Keyboard navigation: all interactive elements Tab-reachable; focus ring `outline: 2px solid var(--color-primary)` offset 2px
-- Payment form landmarks: `role="main"` wrapping payment region, `role="status"` for hold countdown, `aria-live="polite"` for availability messages
-- Error states: `role="alert"` for 409/503 responses; errors announced immediately
-- Stripe embedded checkout iframe: preserve Stripe's own accessibility, do not suppress focus within the frame
-- Stream 3 contract: the embedded Stripe checkout mounts inside a labelled container `aria-label="Paiement sécurisé"` with `lang="fr"` on the document
+
+- Countdown region: `aria-live="polite"` + `aria-atomic="true"` so screen-readers announce the updated time without interrupting the user.
+- Expired and misconfigured states: focus shifted programmatically to the state heading on transition (same pattern as the existing success heading `tabindex="-1"` + `bind:this` + `.focus()`).
+- Stripe mount container: `aria-label="Stripe secure payment form"` on the outer wrapper; the Stripe iframe itself provides its own internal accessibility.
+- Back-to-form button: `data-testid="payment-back"`, visible label from `contact.payment.backToForm` key, receives focus on expired/misconfigured state entry.
+- Confirmation page: `data-testid="reservation-confirmee"`, session ID rendered as text content only (never `innerHTML`).
+- All interactive elements reachable via Tab; `:focus-visible` ring from global stylesheet applies everywhere.
+- Reduced-motion: the hold-indicator animation and countdown colour transitions respect `prefers-reduced-motion: reduce` via the global rule already in `app.css`.
 
 ### Security
-- No `innerHTML` assignments in any glue code — use `textContent` or `createTextNode`
-- The `clientSecret` received from this stream's API must never be logged, stored in `localStorage`, or appended to any URL — Stream 3 must pass it only to `stripe.initEmbeddedCheckout()`
-- `holdExpiresAt` is display-only; never re-submit it to the server
-- Stripe's `return_url` includes `{CHECKOUT_SESSION_ID}` (Stripe replaces this); ensure it is treated as a template literal at the API layer, never interpolated from user input
-- CSP concern for Stream 3: `frame-src https://js.stripe.com` and `connect-src https://api.stripe.com` must be added — this is an explicit cross-stream contract
+
+- No `innerHTML` assignments — all dynamic values (`greetingName`, `sessionId`) use Svelte text interpolation (`{value}`) which escapes by default.
+- `session_id` from the URL query string is displayed as text only, never rendered as HTML.
+- `STRIPE_PUBLISHABLE_KEY` (starts `pk_`) is the only Stripe value in `apps/web`; the secret key and webhook secret must never appear in this package.
+- CSP additions are scoped exactly to `https://js.stripe.com` (script-src) and `https://js.stripe.com https://*.stripe.com` (frame-src); no wildcards broadened beyond Stripe.
 
 ## Component Inventory
 
-- component: availability-excluder
-  description: >
-    Add optional `excludeReservationId` (number) parameter to `availabilityForRange`
-    in `apps/api/src/availability.ts`. Add `id` field to `ReservationRow` interface.
-    Skip the named reservation's hold when computing occupancy — so the webhook
-    re-check does not count a reservation's own hold against itself.
-  inputs: existing availabilityForRange signature; new optional 5th param; ReservationRow interface
-  interactions: pure function — no side effects; two callers unaffected when param omitted
+- component: stripe-dep
+  description: Add @stripe/stripe-js to apps/web/package.json dependencies and document VITE_STRIPE_PUBLISHABLE_KEY in .dev.env.example
+  inputs: none (file edits only)
+  interactions: none
+  kind: infra
+  depends_on: []
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-haiku-4-5-20251001
+  ralph: none
+
+- component: stripe-loader
+  description: New apps/web/src/lib/stripe.ts — exports STRIPE_PUBLISHABLE_KEY and getStripe() lazy loader; resolves null when key absent; single seam for test stubbing
+  inputs: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
+  interactions: none (module, no UI)
   kind: module
-  depends_on: []
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-opus-4-8
-  ralph: 2
-
-- component: stripe-checkout-helper
-  description: >
-    Add `createEmbeddedCheckoutSession(stripe, options)` to `apps/api/src/stripe.ts`.
-    Maps French line items to Stripe `price_data` entries in CAD cents (multiply by 100,
-    round to nearest integer). Creates session with `ui_mode='embedded'`, `mode='payment'`,
-    `customer_email`, `return_url`, `metadata`. Returns `{ id, clientSecret }`.
-    Must typecheck against installed Stripe SDK types for `ui_mode` and `client_secret`.
-  inputs: Stripe client instance, guest email, line items array [{description, amount}], return_url, metadata {reservation_id}
-  interactions: async call to Stripe API; no DB access
-  kind: service
-  depends_on: []
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-opus-4-8
-  ralph: 2
-
-- component: stripe-refund-helper
-  description: >
-    Add `refundCheckoutSession(stripe, sessionId)` to `apps/api/src/stripe.ts`.
-    Retrieves the Checkout session, resolves `payment_intent` (string or expanded object),
-    issues a full refund via `stripe.refunds.create({ payment_intent })`.
-    Guards against missing payment_intent with a descriptive thrown error.
-    Returns the Stripe refund object.
-  inputs: Stripe client instance, checkout session id string
-  interactions: async; two Stripe API calls (retrieve session, create refund)
-  kind: service
-  depends_on: []
-  designer_model: claude-sonnet-4-6
+  depends_on: [stripe-dep]
+  designer_model: claude-haiku-4-5-20251001
   builder_model: claude-opus-4-8
   ralph: 1
 
-- component: hold-booking-handler
-  description: >
-    Rework `POST /api/reservations` handler in `apps/api/src/index.ts`.
-    Adds `HOLD_MINUTES = 15` module-level constant.
-    Order of operations: (1) existing date validations; (2) 503 on missing STRIPE_SECRET_KEY
-    BEFORE any write; (3) TS availabilityForRange pre-check → 409; (4) atomic guarded-insert
-    CTE with pg_advisory_xact_lock + holds-aware occupancy SQL + conditional INSERT RETURNING;
-    → 409 if no row returned; (5) reservation code assignment; (6) computeInvoice with
-    type='full' + flat public settings → four French line items; (7) createEmbeddedCheckoutSession;
-    (8) persist stripe_checkout_session_id; (9) return 201 {reservationId,clientSecret,holdExpiresAt};
-    (10) compensation: if Stripe throws → release held row → 503.
-    Removes old pending-insert + confirmation-email waitUntil block.
-  inputs: ReservationRequestSchema validated body, c.env (DB_CONN, STRIPE_SECRET_KEY, settings), neon sql tag
-  interactions: DB write (INSERT), DB update (UPDATE for session id), Stripe API call, settings load
-  kind: handler
-  depends_on: [availability-excluder, stripe-checkout-helper, stripe-refund-helper]
+- component: api-types
+  description: Update createReservation return type in apps/web/src/lib/api.ts to ReservationHoldResponse (reservationId, clientSecret, holdExpiresAt); add exported interface; leave request body/path/method unchanged
+  inputs: existing api.ts, Stream 2 response contract
+  interactions: none (type change only)
+  kind: module
+  depends_on: []
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-opus-4-8
+  ralph: none
+
+- component: i18n-strings
+  description: Add contact.payment.* (heading, holdMessage, countdownLabel, expiredTitle, expiredBody, backToForm, unavailable) and top-level confirmation.* (title, body, sessionLabel, backHome) to both fr.ts and en.ts with identical key sets
+  inputs: existing message dictionaries
+  interactions: none (data only)
+  kind: module
+  depends_on: []
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-haiku-4-5-20251001
+  ralph: 1
+
+- component: contact-payment
+  description: Extend apps/web/src/routes/contact/+page.svelte with the post-submit payment section — three visual states (paying/expired/misconfigured) within the existing page-contact__form-card; hold-indicator progress bar; IBM Plex Mono countdown at 2.5rem; Stripe embedded checkout mount/destroy lifecycle; fade transitions between states; all strings via t()
+  inputs: createReservation result (reservationId, clientSecret, holdExpiresAt), getStripe(), STRIPE_PUBLISHABLE_KEY, i18n keys from contact.payment.*
+  interactions: countdown tick every second; Stripe iframe mount/destroy on effect; expired state on remainingMs<=0; back-to-form button resets to idle
+  kind: section
+  depends_on: [stripe-loader, api-types, i18n-strings]
   designer_model: claude-sonnet-4-6
-  builder_model: claude-fable-5
+  builder_model: claude-opus-4-8
   ralph: 3
 
-- component: webhook-booking-branch
-  description: >
-    Extend `POST /api/webhooks/stripe` in `apps/api/src/index.ts` with a booking branch
-    for `checkout.session.completed`. Branch selected first: match by metadata.reservation_id
-    or stripe_checkout_session_id. Falls through to existing invoice.paid path if no match.
-    Idempotency guard: no-op if already confirmed+paid. Re-checks availability via
-    availabilityForRange with excludeReservationId. If available: confirms, sets invoice_status='paid',
-    paid_at=now(), enqueues confirmation email. If unavailable: refundCheckoutSession, sets
-    status='released'. Guards refund against redelivery. Returns {received:true}.
-    Existing invoice.paid / invoice.payment_succeeded / invoice.payment_failed paths untouched.
-  inputs: verified Stripe event (checkout.session.completed), DB_CONN, STRIPE_SECRET_KEY, neon sql tag
-  interactions: DB read (SELECT reservation), DB write (UPDATE status/invoice_status/paid_at), Stripe refund API, enqueueEmail
-  kind: handler
-  depends_on: [availability-excluder, stripe-refund-helper, stripe-checkout-helper]
-  designer_model: claude-sonnet-4-6
-  builder_model: claude-fable-5
-  ralph: 3
-
-- component: payment-tests
-  description: >
-    Unit/integration tests under `apps/api/test` and `apps/api/src` for all Stream 2 surfaces.
-    Mocks: neon sql tagged template, Stripe client, enqueueEmail. Test cases:
-    POST /reservations — available dates → 201 {clientSecret,reservationId,holdExpiresAt} + held row;
-    unavailable night → 409 no insert; STRIPE_SECRET_KEY unset → 503 no held row; Stripe throws
-    → 503 + released row.
-    createEmbeddedCheckoutSession — correct price_data CAD cents, ui_mode=embedded, returns clientSecret.
-    refundCheckoutSession — retrieves session, resolves payment_intent, calls refunds.create.
-    availabilityForRange with excludeReservationId — excluded hold not counted; without param, counted.
-    Webhook — held+available → confirmed+paid+email; held+unavailable → refund+released; redelivered → no-op.
-    Parity test — SQL guard and TS availabilityForRange agree on shared fixture (same occupancy decision).
-  inputs: all Stream 2 modules; Vitest; mock factories for sql/stripe/enqueueEmail
-  interactions: none (unit/integration, no live DB or Stripe)
-  kind: test
-  depends_on: [hold-booking-handler, webhook-booking-branch, availability-excluder, stripe-checkout-helper, stripe-refund-helper]
-  designer_model: claude-sonnet-4-6
+- component: reservation-confirmee
+  description: New route apps/web/src/routes/reservation-confirmee/+page.svelte and +page.ts — success confirmation page; reads session_id query param via $page.url.searchParams; renders forest-green success badge with checkmark; confirmation.* i18n strings; backHome link to /; no API calls; prerender=false
+  inputs: $page.url.searchParams.get("session_id"), confirmation.* i18n keys
+  interactions: static display; backHome link navigation
+  kind: page
+  depends_on: [i18n-strings]
+  designer_model: claude-haiku-4-5-20251001
   builder_model: claude-sonnet-4-6
   ralph: 2
+
+- component: csp-update
+  description: Extend apps/web/src/hooks.server.ts CSP — add https://js.stripe.com to script-src; add frame-src https://js.stripe.com https://*.stripe.com; leave all other directives unchanged; update leading comment
+  inputs: existing hooks.server.ts CSP array
+  interactions: none
+  kind: infra
+  depends_on: []
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-opus-4-8
+  ralph: 1
+
+- component: test-csp
+  description: Add CSP assertions to apps/web/src/hooks.server.test.ts — script-src contains https://js.stripe.com; frame-src directive present containing https://js.stripe.com and a Stripe wildcard; existing assertions preserved
+  inputs: updated hooks.server.ts
+  interactions: none (test)
+  kind: test
+  depends_on: [csp-update]
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-sonnet-4-6
+  ralph: 1
+
+- component: test-payment
+  description: Extend apps/web/src/routes/contact/page-contact.test.ts — vi.mock("$lib/stripe") with pk_test_x key and fake initEmbeddedCheckout returning mount/destroy spies; update createReservation mock to new shape; tests for payment section render, countdown, fake-timer expiry, mount/destroy lifecycle
+  inputs: contact-payment component, stripe-loader module mock
+  interactions: none (test)
+  kind: test
+  depends_on: [contact-payment, stripe-loader]
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-sonnet-4-6
+  ralph: 2
+
+- component: test-confirmee
+  description: New apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts — stub $app/stores page with session_id URL; assert success copy and session id render; assert no api-client functions called
+  inputs: reservation-confirmee component
+  interactions: none (test)
+  kind: test
+  depends_on: [reservation-confirmee]
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-sonnet-4-6
+  ralph: 2
+
+- component: test-i18n
+  description: New apps/web/src/lib/__tests__/payment-i18n.test.ts — assert all specific new keys (contact.payment.* and confirmation.*) exist in both fr and en dictionaries
+  inputs: updated fr.ts and en.ts
+  interactions: none (test)
+  kind: test
+  depends_on: [i18n-strings]
+  designer_model: claude-haiku-4-5-20251001
+  builder_model: claude-haiku-4-5-20251001
+  ralph: none

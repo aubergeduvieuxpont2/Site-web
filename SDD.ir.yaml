@@ -1,445 +1,329 @@
 REQ:
-  R-BOOK-001:
-    actor: Website guest
-    capability: create a payment-gated held reservation and receive an embedded Checkout
-      client secret
-    constraints: hold expires 15 minutes after creation; held insert is race-safe;
-      response carries reservationId, clientSecret, holdExpiresAt
-    priority: MUST
-    tests:
-    - T-BOOK-001a
-    - T-BOOK-001b
-  R-BOOK-002:
-    actor: Website guest
-    capability: be refused a booking when payment is unconfigured before any hold
-      is created
-    constraints: STRIPE_SECRET_KEY unset returns 503 and creates no held row
-    priority: MUST
-    tests:
-    - T-BOOK-002a
-  R-BOOK-003:
-    actor: Two concurrent guests
-    capability: never both hold the last available room
-    constraints: single guarded SQL statement with advisory lock is authoritative;
-      loser gets 409
-    priority: MUST
-    tests:
-    - T-BOOK-003a
   R-PAY-001:
-    actor: Stripe checkout session
-    capability: itemized embedded Checkout session for the full stay total in CAD
-    constraints: ui_mode embedded, mode payment, one price_data line per item, cents
-      match admin full invoice to the cent
+    actor: Guest
+    capability: pay the full stay total in an embedded Stripe Checkout mounted on the reservation page after a successful booking
+    constraints: Stripe loaded lazily only when a client secret is present; publishable key read from build-time env var; secret key never in the bundle
     priority: MUST
     tests:
-    - T-PAY-001a
-    - T-PAY-001b
+      - T-PAY-001a
+      - T-PAY-001b
   R-PAY-002:
-    actor: Stripe refund
-    capability: full refund of a checkout session by resolving its payment intent
-    constraints: retrieve session, resolve payment_intent, refunds.create
+    actor: Guest
+    capability: see a fifteen-minute hold message with a live countdown derived from the hold expiry timestamp
+    constraints: countdown is cosmetic; server hold is authoritative; percent-delimited interpolation
     priority: MUST
     tests:
-    - T-PAY-002a
-  R-HOOK-001:
-    actor: Stripe webhook
-    capability: confirm a paid booking when its rooms are still available, else refund
-      and release
-    constraints: booking branch selected first; re-check excludes own hold; idempotent
-      on confirmed/paid; existing invoice path untouched
+      - T-PAY-001a
+  R-PAY-003:
+    actor: Guest
+    capability: see an expired-reservation state with a path back to the form when the countdown reaches zero
+    constraints: embedded checkout instance destroyed on the transition to avoid a dangling iframe
     priority: MUST
     tests:
-    - T-HOOK-001a
-    - T-HOOK-001b
-    - T-HOOK-001c
-  R-AVAIL-001:
-    actor: Availability engine
-    capability: exclude a named reservation from occupancy
-    constraints: optional exclude-reservation-id parameter; AvailabilityResult shape
-      preserved; existing callers unaffected
+      - T-PAY-002a
+      - T-PAY-002b
+  R-PAY-004:
+    actor: Guest
+    capability: see a clear missing-configuration message instead of a crash when the publishable key or client secret is absent
+    constraints: no silent fallback
+    priority: MUST
+    tests: []
+  R-CONF-001:
+    actor: Guest
+    capability: land on a success confirmation page after Stripe redirects, optionally showing the session id
+    constraints: not prerendered; reads session_id query param for display only; makes no API call
     priority: MUST
     tests:
-    - T-AVAIL-001a
-    - T-AVAIL-001b
+      - T-CONF-001a
+  R-API-001:
+    actor: Frontend
+    capability: receive the new reservations contract from the api-client helper
+    constraints: createReservation success type is reservationId, clientSecret, holdExpiresAt; request unchanged
+    priority: MUST
+    tests:
+      - T-API-001a
+  R-CSP-001:
+    actor: Browser
+    capability: load Stripe.js and mount the embedded-checkout iframe under the Content-Security-Policy
+    constraints: script-src adds js.stripe.com; frame-src added for js.stripe.com and *.stripe.com; no other broadening
+    priority: MUST
+    tests:
+      - T-CSP-001a
+  R-I18N-001:
+    actor: Guest
+    capability: read every new payment and confirmation string in the active locale
+    constraints: identical key sets in fr and en; rendered via the t helper
+    priority: MUST
+    tests:
+      - T-I18N-001a
+  R-CFG-001:
+    actor: Operator
+    capability: configure the publishable key via a documented build-time env var and the stripe browser dependency
+    constraints: publishable key public and safe in the bundle; documented in .dev.env.example
+    priority: MUST
+    tests: []
+
 E:
-  E-Reservation:
+  E-ReservationHoldResponse:
     fields:
-      id: integer
-      status: string (pending|confirmed|cancelled|held|released)
-      arrive: date
-      depart: date
-      room_count: integer
-      email: string
-      hold_expires_at: timestamptz (nullable)
-      stripe_checkout_session_id: text (nullable)
-      invoice_status: string (nullable)
-      paid_at: timestamptz (nullable)
-    tenancy: single-tenant property
-    invariants:
-    - INV-no-oversell
-    - INV-no-unpayable-hold
-    - INV-idempotent-paid
-    - INV-webhook-signed
-  E-CheckoutSession:
-    fields:
-      id: string
-      client_secret: string
-      payment_intent: string-or-object
-    tenancy: external (Stripe)
-    invariants: []
-OP:
-  OP-Reservation.book:
-    input:
-      firstName: string
-      lastName: string
-      email: string
-      phone: string
-      room: string
-      checkIn: date
-      checkOut: date
-      guests: integer
-      roomCount: integer
-      message: string
-    auth:
-    - public-rate-limited
-    pre:
-    - reservationsEnabled is true
-    - checkIn and checkOut present and well ordered
-    - checkIn not in the past
-    - STRIPE_SECRET_KEY is set
-    err:
-    - ERR-DATES-REQUIRED
-    - ERR-PAST-DATE
-    - ERR-PAYMENT-UNAVAILABLE
-    - ERR-DATES-TAKEN
-    out:
       reservationId: integer
       clientSecret: string
-      holdExpiresAt: string
-  OP-Stripe.createEmbeddedCheckoutSession:
-    input:
-      email: string
-      lineItems: array
-      returnUrl: string
-      metadata: object
-    auth:
-    - server-only
+      holdExpiresAt: string (ISO-8601)
+    tenancy: none
+    invariants:
+      - INV-publishable-key-only
+  E-StripeLoader:
+    fields:
+      STRIPE_PUBLISHABLE_KEY: string or undefined
+      getStripe: function returning Promise of Stripe or null
+    tenancy: none
+    invariants:
+      - INV-single-stripe-seam
+      - INV-no-dangling-iframe
+
+OP:
+  OP-Contact.submit:
+    input: { booking form fields }
+    auth: []
     pre:
-    - stripe client configured
-    err: []
-    out:
-      id: string
-      clientSecret: string
-  OP-Stripe.refundCheckoutSession:
-    input:
-      sessionId: string
-    auth:
-    - server-only
-    pre:
-    - session has a resolvable payment_intent
+      - client validation passes
+      - availability not blocked
     err:
-    - ERR-NO-PAYMENT-INTENT
-    out:
-      refundId: string
-  OP-Webhook.checkoutSessionCompleted:
-    input:
-      sessionId: string
-      metadataReservationId: string
-    auth:
-    - stripe-signature
+      - ERR-RESERVATION
+    out: { status transitions to paying or misconfigured on success }
+  OP-Payment.mount:
+    input: { clientSecret: string, container: element }
+    auth: []
     pre:
-    - signature verified
+      - status is paying
+      - publishable key present
+    err:
+      - ERR-MISCONFIG
+    out: { embedded checkout mounted into container }
+  OP-Payment.expire:
+    input: { holdExpiresAt: string }
+    auth: []
+    pre:
+      - status is paying
+      - remaining time reaches zero
     err: []
-    out:
-      received: true
-  OP-Availability.forRange:
-    input:
-      checkIn: date
-      checkOut: date
-      rooms: integer
-      assignableRoomCount: integer
-      excludeReservationId: integer-optional
-    auth:
-    - internal
-    pre: []
-    err: []
-    out:
-      nights: array
-      unavailableNights: array
+    out: { status transitions to expired; instance destroyed }
+
 ERR:
-  ERR-DATES-REQUIRED:
-    code: 400
-    meaning: arrival and departure dates are required
-  ERR-PAST-DATE:
-    code: 400
-    meaning: arrival date is in the past
-  ERR-PAYMENT-UNAVAILABLE:
-    code: 503
-    meaning: payment is temporarily unavailable (Stripe unconfigured or session creation
-      failed)
-  ERR-DATES-TAKEN:
-    code: 409
-    meaning: requested dates are no longer available
-  ERR-NO-PAYMENT-INTENT:
-    code: 500
-    meaning: checkout session has no resolvable payment intent to refund
+  ERR-RESERVATION:
+    code: 0
+    meaning: reservations POST failed or returned an error; inline banner shown, form retained
+  ERR-MISCONFIG:
+    code: 0
+    meaning: publishable key or client secret absent; missing-configuration message shown
+
 AUTH:
-  public-rate-limited: unauthenticated caller subject to the reservations rate limiter
-  server-only: called only from within the Worker, never exposed
-  stripe-signature: trust derives solely from a valid Stripe webhook signature
-  internal: internal module function, no external auth surface
+  guest-public: contact and confirmation pages are public; no auth required
+
 INV:
-  INV-no-oversell: no confirmed-or-active-held occupancy for any night may exceed
-    assignableRoomCount
-  INV-no-unpayable-hold: a held reservation without a usable Checkout session must
-    not persist (503-before-insert and release-on-failure)
-  INV-idempotent-paid: a reservation already confirmed and paid is never re-confirmed,
-    re-emailed, or re-refunded
-  INV-webhook-signed: no side effect occurs before the Stripe signature is verified
+  INV-publishable-key-only: no secret key or webhook secret appears anywhere under apps/web
+  INV-single-stripe-seam: only lib/stripe.ts imports the stripe browser SDK
+  INV-no-dangling-iframe: the embedded checkout instance is destroyed on every exit from the paying state
+  INV-key-parity: fr and en dictionaries expose identical dot-key sets, all string leaves
+  INV-csp-stripe-scope: CSP additions are scoped exactly to Stripe hosts; script-src gains no unsafe directives
+
 API:
   POST /api/reservations:
-    input: OP-Reservation.book.input
-    output:
-      reservationId: null
-      clientSecret: null
-      holdExpiresAt: null
-    errors:
-    - ERR-DATES-REQUIRED
-    - ERR-PAST-DATE
-    - ERR-PAYMENT-UNAVAILABLE
-    - ERR-DATES-TAKEN
-    auth: public-rate-limited
-  POST /api/webhooks/stripe:
-    input: raw Stripe event body plus stripe-signature header
-    output:
-      received: true
-    errors: []
-    auth: stripe-signature
-UI: {}
+    input: booking body (firstName, lastName, email, checkIn, checkOut, guests, roomCount, message)
+    output: E-ReservationHoldResponse
+    errors: [ERR-RESERVATION]
+    auth: guest-public
+
+UI:
+  screen-contact-payment:
+    actions: [submit, pay, back-to-form]
+    state: { idle, sending, paying, expired, misconfigured, error }
+  screen-reservation-confirmee:
+    actions: [back-home]
+    state: { success }
+
 DATA:
-  reservations table: existing columns plus hold_expires_at and stripe_checkout_session_id
-    (added by migration 0043, no new migration in this stream)
-  advisory-lock constant: fixed integer key passed to pg_advisory_xact_lock in the
-    guarded insert CTE
+  none: no schema or migration changes
+
 TEST:
-  T-BOOK-001a:
-    verifies: R-BOOK-001
-    behaviour: booking with available dates returns 201 with clientSecret, reservationId,
-      holdExpiresAt and inserts a held row with hold_expires_at
+  T-API-001a:
+    verifies: R-API-001
+    behaviour: "createReservation success type is ReservationHoldResponse with reservationId, clientSecret, holdExpiresAt"
     steps:
-    - mock sql so the guarded insert returns a held row and settings are available
-    - mock createEmbeddedCheckoutSession to return a client secret
-    - POST /api/reservations with valid future dates
-    - assert status 201 and body has reservationId, clientSecret, holdExpiresAt
-  T-BOOK-001b:
-    verifies: R-BOOK-001
-    behaviour: Stripe session creation failure releases the held row and returns 503
-    steps:
-    - mock the guarded insert to return a held row
-    - mock createEmbeddedCheckoutSession to throw
-    - POST /api/reservations
-    - assert status 503 and an update setting the row to released was issued
-  T-BOOK-002a:
-    verifies: R-BOOK-002
-    behaviour: STRIPE_SECRET_KEY unset returns 503 with no held insert
-    steps:
-    - env without STRIPE_SECRET_KEY
-    - POST /api/reservations with valid dates
-    - assert status 503 and no INSERT into reservations was issued
-  T-BOOK-003a:
-    verifies: R-BOOK-003
-    behaviour: guarded insert returning no row yields 409 with no further work
-    steps:
-    - mock the guarded insert to return an empty array
-    - POST /api/reservations
-    - assert status 409 and no Checkout session was created
+      - typecheck the helper return type
+      - contact-page test mock resolves the new shape and the page consumes it
   T-PAY-001a:
     verifies: R-PAY-001
-    behaviour: createEmbeddedCheckoutSession builds one CAD price_data line per item,
-      sets ui_mode embedded and mode payment, returns client_secret
+    behaviour: "after a valid submit the payment section renders with the hold message and a countdown and the form is gone"
     steps:
-    - stub stripe.checkout.sessions.create capturing its argument
-    - call createEmbeddedCheckoutSession with four line items
-    - assert ui_mode embedded, mode payment, four cad price_data lines, returned clientSecret
+      - mock the stripe loader module and createReservation success shape
+      - submit valid form
+      - assert data-testid contact-payment present, contact-form absent, hold message and countdown shown
   T-PAY-001b:
     verifies: R-PAY-001
-    behaviour: the four line-item cent amounts sum to the admin full-invoice total
-      to the cent
+    behaviour: "embedded checkout mount is called with the container"
     steps:
-    - compute computeInvoice full on the same public settings and stay
-    - build the line items and sum their cents
-    - assert the sum equals round of breakdown.total times one hundred
+      - submit valid form
+      - assert the mocked initEmbeddedCheckout mount spy was called with the bound container
   T-PAY-002a:
-    verifies: R-PAY-002
-    behaviour: refundCheckoutSession retrieves the session, resolves the payment intent,
-      and issues a full refund
+    verifies: R-PAY-003
+    behaviour: "advancing past holdExpiresAt while paying shows the expired copy and a back-to-form control"
     steps:
-    - stub sessions.retrieve to return a session with a payment_intent id
-    - stub refunds.create capturing its argument
-    - call refundCheckoutSession
-    - assert refunds.create was called with that payment intent
-  T-HOOK-001a:
-    verifies: R-HOOK-001
-    behaviour: completed event with rooms available confirms and enqueues the email
-      when the toggle is on
+      - use fake timers
+      - submit valid form with a near holdExpiresAt
+      - advance timers past expiry
+      - assert expired copy and data-testid payment-back present
+  T-PAY-002b:
+    verifies: R-PAY-003
+    behaviour: "the embedded checkout instance is destroyed when leaving the paying state"
     steps:
-    - mock signature verification to yield a checkout.session.completed with reservation
-      metadata
-    - mock availability to show rooms available and the toggle enabled
-    - POST /api/webhooks/stripe
-    - assert an update to confirmed/paid and an email_outbox insert
-  T-HOOK-001b:
-    verifies: R-HOOK-001
-    behaviour: completed event with rooms unavailable refunds and releases without
-      confirming
+      - submit valid form then trigger expiry or back-to-form
+      - assert the destroy spy was called
+  T-CONF-001a:
+    verifies: R-CONF-001
+    behaviour: "reservation-confirmee with a session_id renders success copy and the id and calls no API"
     steps:
-    - mock availability to show a night unavailable
-    - stub refundCheckoutSession
-    - POST /api/webhooks/stripe
-    - assert refund called, status set to released, no confirm
-  T-HOOK-001c:
-    verifies: R-HOOK-001
-    behaviour: redelivered completed event for an already confirmed-paid reservation
-      is a no-op
+      - stub the page store with session_id cs_test_123
+      - render the route
+      - assert success copy and cs_test_123 rendered and no api-client function called
+  T-CSP-001a:
+    verifies: R-CSP-001
+    behaviour: "CSP contains js.stripe.com in script-src and a Stripe frame-src"
     steps:
-    - mock the reservation row as already confirmed and paid
-    - POST /api/webhooks/stripe with the same event
-    - assert no confirm update, no email, no refund
-  T-AVAIL-001a:
-    verifies: R-AVAIL-001
-    behaviour: availabilityForRange with exclude-reservation-id does not count the
-      excluded reservation
+      - run handle and read Content-Security-Policy
+      - assert script-src has js.stripe.com and a frame-src with js.stripe.com is present
+  T-I18N-001a:
+    verifies: R-I18N-001
+    behaviour: "the new payment and confirmation keys exist in both fr and en"
     steps:
-    - mock sql to return one held reservation covering the range
-    - call availabilityForRange with excludeReservationId equal to that reservation
-      id
-    - assert the night is available
-  T-AVAIL-001b:
-    verifies: R-AVAIL-001
-    behaviour: the guarded SQL occupancy and the TypeScript availabilityForRange agree
-      on a shared fixture
-    steps:
-    - define a fixture of reservations, blackouts, assignable-room count
-    - compute occupancy via the SQL-guard logic and via availabilityForRange
-    - assert the same available/unavailable decision per night
+      - assert contact.payment keys and confirmation keys present in fr and en
+      - existing i18n-parity test passes
+
 NFR:
-  typecheck: npm run typecheck green; Stripe ui_mode and client_secret shapes typecheck
-    against the installed SDK
-  tests: apps/api and apps/web Vitest green including existing invoice-path tests
-  security: all Stripe secrets stay in the apps/api Worker env; none logged; no side
-    effect before signature verification
-  correctness: guest total equals admin full-invoice total to the cent
+  security: publishable key only in the bundle; CSP scoped to Stripe hosts
+  responsiveness: no horizontal overflow at mobile widths
+  i18n: full fr and en key parity with string leaves
+  typecheck: svelte-check green; apps/web and apps/api vitest green
+
 FILE:
-  apps/api/src/stripe.ts: TASK-stripe-helpers
-  apps/api/src/availability.ts: TASK-availability
-  apps/api/src/index.ts: TASK-endpoints
-  apps/api/test/**: TASK-tests
-  apps/api/src/**/*.test.ts: TASK-tests
+  apps/web/package.json: TASK-config
+  .dev.env.example: TASK-config
+  apps/web/src/lib/stripe.ts: TASK-api-client
+  apps/web/src/lib/api.ts: TASK-api-client
+  apps/web/src/routes/contact/+page.svelte: TASK-contact-page
+  apps/web/src/routes/reservation-confirmee/+page.svelte: TASK-confirmation
+  apps/web/src/routes/reservation-confirmee/+page.ts: TASK-confirmation
+  apps/web/src/hooks.server.ts: TASK-csp
+  apps/web/src/hooks.server.test.ts: TASK-csp
+  apps/web/src/lib/messages/fr.ts: TASK-i18n
+  apps/web/src/lib/messages/en.ts: TASK-i18n
+  apps/web/src/routes/contact/page-contact.test.ts: TASK-contact-page
+  apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts: TASK-confirmation
+  apps/web/src/lib/__tests__/payment-i18n.test.ts: TASK-i18n
+
 TASK:
-  TASK-availability:
+  TASK-config:
     scope:
-    - R-AVAIL-001
-    - OP-Availability.forRange
-    - T-AVAIL-001a
+      - R-CFG-001
+      - E-StripeLoader
     files:
-    - apps/api/src/availability.ts
+      - apps/web/package.json
+      - .dev.env.example
     must_preserve:
-    - INV-no-oversell
-    produce:
-    - code
-    verifies:
-    - R-AVAIL-001
-  TASK-stripe-helpers:
+      - INV-publishable-key-only
+    produce: [config]
+    verifies: [R-CFG-001]
+  TASK-api-client:
     scope:
-    - R-PAY-001
-    - R-PAY-002
-    - OP-Stripe.createEmbeddedCheckoutSession
-    - OP-Stripe.refundCheckoutSession
-    - ERR-NO-PAYMENT-INTENT
+      - R-API-001
+      - R-PAY-004
+      - E-ReservationHoldResponse
+      - E-StripeLoader
+      - OP-Payment.mount
+      - ERR-MISCONFIG
+      - T-API-001a
     files:
-    - apps/api/src/stripe.ts
-    must_preserve: []
-    produce:
-    - code
-    verifies:
-    - R-PAY-001
-    - R-PAY-002
-  TASK-endpoints:
-    scope:
-    - R-BOOK-001
-    - R-BOOK-002
-    - R-BOOK-003
-    - R-HOOK-001
-    - OP-Reservation.book
-    - OP-Webhook.checkoutSessionCompleted
-    - ERR-DATES-REQUIRED
-    - ERR-PAST-DATE
-    - ERR-PAYMENT-UNAVAILABLE
-    - ERR-DATES-TAKEN
-    files:
-    - apps/api/src/index.ts
+      - apps/web/src/lib/api.ts
+      - apps/web/src/lib/stripe.ts
     must_preserve:
-    - INV-no-oversell
-    - INV-no-unpayable-hold
-    - INV-idempotent-paid
-    - INV-webhook-signed
-    produce:
-    - code
-    verifies:
-    - R-BOOK-001
-    - R-BOOK-002
-    - R-BOOK-003
-    - R-HOOK-001
-  TASK-tests:
+      - INV-publishable-key-only
+      - INV-single-stripe-seam
+    produce: [code]
+    verifies: [R-API-001, R-PAY-004]
+  TASK-contact-page:
     scope:
-    - T-BOOK-001a
-    - T-BOOK-001b
-    - T-BOOK-002a
-    - T-BOOK-003a
-    - T-PAY-001a
-    - T-PAY-001b
-    - T-PAY-002a
-    - T-HOOK-001a
-    - T-HOOK-001b
-    - T-HOOK-001c
-    - T-AVAIL-001a
-    - T-AVAIL-001b
+      - R-PAY-001
+      - R-PAY-002
+      - R-PAY-003
+      - R-PAY-004
+      - OP-Contact.submit
+      - OP-Payment.mount
+      - OP-Payment.expire
+      - ERR-RESERVATION
+      - ERR-MISCONFIG
+      - UI
+      - T-PAY-001a
+      - T-PAY-001b
+      - T-PAY-002a
+      - T-PAY-002b
     files:
-    - apps/api/test/**
-    - apps/api/src/**/*.test.ts
+      - apps/web/src/routes/contact/+page.svelte
+      - apps/web/src/routes/contact/page-contact.test.ts
     must_preserve:
-    - INV-idempotent-paid
-    produce:
-    - tests
-    verifies:
-    - R-BOOK-001
-    - R-BOOK-002
-    - R-BOOK-003
-    - R-PAY-001
-    - R-PAY-002
-    - R-HOOK-001
-    - R-AVAIL-001
+      - INV-no-dangling-iframe
+      - INV-single-stripe-seam
+    produce: [code, tests]
+    verifies: [R-PAY-001, R-PAY-002, R-PAY-003, R-PAY-004]
+  TASK-confirmation:
+    scope:
+      - R-CONF-001
+      - T-CONF-001a
+    files:
+      - apps/web/src/routes/reservation-confirmee/+page.svelte
+      - apps/web/src/routes/reservation-confirmee/+page.ts
+      - apps/web/src/routes/__tests__/page-reservation-confirmee.test.ts
+    must_preserve:
+      - INV-publishable-key-only
+    produce: [code, tests]
+    verifies: [R-CONF-001]
+  TASK-csp:
+    scope:
+      - R-CSP-001
+      - T-CSP-001a
+    files:
+      - apps/web/src/hooks.server.ts
+      - apps/web/src/hooks.server.test.ts
+    must_preserve:
+      - INV-csp-stripe-scope
+    produce: [code, tests]
+    verifies: [R-CSP-001]
+  TASK-i18n:
+    scope:
+      - R-I18N-001
+      - T-I18N-001a
+    files:
+      - apps/web/src/lib/messages/fr.ts
+      - apps/web/src/lib/messages/en.ts
+      - apps/web/src/lib/__tests__/payment-i18n.test.ts
+    must_preserve:
+      - INV-key-parity
+    produce: [code, tests]
+    verifies: [R-I18N-001]
+
 STATE:
   ST-01:
     status: locked
-    decision: atomicity via a single guarded SQL statement with pg_advisory_xact_lock
-      (option a); TypeScript availabilityForRange retained as friendly pre-check only
-    rationale: the neon HTTP driver runs each query as its own autocommit transaction,
-      so a cross-call xact lock does not hold; one statement keeps race-safety in
-      a single round trip and preserves the uniform tagged-template pattern
+    decision: All stripe browser SDK access goes through lib/stripe.ts, mocked in tests
+    rationale: single seam keeps remote script and real iframe out of jsdom tests and localizes the publishable-key read
   ST-02:
     status: locked
-    decision: return_url is SITE_ORIGIN + /reservation-confirmee?session_id={CHECKOUT_SESSION_ID}
-    rationale: reuses the existing hardcoded constant like password-reset and verification
-      links; the confirmation path is the agreed contract Stream 3 builds
+    decision: Countdown is cosmetic, derived from holdExpiresAt, driving only the paying-to-expired transition
+    rationale: server hold and webhook are authoritative
   ST-03:
     status: locked
-    decision: guest email passed as customer_email; no pre-created Stripe Customer
-      for bookings
-    rationale: sufficient for embedded checkout and avoids customer-record churn
+    decision: createReservation success type changes in apps/web only as the frontend contract seam, not a backend change
+    rationale: the reservations endpoint already returns this shape from Stream 2
   ST-04:
     status: locked
-    decision: booking webhook branch selected first by metadata.reservation_id or
-      stripe_checkout_session_id, falling through to the existing invoice-id path
-    rationale: keeps the invoice-backed path fully intact while adding the booking
-      path additively
+    decision: VITE_STRIPE_PUBLISHABLE_KEY is documented in .dev.env.example per task instruction
+    rationale: task explicitly names that file for documentation of the public key
