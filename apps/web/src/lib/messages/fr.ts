@@ -702,6 +702,14 @@ export const fr = {
       email: 'Courriel',
       role: 'Rôle',
       rate: 'Votre tarif',
+      firstName: 'Prénom',
+      lastName: 'Nom de famille',
+      phone: 'Téléphone',
+      company: 'Entreprise',
+      addressStreet: 'Adresse',
+      addressCity: 'Ville',
+      addressProvince: 'Province',
+      addressPostalCode: 'Code postal',
     },
     rate: {
       unit: '$/nuit',
@@ -710,6 +718,22 @@ export const fr = {
     },
     admin: {
       link: 'Tableau de bord →',
+    },
+    contact: {
+      heading: 'Informations de contact',
+      edit: 'Modifier',
+      save: 'Enregistrer',
+      cancel: 'Annuler',
+      saving: 'Enregistrement…',
+      success: 'Profil mis à jour.',
+      errors: {
+        generic: 'Une erreur est survenue. Veuillez réessayer.',
+      },
+    },
+    locale: {
+      heading: 'Langue préférée',
+      fr: 'Français',
+      en: 'English',
     },
     reservations: {
       heading: 'Mes réservations',
@@ -723,7 +747,7 @@ export const fr = {
     },
     empty: 'Aucune réservation',
     password: {
-      heading: 'Changer le mot de passe',
+      heading: 'Mot de passe',
       current: 'Mot de passe actuel',
       new: 'Nouveau mot de passe',
       hint: '(8 caractères minimum)',
@@ -734,17 +758,21 @@ export const fr = {
       submitAriaLabel: 'Modifier le mot de passe',
       submitting: 'Modification…',
       submit: 'Modifier le mot de passe',
+      resetBtn: 'Envoyer un lien de réinitialisation',
+      resetSending: 'Envoi…',
+      resetSuccess: 'Un lien de réinitialisation a été envoyé.',
     },
     email: {
       heading: "Changer l'adresse courriel",
       currentPrefix: 'Adresse actuelle : ',
       formAriaLabel: "Changer l'adresse courriel",
       new: 'Nouvelle adresse courriel',
+      step1Hint: 'Un lien de confirmation sera envoyé à votre adresse actuelle pour autoriser le changement.',
       success:
-        "Un lien de confirmation a été envoyé à votre nouvelle adresse — cliquez-le pour activer le changement.",
-      submitAriaLabel: "Modifier l'adresse courriel",
-      submitting: 'Modification…',
-      submit: "Modifier l'adresse courriel",
+        "Un lien a été envoyé à votre adresse actuelle. Cliquez-le pour passer à l'étape suivante.",
+      submitAriaLabel: "Demander le changement de courriel",
+      submitting: 'Envoi…',
+      submit: "Demander le changement",
     },
   },
 
@@ -811,6 +839,8 @@ export const fr = {
           'Votre adresse courriel a été confirmée. Votre compte est maintenant activé et vous retrouvez vos réservations.',
         change:
           "Votre nouvelle adresse courriel%email% est maintenant active. Vous l'utiliserez désormais pour vous connecter.",
+        change_authorize:
+          "Un lien de vérification a été envoyé à votre nouvelle adresse%email%. Cliquez-le pour finaliser le changement.",
       },
       cta: 'Accéder à mon espace',
     },
@@ -826,6 +856,11 @@ export const fr = {
     body: 'Votre paiement a été reçu et votre réservation est confirmée. Vous recevrez une confirmation par courriel sous peu.',
     sessionLabel: 'Référence : %session_id%',
     backHome: 'Retour à l\'accueil',
+  },
+
+  admin: {
+    invoiceLink: 'Voir la facture',
+    invoiceLinkAriaLabel: 'Voir la facture (nouvel onglet)',
   },
 };
 

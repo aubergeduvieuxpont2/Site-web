@@ -565,4 +565,39 @@ export const TEMPLATES: Record<TemplateKey, Record<Locale, HandlebarsTemplateDel
     + alias4(((helper = (helper = lookupProperty(helpers,"newEmail") || (depth0 != null ? lookupProperty(depth0,"newEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"newEmail","hash":{},"data":data,"loc":{"start":{"line":3,"column":95},"end":{"line":3,"column":107}}}) : helper)))
     + "</strong>.</p>\n\n<p>This change will only take effect once the new address has been confirmed.</p>\n\n<p>If this wasn't you, please contact us immediately so we can secure your account.</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
 },"useData":true}) },
+  "email-change-confirm": { fr: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Bonjour "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":11},"end":{"line":1,"column":24}}}) : helper)))
+    + ",</p>\n\n<p>Vous avez demandé à modifier l'adresse courriel de votre compte. La nouvelle adresse souhaitée est&nbsp;: <strong>"
+    + alias4(((helper = (helper = lookupProperty(helpers,"newEmail") || (depth0 != null ? lookupProperty(depth0,"newEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"newEmail","hash":{},"data":data,"loc":{"start":{"line":3,"column":117},"end":{"line":3,"column":129}}}) : helper)))
+    + "</strong>.</p>\n\n<p>Pour autoriser ce changement, cliquez sur le lien ci-dessous. Ce lien expire dans "
+    + alias4(((helper = (helper = lookupProperty(helpers,"expiryHours") || (depth0 != null ? lookupProperty(depth0,"expiryHours") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"expiryHours","hash":{},"data":data,"loc":{"start":{"line":5,"column":85},"end":{"line":5,"column":100}}}) : helper)))
+    + " heures.</p>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmUrl") || (depth0 != null ? lookupProperty(depth0,"confirmUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmUrl","hash":{},"data":data,"loc":{"start":{"line":8,"column":11},"end":{"line":8,"column":25}}}) : helper)))
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Autoriser le changement</a>\n</p>\n\n<p>Si vous n'êtes pas à l'origine de cette demande, ignorez ce message. Votre adresse actuelle reste inchangée.</p>\n\n<p>Cordialement,<br/>\nL'équipe du Vieux Pont</p>\n";
+},"useData":true}), en: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Hello "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":9},"end":{"line":1,"column":22}}}) : helper)))
+    + ",</p>\n\n<p>You requested to change the email address on your account. The requested new address is: <strong>"
+    + alias4(((helper = (helper = lookupProperty(helpers,"newEmail") || (depth0 != null ? lookupProperty(depth0,"newEmail") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"newEmail","hash":{},"data":data,"loc":{"start":{"line":3,"column":100},"end":{"line":3,"column":112}}}) : helper)))
+    + "</strong>.</p>\n\n<p>To authorize this change, click the link below. This link expires in "
+    + alias4(((helper = (helper = lookupProperty(helpers,"expiryHours") || (depth0 != null ? lookupProperty(depth0,"expiryHours") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"expiryHours","hash":{},"data":data,"loc":{"start":{"line":5,"column":72},"end":{"line":5,"column":87}}}) : helper)))
+    + " hours.</p>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"confirmUrl") || (depth0 != null ? lookupProperty(depth0,"confirmUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"confirmUrl","hash":{},"data":data,"loc":{"start":{"line":8,"column":11},"end":{"line":8,"column":25}}}) : helper)))
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Authorize the change</a>\n</p>\n\n<p>If you did not request this change, you can safely ignore this message. Your current email address remains unchanged.</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
+},"useData":true}) },
 };

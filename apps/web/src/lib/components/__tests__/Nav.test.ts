@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
-import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import { render, fireEvent, cleanup, waitFor } from "@testing-library/svelte";
 
 // Nav reads `$page.url.pathname` from the SvelteKit `page` store. Outside a
 // real request that store is uninitialized (`url` is undefined), so we stub
@@ -12,6 +12,13 @@ vi.mock("$app/stores", () => ({
       return () => {};
     },
   },
+}));
+
+// Nav.handleLogout calls goto('/') after clearing the user. Mock the module so
+// the test environment never attempts real SvelteKit client navigation.
+const gotoMock = vi.fn((..._args: unknown[]) => Promise.resolve());
+vi.mock("$app/navigation", () => ({
+  goto: (...args: unknown[]) => gotoMock(...args),
 }));
 
 import Nav from "../Nav.svelte";
@@ -239,10 +246,12 @@ describe("Nav", () => {
     beforeEach(() => {
       vi.unstubAllGlobals();
       clearUser();
+      gotoMock.mockClear();
     });
     afterEach(() => {
       vi.unstubAllGlobals();
       clearUser();
+      gotoMock.mockClear();
     });
 
     it("hides logout (desktop + mobile) for an unauthenticated visitor", () => {
@@ -295,6 +304,40 @@ describe("Nav", () => {
       // clearUser() ran → both logout buttons removed from the DOM.
       expect(queryByTestId("nav-logout")).toBeNull();
       expect(queryByTestId("nav-logout-mobile")).toBeNull();
+    });
+
+    it("navigates to home (goto('/')) after logout — desktop and mobile buttons", async () => {
+      setUser({ id: 1, email: "guest@test.com", name: "Guest", role: "guest", locale: "fr" });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }),
+        ),
+      );
+
+      const { queryByTestId } = render(Nav);
+
+      // Desktop logout button
+      await fireEvent.click(queryByTestId("nav-logout") as HTMLButtonElement);
+      await waitFor(() => expect(gotoMock).toHaveBeenCalledWith("/"));
+    });
+
+    it("navigates to home via the mobile logout button too", async () => {
+      setUser({ id: 2, email: "guest2@test.com", name: "Guest2", role: "guest", locale: "fr" });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(() =>
+          Promise.resolve({ ok: true, json: () => Promise.resolve({ ok: true }) }),
+        ),
+      );
+
+      // Expand mobile menu first so the mobile button exists in the DOM.
+      const { queryByTestId, container } = render(Nav);
+      const toggle = container.querySelector("button[aria-expanded]") as HTMLButtonElement;
+      await fireEvent.click(toggle);
+
+      await fireEvent.click(queryByTestId("nav-logout-mobile") as HTMLButtonElement);
+      await waitFor(() => expect(gotoMock).toHaveBeenCalledWith("/"));
     });
   });
 

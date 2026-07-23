@@ -11,6 +11,7 @@ import roomAssignedSample from "../../emails/samples/room-assigned.json";
 import otaWelcomeSample from "../../emails/samples/ota-welcome.json";
 import emailVerificationSample from "../../emails/samples/email-verification.json";
 import emailChangeAlertSample from "../../emails/samples/email-change-alert.json";
+import emailChangeConfirmSample from "../../emails/samples/email-change-confirm.json";
 
 export type Locale = "fr" | "en";
 export type TemplateKey =
@@ -23,7 +24,8 @@ export type TemplateKey =
   | "room-assigned"
   | "ota-welcome"
   | "email-verification"
-  | "email-change-alert";
+  | "email-change-alert"
+  | "email-change-confirm";
 
 export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   welcome: welcomeSample,
@@ -36,4 +38,5 @@ export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   "ota-welcome": otaWelcomeSample,
   "email-verification": emailVerificationSample,
   "email-change-alert": emailChangeAlertSample,
+  "email-change-confirm": emailChangeConfirmSample,
 };

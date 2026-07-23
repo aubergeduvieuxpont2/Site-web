@@ -26,6 +26,15 @@ export interface User {
   hubspotContactId?: string | null;
   effectiveNightlyPrice?: number;
   effectiveWeeklyPrice?: number;
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  pending_email?: string | null;
+  address_street?: string | null;
+  address_city?: string | null;
+  address_province?: string | null;
+  address_postal_code?: string | null;
 }
 
 export interface ReservationRow {
@@ -54,6 +63,7 @@ export interface ReservationRow {
   stripe_invoice_id?: string | null;
   invoice_status?: string | null;
   paid_at?: string | null;
+  hosted_invoice_url?: string | null;
 }
 
 export interface OutboxRow {
@@ -335,8 +345,8 @@ export async function resetPassword(
  */
 export async function verifyEmail(
   token: string,
-): Promise<{ ok: true; purpose: "register" | "change"; email?: string } | ApiError> {
-  return fetchJson<{ ok: true; purpose: "register" | "change"; email?: string }>(
+): Promise<{ ok: true; purpose: "register" | "change" | "change_authorize"; email?: string } | ApiError> {
+  return fetchJson<{ ok: true; purpose: "register" | "change" | "change_authorize"; email?: string }>(
     "/auth/verify-email",
     {
       method: "POST",
@@ -383,6 +393,38 @@ export async function changeProfileEmail(
   return fetchJson<{ ok: true; pending: true }>("/profile/email", {
     method: "POST",
     body: JSON.stringify({ newEmail, currentPassword }),
+  });
+}
+
+/**
+ * Input shape for the self-service contact profile update. All fields are
+ * optional; an explicit `null` clears the value server-side. The server
+ * trims non-null values and rejects any attempt to change email, locale,
+ * password_hash, or role (INV-contact-whitelist).
+ */
+export interface ContactProfileInput {
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  addressStreet?: string | null;
+  addressCity?: string | null;
+  addressProvince?: string | null;
+  addressPostalCode?: string | null;
+}
+
+/**
+ * Update the authenticated user's own contact fields. Returns the updated
+ * user record on success. Only the whitelist fields (first_name, last_name,
+ * phone, company, address columns) are touched — email, locale, password, and
+ * role are never modified by this endpoint.
+ */
+export async function updateContactProfile(
+  data: ContactProfileInput,
+): Promise<{ user: User } | ApiError> {
+  return fetchJson<{ user: User }>("/profile/contact", {
+    method: "PATCH",
+    body: JSON.stringify(data),
   });
 }
 

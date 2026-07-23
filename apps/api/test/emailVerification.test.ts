@@ -234,8 +234,11 @@ describe("POST /api/auth/login reservation linking", () => {
 // ---------------------------------------------------------------------------
 // Email change — stages pending_email, does not update email
 // ---------------------------------------------------------------------------
-describe("POST /api/profile/email", () => {
-  it("stages pending_email, enqueues verify-to-new + alert-to-old, and does NOT change the email", async () => {
+// ---------------------------------------------------------------------------
+// Email change — two-step flow
+// ---------------------------------------------------------------------------
+describe("POST /api/profile/email (step 1)", () => {
+  it("stages pending_email, creates change_authorize token, emails confirm to OLD address only", async () => {
     const passwordHash = await hashPassword("hunter2hunter2");
     const sessionUser = {
       id: 7,
@@ -247,7 +250,7 @@ describe("POST /api/profile/email", () => {
 
     const { sql, calls } = recorder((q) => {
       if (q.includes("FROM sessions") && q.includes("JOIN users")) return [sessionUser];
-      if (q.includes("password_hash")) return [{ password_hash: passwordHash, first_name: "Old" }];
+      if (q.includes("password_hash")) return [{ password_hash: passwordHash, first_name: "Old", locale: "fr" }];
       if (q.includes("lower(email)")) return []; // new email free
       return [];
     });
@@ -274,24 +277,91 @@ describe("POST /api/profile/email", () => {
     expect(calls.some((c) => c.q.includes("SET pending_email"))).toBe(true);
     expect(calls.some((c) => c.q.includes("UPDATE users") && c.q.includes("SET email ="))).toBe(false);
 
-    // A change-purpose token is inserted with the new email.
+    // A change_authorize token is inserted (INV-authorize-before-new).
     const token = calls.find((c) => c.q.includes("INSERT INTO email_verification_tokens"));
     expect(token).toBeDefined();
-    expect(token!.q).toContain("'change'");
+    expect(token!.q).toContain("'change_authorize'");
     expect(token!.vals).toContain("new@example.com");
 
-    // Verification email to the NEW address.
-    const verify = calls.find(
+    // Confirmation email sent to OLD address — new address not contacted yet.
+    const confirm = calls.find(
+      (c) => c.q.includes("INSERT INTO email_outbox") && c.vals.includes("email-change-confirm"),
+    );
+    expect(confirm).toBeDefined();
+    expect(confirm!.vals).toContain("old@example.com");
+
+    // No email-verification sent to the new address in step 1.
+    const verifyToNew = calls.find(
+      (c) => c.q.includes("INSERT INTO email_outbox") && c.vals.includes("email-verification") && c.vals.includes("new@example.com"),
+    );
+    expect(verifyToNew).toBeUndefined();
+  });
+});
+
+describe("POST /api/auth/verify-email (change_authorize — step 2)", () => {
+  it("consumes the authorize token, issues a change token, and emails the new address", async () => {
+    const { sql, calls } = recorder((q) => {
+      if (q.includes("FROM email_verification_tokens")) {
+        return [{ user_id: 7, purpose: "change_authorize", new_email: "new@example.com" }];
+      }
+      if (q.includes("lower(email)")) return []; // new email not taken
+      if (q.includes("FROM users")) return [{ first_name: "Old", name: "Old Name", locale: "fr" }];
+      return [];
+    });
+    neonHolder.sql = sql;
+
+    const res = await app.request(
+      "http://localhost/api/auth/verify-email",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "cf-connecting-ip": "4.4.4.4" },
+        body: JSON.stringify({ token: "raw-authorize-token" }),
+      },
+      env,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, purpose: "change_authorize", email: "new@example.com" });
+
+    // The authorize token is consumed.
+    expect(calls.some((c) => c.q.includes("SET used_at = now()"))).toBe(true);
+
+    // A change-purpose token is issued for the new email.
+    const changeToken = calls.find((c) => c.q.includes("INSERT INTO email_verification_tokens"));
+    expect(changeToken).toBeDefined();
+    expect(changeToken!.q).toContain("'change'");
+    expect(changeToken!.vals).toContain("new@example.com");
+
+    // email-verification sent to the new address.
+    const verifyEmail = calls.find(
       (c) => c.q.includes("INSERT INTO email_outbox") && c.vals.includes("email-verification"),
     );
-    expect(verify).toBeDefined();
-    expect(verify!.vals).toContain("new@example.com");
+    expect(verifyEmail).toBeDefined();
+    expect(verifyEmail!.vals).toContain("new@example.com");
+  });
 
-    // Alert email to the OLD address.
-    const alert = calls.find(
-      (c) => c.q.includes("INSERT INTO email_outbox") && c.vals.includes("email-change-alert"),
+  it("returns 409 when the new email was taken before authorization", async () => {
+    const { sql, calls } = recorder((q) => {
+      if (q.includes("FROM email_verification_tokens")) {
+        return [{ user_id: 7, purpose: "change_authorize", new_email: "taken@example.com" }];
+      }
+      if (q.includes("lower(email)")) return [{ id: 99 }]; // taken by another account
+      return [];
+    });
+    neonHolder.sql = sql;
+
+    const res = await app.request(
+      "http://localhost/api/auth/verify-email",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "cf-connecting-ip": "4.4.4.5" },
+        body: JSON.stringify({ token: "raw-authorize-token" }),
+      },
+      env,
     );
-    expect(alert).toBeDefined();
-    expect(alert!.vals).toContain("old@example.com");
+
+    expect(res.status).toBe(409);
+    // Token not consumed — no used_at update.
+    expect(calls.some((c) => c.q.includes("SET used_at = now()"))).toBe(false);
   });
 });

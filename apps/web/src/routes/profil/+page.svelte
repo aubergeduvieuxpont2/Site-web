@@ -1,11 +1,20 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { getMe, getProfile, logout, changePassword, changeProfileEmail, isError } from "$lib/api";
+  import {
+    getMe,
+    getProfile,
+    logout,
+    changeProfileEmail,
+    forgotPassword,
+    updateLocale,
+    updateContactProfile,
+    isError,
+  } from "$lib/api";
   import type { User, ReservationRow } from "$lib/api";
   import ProfilReservationTable from "$lib/components/ProfilReservationTable.svelte";
   import { settings } from "$lib/settings.svelte";
-  import { t, locale } from "$lib/i18n.svelte";
+  import { t, locale, setLocale } from "$lib/i18n.svelte";
 
   // ── State ────────────────────────────────────────────────────────────
   type Phase = "loading" | "loaded" | "error";
@@ -19,8 +28,6 @@
   let loggingOut = $state(false);
 
   // ── Rate display ─────────────────────────────────────────────────────
-  // `effectiveNightlyPrice` comes from getMe(); getProfile() may omit it, so
-  // the onMount merge preserves it. Falls back to the public nightly price.
   const displayRate = $derived(user?.effectiveNightlyPrice ?? settings.nightlyPrice);
   const isCustomRate = $derived(
     user?.effectiveNightlyPrice != null &&
@@ -33,37 +40,87 @@
     }).format(displayRate),
   );
 
-  // ── Change password state ─────────────────────────────────────────────
-  let currentPassword = $state("");
-  let newPassword = $state("");
-  let pwdSubmitting = $state(false);
-  let pwdError = $state<string | null>(null);
-  let pwdSuccess = $state(false);
+  // ── Contact edit state ────────────────────────────────────────────────
+  let contactEditing = $state(false);
+  let contactSubmitting = $state(false);
+  let contactError = $state<string | null>(null);
+  let contactSuccess = $state(false);
+  let editFirstName = $state("");
+  let editLastName = $state("");
+  let editPhone = $state("");
+  let editCompany = $state("");
+  let editAddressStreet = $state("");
+  let editAddressCity = $state("");
+  let editAddressProvince = $state("");
+  let editAddressPostalCode = $state("");
 
-  async function handlePasswordChange(e: SubmitEvent): Promise<void> {
+  function startContactEdit() {
+    editFirstName = user?.first_name ?? "";
+    editLastName = user?.last_name ?? "";
+    editPhone = user?.phone ?? "";
+    editCompany = user?.company ?? "";
+    editAddressStreet = user?.address_street ?? "";
+    editAddressCity = user?.address_city ?? "";
+    editAddressProvince = user?.address_province ?? "";
+    editAddressPostalCode = user?.address_postal_code ?? "";
+    contactEditing = true;
+    contactError = null;
+    contactSuccess = false;
+  }
+
+  function cancelContactEdit() {
+    contactEditing = false;
+    contactError = null;
+  }
+
+  async function handleContactSave(e: SubmitEvent): Promise<void> {
     e.preventDefault();
-    if (pwdSubmitting) return;
-
-    pwdError = null;
-    pwdSuccess = false;
-
-    if (newPassword.length < 8) {
-      pwdError = t('profil.password.errors.tooShort');
-      return;
-    }
-
-    pwdSubmitting = true;
-    const result = await changePassword(currentPassword, newPassword);
-    pwdSubmitting = false;
-
+    if (contactSubmitting) return;
+    contactError = null;
+    contactSubmitting = true;
+    const result = await updateContactProfile({
+      firstName: editFirstName.trim() || null,
+      lastName: editLastName.trim() || null,
+      phone: editPhone.trim() || null,
+      company: editCompany.trim() || null,
+      addressStreet: editAddressStreet.trim() || null,
+      addressCity: editAddressCity.trim() || null,
+      addressProvince: editAddressProvince.trim() || null,
+      addressPostalCode: editAddressPostalCode.trim() || null,
+    });
+    contactSubmitting = false;
     if (isError(result)) {
-      pwdError = result.error;
+      contactError = result.error;
       return;
     }
+    // Merge updated fields; preserve effectiveNightlyPrice from getMe.
+    user = { ...user!, ...result.user, effectiveNightlyPrice: user!.effectiveNightlyPrice };
+    contactSuccess = true;
+    contactEditing = false;
+  }
 
-    pwdSuccess = true;
-    currentPassword = "";
-    newPassword = "";
+  // ── Locale (language preference) ──────────────────────────────────────
+  async function handleLocaleChange(newLocale: "fr" | "en") {
+    setLocale(newLocale);
+    if (user) {
+      const result = await updateLocale(newLocale);
+      if (!isError(result)) {
+        user = { ...user, locale: newLocale };
+      }
+    }
+  }
+
+  // ── Password reset ────────────────────────────────────────────────────
+  let pwdResetSending = $state(false);
+  let pwdResetDone = $state(false);
+
+  async function handlePasswordReset(): Promise<void> {
+    if (pwdResetSending || pwdResetDone) return;
+    pwdResetSending = true;
+    // Fire-and-forget: never reveal whether the address has an account.
+    await forgotPassword(user!.email);
+    pwdResetSending = false;
+    pwdResetDone = true;
   }
 
   // ── Change email state ────────────────────────────────────────────────
@@ -85,13 +142,12 @@
     emailSubmitting = false;
 
     if (isError(result)) {
-      emailError = result.error; // text binding — never innerHTML
+      emailError = result.error;
       return;
     }
 
-    // The change is pending confirmation — the address does NOT switch yet, so
-    // we deliberately leave the displayed `user.email` untouched. It updates only
-    // after the guest follows the link sent to the new address.
+    // Step 1 complete: link sent to the current (old) address.
+    // Do NOT update user.email — it only changes after the full two-step flow.
     emailSuccess = true;
     emailNew = "";
     emailPassword = "";
@@ -99,8 +155,6 @@
 
   // ── Mount: auth gate → profile fetch ─────────────────────────────────
   onMount(async () => {
-    // Step 1 — auth gate. Any error (401 or network) redirects to login; we
-    // never surface an error here, so the profile is unreachable unauthenticated.
     const meResult = await getMe();
     if (isError(meResult)) {
       await goto("/connexion");
@@ -109,13 +163,6 @@
     const meUser = meResult.user;
     user = meUser;
 
-    // Admin redirect — admins manage settings in /admin, not here.
-    if (user.role === "admin") {
-      await goto("/admin");
-      return;
-    }
-
-    // Step 2 — full profile (reservations).
     const profileResult = await getProfile();
     if (isError(profileResult)) {
       errorMessage = profileResult.error;
@@ -123,8 +170,8 @@
       return;
     }
 
-    // Merge: profileResult.user carries reservation-related fields; meUser
-    // carries effectiveNightlyPrice, which getProfile() does not return.
+    // Merge: profileResult.user carries all contact fields; meUser carries
+    // effectiveNightlyPrice, which getProfile() does not return.
     user = { ...profileResult.user, effectiveNightlyPrice: meUser.effectiveNightlyPrice };
     reservations = profileResult.reservations;
     phase = "loaded";
@@ -134,7 +181,6 @@
   async function handleLogout(): Promise<void> {
     if (loggingOut) return;
     loggingOut = true;
-    // Best-effort: the cookie is cleared server-side; ignore transport errors.
     await logout();
     await goto("/");
   }
@@ -254,6 +300,251 @@
 
       <div class="profil__hairline" role="separator" aria-hidden="true"></div>
 
+      <!-- ── Contact info ── -->
+      <section class="profil__section" aria-labelledby="profil-contact-heading" data-testid="profil-contact-section">
+        <h2 id="profil-contact-heading" class="profil__section-heading" data-testid="profil-contact-heading">
+          {t('profil.contact.heading')}
+        </h2>
+
+        {#if !contactEditing}
+          <!-- Display mode -->
+          <div class="profil__user-card" data-testid="profil-contact-display">
+            <dl class="profil__user-dl">
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.firstName')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-firstName">{user.first_name ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.lastName')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-lastName">{user.last_name ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.phone')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-phone">{user.phone ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.company')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-company">{user.company ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.addressStreet')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressStreet">{user.address_street ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.addressCity')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressCity">{user.address_city ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.addressProvince')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressProvince">{user.address_province ?? "—"}</dd>
+              </div>
+              <div class="profil__user-field">
+                <dt class="profil__user-dt">{t('profil.fields.addressPostalCode')}</dt>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressPostalCode">{user.address_postal_code ?? "—"}</dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              class="button button--secondary profil__contact-edit-btn"
+              data-testid="profil-contact-edit-btn"
+              onclick={startContactEdit}
+            >
+              {t('profil.contact.edit')}
+            </button>
+          </div>
+
+          {#if contactSuccess}
+            <div
+              class="profil__pwd-feedback profil__pwd-feedback--success profil__contact-feedback"
+              role="status"
+              data-testid="profil-contact-success"
+            >
+              {t('profil.contact.success')}
+            </div>
+          {/if}
+        {:else}
+          <!-- Edit mode -->
+          <form
+            class="profil__contact-form"
+            data-testid="profil-contact-form"
+            onsubmit={handleContactSave}
+            novalidate
+          >
+            <div class="profil__contact-grid">
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-firstName">
+                  {t('profil.fields.firstName')}
+                </label>
+                <input
+                  id="profil-edit-firstName"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="given-name"
+                  disabled={contactSubmitting}
+                  bind:value={editFirstName}
+                  data-testid="profil-edit-firstName"
+                />
+              </div>
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-lastName">
+                  {t('profil.fields.lastName')}
+                </label>
+                <input
+                  id="profil-edit-lastName"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="family-name"
+                  disabled={contactSubmitting}
+                  bind:value={editLastName}
+                  data-testid="profil-edit-lastName"
+                />
+              </div>
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-phone">
+                  {t('profil.fields.phone')}
+                </label>
+                <input
+                  id="profil-edit-phone"
+                  class="profil__pwd-input"
+                  type="tel"
+                  autocomplete="tel"
+                  disabled={contactSubmitting}
+                  bind:value={editPhone}
+                  data-testid="profil-edit-phone"
+                />
+              </div>
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-company">
+                  {t('profil.fields.company')}
+                </label>
+                <input
+                  id="profil-edit-company"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="organization"
+                  disabled={contactSubmitting}
+                  bind:value={editCompany}
+                  data-testid="profil-edit-company"
+                />
+              </div>
+            </div>
+
+            <div class="profil__pwd-field">
+              <label class="profil__pwd-label" for="profil-edit-addressStreet">
+                {t('profil.fields.addressStreet')}
+              </label>
+              <input
+                id="profil-edit-addressStreet"
+                class="profil__pwd-input"
+                type="text"
+                autocomplete="street-address"
+                disabled={contactSubmitting}
+                bind:value={editAddressStreet}
+                data-testid="profil-edit-addressStreet"
+              />
+            </div>
+
+            <div class="profil__contact-grid">
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-addressCity">
+                  {t('profil.fields.addressCity')}
+                </label>
+                <input
+                  id="profil-edit-addressCity"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="address-level2"
+                  disabled={contactSubmitting}
+                  bind:value={editAddressCity}
+                  data-testid="profil-edit-addressCity"
+                />
+              </div>
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-addressProvince">
+                  {t('profil.fields.addressProvince')}
+                </label>
+                <input
+                  id="profil-edit-addressProvince"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="address-level1"
+                  disabled={contactSubmitting}
+                  bind:value={editAddressProvince}
+                  data-testid="profil-edit-addressProvince"
+                />
+              </div>
+              <div class="profil__pwd-field">
+                <label class="profil__pwd-label" for="profil-edit-addressPostalCode">
+                  {t('profil.fields.addressPostalCode')}
+                </label>
+                <input
+                  id="profil-edit-addressPostalCode"
+                  class="profil__pwd-input"
+                  type="text"
+                  autocomplete="postal-code"
+                  disabled={contactSubmitting}
+                  bind:value={editAddressPostalCode}
+                  data-testid="profil-edit-addressPostalCode"
+                />
+              </div>
+            </div>
+
+            {#if contactError}
+              <div
+                class="profil__pwd-feedback profil__pwd-feedback--error"
+                role="alert"
+                data-testid="profil-contact-error"
+              >
+                {contactError}
+              </div>
+            {/if}
+
+            <div class="profil__pwd-actions">
+              <button
+                class="button button--action"
+                type="submit"
+                disabled={contactSubmitting}
+                data-testid="profil-contact-save-btn"
+              >
+                {contactSubmitting ? t('profil.contact.saving') : t('profil.contact.save')}
+              </button>
+              <button
+                class="button button--secondary"
+                type="button"
+                disabled={contactSubmitting}
+                data-testid="profil-contact-cancel-btn"
+                onclick={cancelContactEdit}
+              >
+                {t('profil.contact.cancel')}
+              </button>
+            </div>
+          </form>
+        {/if}
+
+        <!-- Language preference (always visible) -->
+        <div class="profil__locale-section" data-testid="profil-locale-selector">
+          <span class="profil__user-dt profil__locale-label">{t('profil.locale.heading')}</span>
+          <div class="profil__locale-btns">
+            <button
+              type="button"
+              class="profil__locale-btn {locale.current === 'fr' ? 'profil__locale-btn--active' : ''}"
+              aria-pressed={locale.current === 'fr'}
+              data-testid="profil-locale-fr"
+              onclick={() => handleLocaleChange('fr')}
+            >{t('profil.locale.fr')}</button>
+            <button
+              type="button"
+              class="profil__locale-btn {locale.current === 'en' ? 'profil__locale-btn--active' : ''}"
+              aria-pressed={locale.current === 'en'}
+              data-testid="profil-locale-en"
+              onclick={() => handleLocaleChange('en')}
+            >{t('profil.locale.en')}</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="profil__hairline" role="separator" aria-hidden="true"></div>
+
       <!-- ── Reservations ── -->
       <section class="profil__section" aria-labelledby="profil-res-heading">
         <h2 id="profil-res-heading" class="profil__section-heading" data-testid="profil-res-heading">
@@ -265,7 +556,7 @@
 
       <div class="profil__hairline" role="separator" aria-hidden="true"></div>
 
-      <!-- ── Change password ── -->
+      <!-- ── Password reset ── -->
       <section
         class="profil__section profil__section--pwd"
         aria-labelledby="profil-pwd-heading"
@@ -278,78 +569,25 @@
           {t('profil.password.heading')}
         </h2>
 
-        <form
-          class="profil__pwd-form"
-          data-testid="profil-pwd-form"
-          onsubmit={handlePasswordChange}
-          novalidate
-        >
-          <div class="profil__pwd-field">
-            <label class="profil__pwd-label" for="profil-pwd-current">
-              {t('profil.password.current')}
-            </label>
-            <input
-              id="profil-pwd-current"
-              class="profil__pwd-input"
-              type="password"
-              autocomplete="current-password"
-              required
-              disabled={pwdSubmitting}
-              bind:value={currentPassword}
-              data-testid="profil-pwd-current-input"
-            />
+        {#if !pwdResetDone}
+          <button
+            class="button button--secondary"
+            type="button"
+            disabled={pwdResetSending}
+            data-testid="profil-pwd-reset-btn"
+            onclick={handlePasswordReset}
+          >
+            {pwdResetSending ? t('profil.password.resetSending') : t('profil.password.resetBtn')}
+          </button>
+        {:else}
+          <div
+            class="profil__pwd-feedback profil__pwd-feedback--success"
+            role="status"
+            data-testid="profil-pwd-reset-success"
+          >
+            {t('profil.password.resetSuccess')}
           </div>
-
-          <div class="profil__pwd-field">
-            <label class="profil__pwd-label" for="profil-pwd-new">
-              {t('profil.password.new')}
-              <span class="profil__pwd-hint" aria-hidden="true">{t('profil.password.hint')}</span>
-            </label>
-            <input
-              id="profil-pwd-new"
-              class="profil__pwd-input"
-              type="password"
-              autocomplete="new-password"
-              minlength="8"
-              required
-              disabled={pwdSubmitting}
-              bind:value={newPassword}
-              data-testid="profil-pwd-new-input"
-            />
-          </div>
-
-          {#if pwdError}
-            <div
-              class="profil__pwd-feedback profil__pwd-feedback--error"
-              role="alert"
-              data-testid="profil-pwd-error"
-            >
-              {pwdError}
-            </div>
-          {/if}
-
-          {#if pwdSuccess}
-            <div
-              class="profil__pwd-feedback profil__pwd-feedback--success"
-              role="status"
-              data-testid="profil-pwd-success"
-            >
-              {t('profil.password.success')}
-            </div>
-          {/if}
-
-          <div class="profil__pwd-actions">
-            <button
-              class="button button--action"
-              type="submit"
-              disabled={pwdSubmitting}
-              aria-label={t('profil.password.submitAriaLabel')}
-              data-testid="profil-pwd-submit"
-            >
-              {pwdSubmitting ? t('profil.password.submitting') : t('profil.password.submit')}
-            </button>
-          </div>
-        </form>
+        {/if}
       </section>
 
       <div class="profil__hairline" role="separator" aria-hidden="true"></div>
@@ -372,6 +610,10 @@
           data-testid="profil-email-current"
         >
           {t('profil.email.currentPrefix')}{user.email}
+        </p>
+
+        <p class="profil__pwd-hint profil__email-step-hint" data-testid="profil-email-step-hint">
+          {t('profil.email.step1Hint')}
         </p>
 
         <form
@@ -609,7 +851,6 @@
     color: var(--color-ink, #191c1e);
   }
 
-  /* Custom rate badge — ember amber signal (admin-granted privilege). */
   .profil__role-badge--custom {
     background-color: var(--color-ember-pale, #ffdbca);
     border-color: var(--color-ember-pale, #ffdbca);
@@ -625,7 +866,80 @@
     flex-shrink: 0;
   }
 
-  /* ── Change-password section ── */
+  /* ── Contact edit button ── */
+  .profil__contact-edit-btn {
+    align-self: flex-start;
+    flex-shrink: 0;
+  }
+
+  .profil__contact-feedback {
+    margin-top: var(--space-md, 16px);
+  }
+
+  /* ── Contact form ── */
+  .profil__contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg, 24px);
+    max-width: 720px;
+  }
+
+  .profil__contact-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-lg, 24px);
+  }
+
+  /* ── Language selector ── */
+  .profil__locale-section {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md, 16px);
+    margin-top: var(--space-xl, 40px);
+    flex-wrap: wrap;
+  }
+
+  .profil__locale-label {
+    display: inline;
+    margin-bottom: 0;
+  }
+
+  .profil__locale-btns {
+    display: flex;
+    gap: var(--space-xs, 4px);
+  }
+
+  .profil__locale-btn {
+    padding: 6px 16px;
+    border: 1px solid var(--color-outline-variant, #c6c6cd);
+    border-radius: var(--radius, 0.25rem);
+    background-color: var(--color-surface-container-lowest, #ffffff);
+    font-family: var(--font-mono, "IBM Plex Mono", monospace);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: var(--color-ink-variant, #45464d);
+    cursor: pointer;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+
+  .profil__locale-btn--active {
+    background-color: var(--color-ink, #191c1e);
+    border-color: var(--color-ink, #191c1e);
+    color: var(--color-surface, #f7f9fb);
+  }
+
+  .profil__locale-btn:not(.profil__locale-btn--active):hover {
+    background-color: var(--color-surface-container, #eceef0);
+    border-color: var(--color-ink-variant, #45464d);
+  }
+
+  .profil__locale-btn:focus-visible {
+    outline: 2px solid var(--color-primary, #000000);
+    outline-offset: 3px;
+  }
+
+  /* ── Change-password / email section ── */
   .profil__section--pwd {
     max-width: 480px;
   }
@@ -636,11 +950,14 @@
     gap: var(--space-lg, 24px);
   }
 
-  /* Current-email hint — reuses .profil__pwd-hint type/colour tokens;
-     block display + margin anchor it between heading and form. */
   .profil__email-current {
     display: block;
     margin-top: calc(-1 * var(--space-sm, 8px));
+    margin-bottom: var(--space-md, 16px);
+  }
+
+  .profil__email-step-hint {
+    display: block;
     margin-bottom: var(--space-lg, 24px);
   }
 
@@ -793,11 +1110,7 @@
     margin: 0;
   }
 
-  /* ── Button (local scoped copy of the shared .button system) ──
-     The shared styles live in Button.svelte's :global block, which only loads
-     on routes that render a Button instance. This page uses raw <a>/<button>
-     elements (to keep design test hooks and to attach an onclick handler), so
-     the base + variants used here are declared locally and scoped to .profil. */
+  /* ── Button (local scoped copy of the shared .button system) ── */
   .button {
     display: inline-flex;
     align-items: center;
@@ -873,7 +1186,8 @@
       flex-direction: column;
     }
 
-    .profil__admin-link {
+    .profil__admin-link,
+    .profil__contact-edit-btn {
       align-self: stretch;
       justify-content: center;
     }
@@ -891,6 +1205,14 @@
       max-width: 100%;
     }
 
+    .profil__contact-form {
+      max-width: 100%;
+    }
+
+    .profil__contact-grid {
+      grid-template-columns: 1fr;
+    }
+
     .profil__pwd-actions {
       flex-direction: column;
       align-items: stretch;
@@ -899,6 +1221,11 @@
     .profil__pwd-actions .button {
       justify-content: center;
       width: 100%;
+    }
+
+    .profil__locale-section {
+      flex-direction: column;
+      align-items: flex-start;
     }
   }
 

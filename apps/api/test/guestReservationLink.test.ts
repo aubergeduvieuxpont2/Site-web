@@ -42,7 +42,7 @@ describe("GET /api/profile reservation query", () => {
 
     const start = src.indexOf('app.get("/api/profile"');
     expect(start).toBeGreaterThan(-1);
-    const handler = src.slice(start, start + 900);
+    const handler = src.slice(start, start + 3000);
 
     expect(handler).toContain("FROM reservations");
     expect(handler).toContain("WHERE user_id = ${user.id}");

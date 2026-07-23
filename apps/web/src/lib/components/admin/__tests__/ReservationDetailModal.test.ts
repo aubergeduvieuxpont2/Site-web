@@ -190,4 +190,56 @@ describe("ReservationDetailModal", () => {
     expect(screen.getByTestId("rdm-invoice-badge").textContent?.trim()).toBe("Payée");
     expect(screen.getByTestId("rdm-paid-at")).toBeTruthy();
   });
+
+  // ── Hosted invoice URL (Feature 4 — new invoices only) ──
+
+  it("shows a hosted invoice link when hosted_invoice_url is present", () => {
+    render(ReservationDetailModal, {
+      props: props({ hosted_invoice_url: "https://invoice.stripe.com/i/test_abc123" }),
+    });
+    const link = screen.getByTestId("rdm-hosted-invoice-url");
+    expect(link).toBeTruthy();
+    expect(link.tagName).toBe("A");
+    expect(link.getAttribute("href")).toBe("https://invoice.stripe.com/i/test_abc123");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toBe("noopener");
+  });
+
+  it("link text is localized (Voir la facture) and has an accessible aria-label", () => {
+    render(ReservationDetailModal, {
+      props: props({ hosted_invoice_url: "https://invoice.stripe.com/i/test_abc123" }),
+    });
+    const link = screen.getByTestId("rdm-hosted-invoice-url");
+    expect(link.textContent?.trim()).toBeTruthy();
+    const ariaLabel = link.getAttribute("aria-label");
+    expect(ariaLabel).toBeTruthy();
+    // Must mention the action (viewing invoice) in the accessible label.
+    expect(ariaLabel).toContain("facture");
+  });
+
+  it("omits the hosted invoice link when hosted_invoice_url is null", () => {
+    render(ReservationDetailModal, { props: props({ hosted_invoice_url: null }) });
+    expect(screen.queryByTestId("rdm-hosted-invoice-url")).toBeNull();
+  });
+
+  it("omits the hosted invoice link when hosted_invoice_url is absent from the row", () => {
+    // Rows invoiced before this feature was deployed have no stored URL.
+    const rowWithoutUrl = baseRow();
+    delete (rowWithoutUrl as Partial<typeof rowWithoutUrl>).hosted_invoice_url;
+    render(ReservationDetailModal, {
+      props: { open: true, row: rowWithoutUrl, onClose: vi.fn(), onCreateInvoice: vi.fn() },
+    });
+    expect(screen.queryByTestId("rdm-hosted-invoice-url")).toBeNull();
+  });
+
+  it("invoice link is independent of stripe_invoice_id — both can coexist", () => {
+    render(ReservationDetailModal, {
+      props: props({
+        stripe_invoice_id: "in_test_abc123",
+        hosted_invoice_url: "https://invoice.stripe.com/i/test_abc123",
+      }),
+    });
+    expect(screen.getByTestId("rdm-stripe-invoice-id")).toBeTruthy();
+    expect(screen.getByTestId("rdm-hosted-invoice-url")).toBeTruthy();
+  });
 });

@@ -31,6 +31,7 @@ const KEYS = [
   "ota-welcome",
   "email-verification",
   "email-change-alert",
+  "email-change-confirm",
 ];
 
 const read = (rel) => readFileSync(join(emailsDir, rel), "utf8");

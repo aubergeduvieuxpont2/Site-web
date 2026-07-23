@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
   import { NAV, SITE, phoneToHref } from "../content";
   import { settings } from "../settings.svelte";
   import Wordmark from "./Wordmark.svelte";
@@ -35,6 +36,7 @@
     await logout();
     clearUser();
     open = false;
+    await goto("/");
   }
 
   async function handleLocaleSwitch(newLocale: "fr" | "en") {

@@ -1,0 +1,6 @@
+{
+  "firstName": "Marie",
+  "newEmail": "nouvelle@example.com",
+  "confirmUrl": "https://www.aubergeduvieuxpont.ca/verification?token=abc123",
+  "expiryHours": 24
+}
