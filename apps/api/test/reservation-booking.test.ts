@@ -19,11 +19,15 @@ vi.mock("@neondatabase/serverless", () => ({
 const { stripeHolder } = vi.hoisted(() => ({
   stripeHolder: {
     session: { sessionId: "cs_test_1", clientSecret: "cs_test_1_secret" },
+    error: null as { type?: string; code?: string } | null,
   },
 }));
 vi.mock("../src/stripe", () => ({
   createStripeClient: () => ({}),
-  createEmbeddedCheckoutSession: async () => stripeHolder.session,
+  createEmbeddedCheckoutSession: async () => {
+    if (stripeHolder.error) throw stripeHolder.error;
+    return stripeHolder.session;
+  },
   refundCheckoutSession: async () => ({ id: "re_1" }),
   constructStripeEvent: async () => ({}),
   createAndFinalizeInvoice: async () => ({ invoiceId: "in_1", hostedInvoiceUrl: null }),
@@ -74,6 +78,46 @@ describe("POST /api/reservations — hold + embedded checkout", () => {
     const res = await post({ ...baseEnv, STRIPE_SECRET_KEY: undefined });
     expect(res.status).toBe(503);
     expect(inserted).toBe(false);
+    const b = (await res.json()) as { code?: string };
+    expect(b.code).toBe("stripe_not_configured");
+  });
+
+  it("returns 503 with a stripe_session_failed classifier and releases the hold when Checkout session creation throws", async () => {
+    let releasedId: number | null = null;
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+      if (q.includes("INSERT INTO reservations")) {
+        return Promise.resolve([
+          {
+            id: 77,
+            arrive: "2027-01-10",
+            depart: "2027-01-12",
+            hold_expires_at: "2027-01-10T00:15:00.000Z",
+          },
+        ]);
+      }
+      if (q.includes("UPDATE reservations SET status = 'released'")) {
+        releasedId = vals[0] as number;
+      }
+      return Promise.resolve([]);
+    };
+    stripeHolder.error = { type: "StripeAuthenticationError", code: "api_key_missing_permission" };
+    try {
+      const res = await post(baseEnv);
+      expect(res.status).toBe(503);
+      const b = (await res.json()) as {
+        code?: string;
+        stripeErrorType?: string | null;
+        stripeErrorCode?: string | null;
+      };
+      expect(b.code).toBe("stripe_session_failed");
+      expect(b.stripeErrorType).toBe("StripeAuthenticationError");
+      expect(b.stripeErrorCode).toBe("api_key_missing_permission");
+      // The held row is rolled back to 'released' so it stops occupying inventory.
+      expect(releasedId).toBe(77);
+    } finally {
+      stripeHolder.error = null;
+    }
   });
 
   it("returns 409 when the guarded insert finds no remaining capacity", async () => {

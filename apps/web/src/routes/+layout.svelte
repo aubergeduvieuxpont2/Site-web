@@ -28,13 +28,25 @@
     document.documentElement.style.setProperty("--maintenance-h", px);
   });
 
-  // Sync the locale store whenever the authenticated user changes (login,
-  // session restore). Anonymous visitors keep their cookie/localStorage locale.
+  // Adopt the account's saved locale ONCE per login (when a user first becomes
+  // known), NOT on every re-evaluation of this effect. Re-applying it on every
+  // auth read fought an in-session language toggle: a logged-in guest who
+  // switched FR↔EN would get reverted to their stored account locale. Tracking
+  // the last-synced user id means the toggle wins for the rest of the session
+  // (and the toggle persists the new choice to the account anyway). Reset on
+  // logout so the next login re-syncs. Anonymous visitors keep their
+  // cookie/localStorage locale untouched.
+  let syncedUserId: number | null = null;
   $effect(() => {
     const u = auth.user as (typeof auth.user & { locale?: string }) | null;
-    const userLocale = u?.locale;
-    if (userLocale === "fr" || userLocale === "en") {
-      setLocale(userLocale);
+    if (!u) {
+      syncedUserId = null;
+      return;
+    }
+    if (u.id === syncedUserId) return;
+    syncedUserId = u.id;
+    if (u.locale === "fr" || u.locale === "en") {
+      setLocale(u.locale);
     }
   });
 
