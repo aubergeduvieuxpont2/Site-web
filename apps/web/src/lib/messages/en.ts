@@ -612,6 +612,15 @@ export const en: Messages = {
       lastNameRequired: 'Last name is required.',
       roomCountRequired: 'At least one room is required.',
     },
+    payment: {
+      heading: 'Complete your payment',
+      holdMessage: 'Your rooms are reserved for 15 minutes. Complete your payment to confirm your stay.',
+      countdownLabel: 'Time remaining: %minutes%:%seconds%',
+      expiredTitle: 'Reservation expired',
+      expiredBody: 'The 15-minute reservation hold has expired. Please submit a new request.',
+      backToForm: 'Back to the form',
+      unavailable: 'Payment configuration error — please contact us directly.',
+    },
   },
 
   politiques: {
@@ -811,5 +820,12 @@ export const en: Messages = {
       body: "This confirmation link is no longer valid or has already been used. Log in to request a new link.",
       backLink: 'Back to login',
     },
+  },
+
+  confirmation: {
+    title: 'Reservation confirmed',
+    body: 'Your payment has been received and your reservation is confirmed. You will receive a confirmation email shortly.',
+    sessionLabel: 'Reference: %session_id%',
+    backHome: 'Back to home',
   },
 };

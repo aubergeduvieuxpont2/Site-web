@@ -611,6 +611,15 @@ export const fr = {
       lastNameRequired: 'Le nom de famille est requis.',
       roomCountRequired: 'Au moins une chambre est requise.',
     },
+    payment: {
+      heading: 'Procéder au paiement',
+      holdMessage: 'Vos chambres sont réservées pendant 15 minutes. Complétez le paiement pour confirmer votre séjour.',
+      countdownLabel: 'Temps restant : %minutes%:%seconds%',
+      expiredTitle: 'Réservation expirée',
+      expiredBody: 'Le délai de réservation de 15 minutes est écoulé. Veuillez soumettre une nouvelle demande.',
+      backToForm: 'Retour au formulaire',
+      unavailable: 'Erreur de configuration du paiement — veuillez nous contacter directement.',
+    },
   },
 
   politiques: {
@@ -810,6 +819,13 @@ export const fr = {
       body: "Ce lien de confirmation n'est plus valide ou a déjà été utilisé. Connectez-vous pour demander un nouveau lien.",
       backLink: 'Retour à la connexion',
     },
+  },
+
+  confirmation: {
+    title: 'Réservation confirmée',
+    body: 'Votre paiement a été reçu et votre réservation est confirmée. Vous recevrez une confirmation par courriel sous peu.',
+    sessionLabel: 'Référence : %session_id%',
+    backHome: 'Retour à l\'accueil',
   },
 };
 

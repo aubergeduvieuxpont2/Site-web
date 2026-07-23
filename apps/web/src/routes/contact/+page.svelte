@@ -17,6 +17,20 @@
   import Button from "$lib/components/Button.svelte";
   import SectionLabel from "$lib/components/SectionLabel.svelte";
   import { t, locale } from "$lib/i18n.svelte";
+  import { getStripe } from "$lib/stripe";
+
+  // Minimal interface for the mounted checkout (avoids importing Stripe types directly).
+  interface EmbeddedCheckoutInstance {
+    mount(container: HTMLElement): void;
+    destroy(): void;
+  }
+
+  // Shape returned by the updated POST /api/reservations endpoint.
+  interface ReservationHoldResponse {
+    reservationId: number;
+    clientSecret: string;
+    holdExpiresAt: string;
+  }
 
   let form = $state({
     firstName: "",
@@ -29,10 +43,16 @@
     message: "",
   });
 
-  type Status = "idle" | "sending" | "sent" | "error";
+  type Status = "idle" | "sending" | "paying" | "expired" | "error" | "misconfigured";
   let status = $state<Status>("idle");
   let errorMsg = $state("");
-  let greetingName = $state("");
+
+  // Payment-flow state
+  let clientSecret = $state("");
+  let holdExpiresAt = $state("");
+  let secondsLeft = $state(0);
+  // Container element for Stripe Embedded Checkout (bound via bind:this).
+  let checkoutEl = $state<HTMLDivElement | null>(null);
 
   // Configured contact phone with graceful fallback to the static default.
   const phoneDisplay = $derived(settings.contactPhone || SITE.phone);
@@ -47,12 +67,8 @@
     checkOut?: string;
   }>({});
 
-  // When a session user is present, the identity fields are hidden and their
-  // values are derived from the store instead of the form.
   const loggedIn = $derived(!!auth.user);
 
-  // Effective nightly rate: the per-user price when granted, otherwise the
-  // public setting. `isCustomRate` flags an admin-granted personalised rate.
   const nightlyRate = $derived(
     auth.user?.effectiveNightlyPrice ?? settings.nightlyPrice
   );
@@ -60,8 +76,6 @@
     auth.user?.effectiveNightlyPrice != null &&
       auth.user.effectiveNightlyPrice !== settings.nightlyPrice
   );
-  // Effective weekly rate: per-user grant, else the public setting, else the
-  // documented 560 fallback. Applied to stays of 7+ nights via estimateStay.
   const weeklyRate = $derived(
     auth.user?.effectiveWeeklyPrice ?? settings.weeklyPrice ?? 560
   );
@@ -82,9 +96,6 @@
     )
   );
 
-  // ── Checkout min: the day after check-in ─────────────────────────
-  // Formatted from local date components (matching formatDateOnly's local-parse
-  // convention) to avoid the UTC day-shift that toISOString() introduces.
   const minCheckOut = $derived.by((): string => {
     if (!form.checkIn) return "";
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(form.checkIn);
@@ -97,8 +108,6 @@
     return `${y}-${mo}-${da}`;
   });
 
-  // Clear checkOut when it collapses to the same day or before check-in, so the
-  // form can never hold a zero/negative-night range.
   $effect(() => {
     if (form.checkIn && form.checkOut && form.checkOut <= form.checkIn) {
       form.checkOut = "";
@@ -110,8 +119,6 @@
   let availabilityStatus = $state<AvailStatus>("idle");
   let unavailableNights = $state<string[]>([]);
 
-  // Debounced availability probe on date/room changes. A per-run `cancelled`
-  // flag prevents a slow in-flight response from overwriting newer state.
   $effect(() => {
     const ci = form.checkIn;
     const co = form.checkOut;
@@ -143,16 +150,64 @@
     };
   });
 
-  // ── Submit gate ──────────────────────────────────────────────────
-  // Disabled while sending, during maintenance, while an availability probe is
-  // in flight, or when the chosen range has unavailable nights. An availability
-  // API error leaves submit enabled — the server re-checks on POST.
   const submitDisabled = $derived(
     status === "sending" ||
       !settings.reservationsEnabled ||
       availabilityStatus === "unavailable" ||
       availabilityStatus === "loading"
   );
+
+  // ── Countdown timer ───────────────────────────────────────────────
+  // Ticks every second while in paying state. Transitions to expired when
+  // the remaining time reaches zero (the server hold is authoritative; this
+  // countdown is cosmetic and indicates urgency to the guest).
+  $effect(() => {
+    if (status !== "paying" || !holdExpiresAt) return;
+    const expireMs = new Date(holdExpiresAt).getTime();
+    const tick = () => {
+      const ms = expireMs - Date.now();
+      secondsLeft = Math.max(0, Math.ceil(ms / 1000));
+      if (secondsLeft === 0) status = "expired";
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  });
+
+  // ── Stripe Embedded Checkout mount/unmount ────────────────────────
+  // Lazily loads the Stripe SDK (only when clientSecret is present) and
+  // mounts the embedded checkout into the container element.
+  // INV-no-dangling-iframe: the cleanup function always destroys the instance
+  // on every exit from the paying state (expiry, teardown, or navigation).
+  $effect(() => {
+    if (status !== "paying" || !clientSecret || !checkoutEl) return;
+    let alive = true;
+    let instance: EmbeddedCheckoutInstance | null = null;
+
+    (async () => {
+      const stripe = await getStripe();
+      if (!alive) return;
+      if (!stripe) {
+        status = "misconfigured";
+        return;
+      }
+      // stripe.initEmbeddedCheckout is typed via the Stripe type from $lib/stripe.
+      const co = await (stripe as unknown as {
+        initEmbeddedCheckout(opts: { clientSecret: string }): Promise<EmbeddedCheckoutInstance>;
+      }).initEmbeddedCheckout({ clientSecret });
+      if (!alive) {
+        co.destroy();
+        return;
+      }
+      instance = co;
+      co.mount(checkoutEl!);
+    })();
+
+    return () => {
+      alive = false;
+      instance?.destroy();
+    };
+  });
 
   function formatRate(value: number): string {
     return new Intl.NumberFormat(locale.current === 'en' ? 'en-CA' : 'fr-CA', {
@@ -179,8 +234,6 @@
     return { first, last: rest.join(" ") || first };
   }
 
-  // The effective identity used for the submit payload: the session user when
-  // logged in, the trimmed form fields otherwise.
   const effective = $derived.by(() => {
     if (auth.user) {
       const { first, last } = splitName(auth.user.name);
@@ -193,18 +246,10 @@
     };
   });
 
-  // On success, move keyboard focus to the confirmation heading.
-  let successHeading = $state<HTMLHeadingElement | null>(null);
-  $effect(() => {
-    if (status === "sent") successHeading?.focus();
-  });
-
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   function validateClient(): boolean {
     const errors: typeof fieldErrors = {};
-    // Identity fields are only required when logged out — otherwise they come
-    // from the session user.
     if (!loggedIn) {
       if (!form.firstName.trim()) errors.firstName = t('contact.errors.firstNameRequired');
       if (!form.lastName.trim()) errors.lastName = t('contact.errors.lastNameRequired');
@@ -220,10 +265,17 @@
     return Object.keys(errors).length === 0;
   }
 
+  /** Reset back to the booking form (from expired or misconfigured states). */
+  function resetToForm() {
+    status = "idle";
+    clientSecret = "";
+    holdExpiresAt = "";
+    secondsLeft = 0;
+    errorMsg = "";
+  }
+
   async function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
-    // Defense in depth: the submit button is disabled while gated, but an Enter
-    // keypress could still fire the form's submit — honour the same gate here.
     if (submitDisabled) return;
     if (!validateClient()) return;
 
@@ -246,8 +298,15 @@
       status = "error";
       errorMsg = result.error;
     } else {
-      greetingName = eff.firstName || t('contact.success.nameFallback');
-      status = "sent";
+      // Cast to the updated contract shape (api.ts updated by Stream 3 build).
+      const data = result as unknown as ReservationHoldResponse;
+      if (!data.clientSecret) {
+        status = "misconfigured";
+      } else {
+        clientSecret = data.clientSecret;
+        holdExpiresAt = data.holdExpiresAt;
+        status = "paying";
+      }
     }
   }
 </script>
@@ -270,25 +329,80 @@
       <!-- ── FORM COLUMN ── -->
       <div class="page-contact__form-col" use:reveal>
         <div class="page-contact__form-card">
-          {#if status === "sent"}
-            <div class="page-contact__success" data-testid="contact-success">
-              <div class="page-contact__success-badge" aria-hidden="true"></div>
-              <h2
-                class="page-contact__success-title"
-                tabindex="-1"
-                bind:this={successHeading}
-              >
-                {t('contact.success.greeting', { name: greetingName })}
+
+          {#if status === "paying"}
+            <!-- ── PAYMENT STATE ── -->
+            <div class="page-contact__payment" data-testid="contact-payment">
+              <h2 class="page-contact__payment-heading">
+                {t('contact.payment.heading')}
               </h2>
-              <p class="page-contact__success-body">
-                {t('contact.success.body')}
+              <div
+                class="page-contact__hold-notice"
+                data-testid="payment-hold-notice"
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                <p class="page-contact__hold-message">
+                  {t('contact.payment.holdMessage')}
+                </p>
+                <p class="page-contact__countdown" data-testid="payment-countdown">
+                  {t('contact.payment.countdownLabel', { minutes: String(Math.floor(secondsLeft / 60)).padStart(2, '0'), seconds: String(secondsLeft % 60).padStart(2, '0') })}
+                </p>
+              </div>
+              <!-- Stripe Embedded Checkout mounts here (INV-no-dangling-iframe). -->
+              <div
+                class="page-contact__checkout-container"
+                data-testid="embedded-checkout"
+                bind:this={checkoutEl}
+              ></div>
+            </div>
+
+          {:else if status === "expired"}
+            <!-- ── EXPIRED STATE ── -->
+            <div class="page-contact__expired" data-testid="payment-expired">
+              <div class="page-contact__expired-badge" aria-hidden="true"></div>
+              <h2 class="page-contact__expired-heading">
+                {t('contact.payment.expiredTitle')}
+              </h2>
+              <p class="page-contact__expired-body">
+                {t('contact.payment.expiredBody')}
               </p>
-              <div class="page-contact__success-cta">
+              <div class="page-contact__expired-actions">
+                <button
+                  class="page-contact__back-btn"
+                  type="button"
+                  onclick={resetToForm}
+                  data-testid="payment-back"
+                >
+                  {t('contact.payment.backToForm')}
+                </button>
+              </div>
+            </div>
+
+          {:else if status === "misconfigured"}
+            <!-- ── MISSING-CONFIGURATION STATE ── -->
+            <div class="page-contact__misconfigured" data-testid="payment-misconfigured">
+              <p class="page-contact__misconfigured-body">
+                {t('contact.payment.unavailable')}
+              </p>
+              <div class="page-contact__misconfigured-cta">
                 <span class="page-contact__tech-label">{t('contact.success.urgentLabel')}</span>
                 <a class="page-contact__phone-link" href={phoneHref}>{phoneDisplay}</a>
               </div>
+              <div class="page-contact__misconfigured-back">
+                <button
+                  class="page-contact__back-btn page-contact__back-btn--secondary"
+                  type="button"
+                  onclick={resetToForm}
+                >
+                  {t('contact.payment.backToForm')}
+                </button>
+              </div>
             </div>
+
           {:else}
+            <!-- ── FORM STATE (idle / sending / error) ── -->
             <div class="page-contact__form-header">
               <SectionLabel text={t('contact.form.sectionLabel')} />
               <p class="page-contact__form-desc">
@@ -304,7 +418,6 @@
               data-testid="contact-form"
             >
               {#if loggedIn}
-                <!-- Logged-in identity: name/email derived from the session -->
                 <div
                   class="page-contact__identity"
                   data-testid="contact-identity"
@@ -663,6 +776,7 @@
               </div>
             </form>
           {/if}
+
         </div>
       </div>
 
@@ -931,8 +1045,6 @@
     color: var(--color-ink, #191c1e);
   }
 
-  /* Amber ember badge — reuses the ember-pale admin badge signal. Dark-brown
-     text declared directly (contrast #5c2400 on #ffdbca ≈ 7.2:1, WCAG AAA). */
   .page-contact__rate-badge {
     display: inline-flex;
     align-items: center;
@@ -972,7 +1084,6 @@
     color: var(--color-ink, #191c1e);
   }
 
-  /* Breakdown rows — extend .page-contact__estimate */
   .page-contact__estimate-rows {
     margin: 0;
     padding: 0;
@@ -1139,39 +1250,85 @@
     }
   }
 
-  /* ── Success state ────────────────────────────────────── */
-  .page-contact__success {
+  /* ── Payment section ──────────────────────────────────── */
+  .page-contact__payment {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+  }
+
+  .page-contact__payment-heading {
+    font-family: var(--font-sans);
+    font-weight: 300;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--color-ink);
+    margin: 0;
+  }
+
+  .page-contact__hold-notice {
+    background-color: var(--color-surface-container-low, #f2f4f6);
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius);
+    padding: var(--space-md) var(--space-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+
+  .page-contact__hold-message {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--color-ink-soft);
+    margin: 0;
+  }
+
+  .page-contact__countdown {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--color-ink);
+    letter-spacing: 0.04em;
+    margin: 0;
+  }
+
+  /* The Stripe iframe fills the container; no min-height needed since Stripe
+     sizes the iframe to its own content. overflow:hidden prevents horizontal
+     bleed at mobile widths (INV-no-dangling-iframe / responsive requirement). */
+  .page-contact__checkout-container {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* ── Expired state ────────────────────────────────────── */
+  .page-contact__expired {
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
   }
 
-  .page-contact__success-title {
-    font-family: var(--font-sans);
-    font-weight: 300;
-    font-size: clamp(1.75rem, 4vw, 2.5rem);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    color: var(--color-ink);
-    margin: 0;
-    outline: none;
-  }
-
-  .page-contact__success-title:focus-visible {
-    outline: 2px solid var(--color-terracotta);
-    outline-offset: 4px;
-    border-radius: 2px;
-  }
-
-  .page-contact__success-badge {
+  .page-contact__expired-badge {
     width: 40px;
     height: 4px;
-    background-color: var(--color-ember);
+    background-color: var(--color-error, #ba1a1a);
     border-radius: 2px;
     margin-bottom: var(--space-xs);
   }
 
-  .page-contact__success-body {
+  .page-contact__expired-heading {
+    font-family: var(--font-sans);
+    font-weight: 300;
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--color-ink);
+    margin: 0;
+  }
+
+  .page-contact__expired-body {
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.65;
@@ -1180,15 +1337,72 @@
     margin: 0;
   }
 
-  .page-contact__success-cta {
+  .page-contact__expired-actions {
+    margin-top: var(--space-sm);
+  }
+
+  /* ── Missing-configuration state ─────────────────────── */
+  .page-contact__misconfigured {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+  }
+
+  .page-contact__misconfigured-body {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--color-ink-soft);
+    max-width: 48ch;
+    margin: 0;
+  }
+
+  .page-contact__misconfigured-cta {
     background-color: var(--color-surface-2);
     border: 1px solid var(--color-outline-variant);
     border-radius: var(--radius);
     padding: var(--space-md) var(--space-lg);
-    margin-top: var(--space-sm);
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
+  }
+
+  .page-contact__misconfigured-back {
+    margin-top: var(--space-xs);
+  }
+
+  /* ── Back / restart button ────────────────────────────── */
+  .page-contact__back-btn {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+    background: transparent;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius);
+    padding: 10px var(--space-lg);
+    cursor: pointer;
+    transition:
+      border-color 150ms ease,
+      color 150ms ease;
+  }
+
+  .page-contact__back-btn:hover {
+    border-color: var(--color-outline);
+    color: var(--color-terracotta);
+  }
+
+  .page-contact__back-btn:focus-visible {
+    outline: 2px solid var(--color-terracotta);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  .page-contact__back-btn--secondary {
+    font-size: 12px;
+    opacity: 0.75;
   }
 
   /* ── Weekly-rate hint ─────────────────────────────────── */
