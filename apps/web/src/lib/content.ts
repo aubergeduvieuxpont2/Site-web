@@ -287,7 +287,7 @@ export const PROPERTY_AREAS: PropertyArea[] = [
     id: "exterieur",
     label: "Extérieur",
     blurb:
-      "Sur la rivière Sainte-Anne, au pied du vieux pont — pierre, bois et fer forgé depuis 1972.",
+      "Sur la rivière Sainte-Anne, au pied du vieux pont — pierre, bois et fer forgé depuis 1911.",
     images: [
       {
         key: "auberge-exterior.jpg",
@@ -442,7 +442,7 @@ export type Stat = { value: number; suffix: string; label: string; localize?: bo
 
 export const STATS: Stat[] = [
   { value: 30, suffix: " min", label: "des principaux chantiers forestiers" },
-  { value: 1972, suffix: "", label: "année de fondation" },
+  { value: 1911, suffix: "", label: "année de fondation" },
   { value: 12, suffix: " chambres", label: "disponibles pour l'équipe" },
   { value: 24, suffix: " h", label: "stockage sécurisé" },
 ];
