@@ -43,7 +43,7 @@ export const fr = {
     seo: {
       title: 'Auberge du Vieux Pont — hébergement pour travailleurs de terrain',
       description:
-        "Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres insonorisées, stockage d'équipement, tarifs d'entreprise, à 30 min des chantiers.",
+        "Auberge à Saint-Raymond (Portneuf) pour les travailleurs de terrain — foresterie et secteur hydroélectrique. Chambres, stockage d'équipement, tarifs d'entreprise, à 30 min des chantiers.",
     },
     hero: {
       heading: "L'art de recevoir les travailleurs de terrain",
@@ -95,11 +95,10 @@ export const fr = {
     'A-01': { title: 'Stockage sécurisé' },
     'A-02': { title: 'Recharge outils & radios' },
     'A-03': { title: 'Salle de séchage' },
-    'A-04': { title: 'Café en libre-service' },
-    'A-05': { title: 'Chambres insonorisées' },
-    'A-06': { title: 'Tarifs entreprise' },
-    'A-07': { title: 'Cuisine partagée' },
-    'A-08': { title: 'Proximité des chantiers' },
+    'A-04': { title: 'Chambres' },
+    'A-05': { title: 'Tarifs entreprise' },
+    'A-06': { title: 'Cuisine partagée' },
+    'A-07': { title: 'Proximité des chantiers' },
   },
 
   faq: {
@@ -116,7 +115,7 @@ export const fr = {
     '2': {
       question: "Peut-on arriver tard ou loger pour un quart de nuit ?",
       answer:
-        "Oui. Nos chambres sont insonorisées et équipées de rideaux occultants, pensées pour les travailleurs de quart qui doivent dormir le jour.",
+        "Oui. Nos chambres sont équipées de rideaux occultants, pensées pour les travailleurs de quart qui doivent dormir le jour.",
     },
     '3': {
       question: "Y a-t-il du rangement pour l'équipement et les outils ?",
@@ -126,7 +125,7 @@ export const fr = {
     '4': {
       question: "Quels services sont inclus et à partir de quel tarif ?",
       answer:
-        "Les chambres débutent à 89 $ la nuit. La cuisine partagée, la buanderie, le café en libre-service et le WiFi sont inclus.",
+        "Consulter la page de réservation pour les tarifs à jour. La cuisine partagée, la buanderie le WiFi sont inclus.",
     },
   },
 
@@ -134,17 +133,17 @@ export const fr = {
     seo: {
       title: 'À propos — Auberge du Vieux Pont',
       description:
-        "L'Auberge du Vieux Pont à Saint-Raymond depuis 1972 — un hébergement pensé pour les équipes de foresterie et du secteur hydroélectrique de Portneuf.",
+        "L'Auberge du Vieux Pont à Saint-Raymond depuis 1911 — un hébergement pensé pour les équipes de foresterie et du secteur hydroélectrique de Portneuf.",
     },
     heading: 'Bâti pour ceux qui ne reculent devant rien.',
     lead: "Depuis un demi-siècle, l'Auberge du Vieux Pont loge les travailleurs, les pêcheurs et les équipes de terrain d'aujourd'hui. Même promesse : un repos honnête, sans flafla.",
     intro: {
-      sectionLabel: 'À propos · Est. 1972',
+      sectionLabel: 'À propos · Est. 1911',
     },
     histoire: {
       sectionLabel: "D'où l'on vient",
       heading: 'Une maison plantée au bord de la rivière.',
-      p1: "Tout commence près du vieux pont Tessier, là où la rivière Sainte-Anne taille son chemin dans la roche de Portneuf. En 1972, la bâtisse ouvre ses portes pour loger ceux qui travaillaient fort : bûcherons, gens de chantier, pêcheurs venus tester l'eau froide au petit matin.",
+      p1: "Tout commence près du vieux pont Tessier, là où la rivière Sainte-Anne taille son chemin dans la roche de Portneuf. En 1911, la bâtisse ouvre ses portes pour loger ceux qui travaillaient fort : bûcherons, gens de chantier, pêcheurs venus tester l'eau froide au petit matin.",
       p2: "On n'a jamais cherché à impressionner. On a cherché à dépanner. Un lit propre, un repas chaud, un toit solide quand la journée finissait tard et que la suivante commençait tôt. C'est devenu notre réputation — et on ne l'a pas lâchée depuis.",
       p3: "Avec les années, le monde a changé de bottes. La foresterie s'est mécanisée et les chantiers du secteur hydroélectrique se sont développés partout en Portneuf. On a ajouté un séchage pour vêtements de travail, des bornes de recharge pour outils et radios, un local sécurisé renforcé. Mais l'esprit, lui, n'a pas bougé d'un pouce.",
       image: {
@@ -154,7 +153,7 @@ export const fr = {
     },
     quote: {
       text: "« On ne vend pas du luxe. On vend du repos qui tient la route. »",
-      caption: 'La maison · depuis 1972',
+      caption: 'La maison · depuis 1911',
     },
     valeurs: {
       sectionLabel: 'Nos principes',
@@ -175,7 +174,7 @@ export const fr = {
       },
       '3': {
         title: 'Ancré',
-        text: "Saint-Raymond, c'est chez nous depuis 1972. On connaît la rivière, les chantiers et le monde qui y travaille.",
+        text: "Saint-Raymond, c'est chez nous depuis 1911. On connaît la rivière, les chantiers et le monde qui y travaille.",
       },
     },
     ancrage: {
@@ -208,7 +207,7 @@ export const fr = {
     seo: {
       title: 'Le site — Auberge du Vieux Pont',
       description:
-        "Découvrez L'Auberge du Vieux Pont : chambres insonorisées, cuisine partagée, buanderie, salle de séchage et salon commun, sur la rivière Sainte-Anne à Saint-Raymond.",
+        "Découvrez L'Auberge du Vieux Pont : chambres, cuisine partagée, buanderie, salle de séchage et salon commun, sur la rivière Sainte-Anne à Saint-Raymond.",
     },
     inpageNav: {
       ariaLabel: 'Sur cette page',
@@ -236,7 +235,7 @@ export const fr = {
     lieu: {
       sectionLabel: 'Le lieu',
       heading: 'Un vieux pont sur la Sainte-Anne',
-      p1: "Depuis 1972, l'Auberge du Vieux Pont domine la rivière Sainte-Anne au cœur de Saint-Raymond. Pierre, bois, fer forgé — les matériaux parlent d'eux-mêmes. À proximité des principaux chantiers forestiers et des lignes du réseau hydroélectrique de Portneuf.",
+      p1: "Depuis 1911, l'Auberge du Vieux Pont domine la rivière Sainte-Anne au cœur de Saint-Raymond. Pierre, bois, fer forgé — les matériaux parlent d'eux-mêmes. À proximité des principaux chantiers forestiers et des lignes du réseau hydroélectrique de Portneuf.",
       p2: "Un endroit calibré pour ceux qui partent tôt et rentrent tard, avec du béton qu'on lave à grande eau.",
       image: {
         alt: "Vue extérieure de l'Auberge du Vieux Pont sur la rivière Sainte-Anne",
@@ -274,7 +273,7 @@ export const fr = {
     },
     chambre: {
       label: 'Chambre',
-      blurb: 'Chambres insonorisées et rideaux occultants — pensées pour ceux qui dorment le jour.',
+      blurb: 'Chambres avec rideaux occultants — pensées pour ceux qui dorment le jour.',
       images: {
         bedroom: { alt: 'Chambre privée avec lit queen et rideaux occultants', caption: 'Chambre type · insonorisée' },
       },
@@ -297,7 +296,7 @@ export const fr = {
     },
     exterieur: {
       label: 'Extérieur',
-      blurb: "Sur la rivière Sainte-Anne, au pied du vieux pont — pierre, bois et fer forgé depuis 1972.",
+      blurb: "Sur la rivière Sainte-Anne, au pied du vieux pont — pierre, bois et fer forgé depuis 1911.",
       images: {
         'auberge-exterior': { alt: "Vue extérieure de l'Auberge du Vieux Pont", caption: "L'auberge sur la Sainte-Anne" },
         'auberge-porch': { alt: "Galerie couverte à l'entrée de l'auberge", caption: "Galerie d'entrée" },
@@ -654,7 +653,7 @@ export const fr = {
       title: 'Heures de repos',
       items: {
         '0': 'Heures de silence de 22 h 00 à 7 h 00, par respect pour les travailleurs de quart.',
-        '1': 'Les chambres insonorisées restent un espace de repos en tout temps.',
+        '1': 'Les chambres restent un espace de repos en tout temps.',
       },
     },
     'P-04': {

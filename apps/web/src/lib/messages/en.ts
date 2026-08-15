@@ -44,7 +44,7 @@ export const en: Messages = {
     seo: {
       title: "Auberge du Vieux Pont — lodging for field workers",
       description:
-        "Inn in Saint-Raymond (Portneuf) for field workers — forestry and hydroelectric sector. Soundproofed rooms, equipment storage, corporate rates, 30 min from job sites.",
+        "Inn in Saint-Raymond (Portneuf) for field workers — forestry and hydroelectric sector. Rooms, equipment storage, corporate rates, 30 min from job sites.",
     },
     hero: {
       heading: "Where field workers come to rest",
@@ -96,11 +96,10 @@ export const en: Messages = {
     'A-01': { title: 'Secure Storage' },
     'A-02': { title: 'Tool & Radio Charging' },
     'A-03': { title: 'Drying Room' },
-    'A-04': { title: 'Self-serve Coffee' },
-    'A-05': { title: 'Soundproofed Rooms' },
-    'A-06': { title: 'Corporate Rates' },
-    'A-07': { title: 'Shared Kitchen' },
-    'A-08': { title: 'Near Job Sites' },
+    'A-04': { title: 'Rooms' },
+    'A-05': { title: 'Corporate Rates' },
+    'A-06': { title: 'Shared Kitchen' },
+    'A-07': { title: 'Near Job Sites' },
   },
 
   faq: {
@@ -117,7 +116,7 @@ export const en: Messages = {
     '2': {
       question: "Can we arrive late or stay for a night shift?",
       answer:
-        "Yes. Our rooms are soundproofed and fitted with blackout curtains, designed for shift workers who need to sleep during the day.",
+        "Yes. Our rooms are fitted with blackout curtains, designed for shift workers who need to sleep during the day.",
     },
     '3': {
       question: "Is there storage for equipment and tools?",
@@ -127,7 +126,7 @@ export const en: Messages = {
     '4': {
       question: "What services are included and starting at what rate?",
       answer:
-        "Rooms start at $89 per night. The shared kitchen, laundry, self-serve coffee and WiFi are all included.",
+        "Visit the reservation page for current rates. The shared kitchen, laundry and WiFi are all included.",
     },
   },
 
@@ -135,17 +134,17 @@ export const en: Messages = {
     seo: {
       title: 'About — Auberge du Vieux Pont',
       description:
-        "The Auberge du Vieux Pont in Saint-Raymond since 1972 — lodging designed for forestry and hydroelectric sector crews in Portneuf.",
+        "The Auberge du Vieux Pont in Saint-Raymond since 1911 — lodging designed for forestry and hydroelectric sector crews in Portneuf.",
     },
     heading: 'Built for those who never back down.',
     lead: "For half a century, the Auberge du Vieux Pont has housed workers, anglers and today's field crews. Same promise: honest rest, no frills.",
     intro: {
-      sectionLabel: 'About · Est. 1972',
+      sectionLabel: 'About · Est. 1911',
     },
     histoire: {
       sectionLabel: 'Where we come from',
       heading: 'A house planted on the riverbank.',
-      p1: "It all starts near the old Tessier bridge, where the Sainte-Anne River carves its way through Portneuf rock. In 1972, the building opened its doors to house those who worked hard: loggers, site workers, anglers who came to test the cold water at dawn.",
+      p1: "It all starts near the old Tessier bridge, where the Sainte-Anne River carves its way through Portneuf rock. In 1911, the building opened its doors to house those who worked hard: loggers, site workers, anglers who came to test the cold water at dawn.",
       p2: "We never tried to impress. We tried to help. A clean bed, a hot meal, a solid roof when the day ended late and the next one started early. That became our reputation — and we haven't let it go since.",
       p3: "Over the years, the world changed boots. Forestry became mechanized and hydroelectric sector job sites spread across Portneuf. We added a work clothes drying room, charging stations for tools and radios, a reinforced secure storage room. But the spirit hasn't budged an inch.",
       image: {
@@ -155,7 +154,7 @@ export const en: Messages = {
     },
     quote: {
       text: "\"We don't sell luxury. We sell rest that holds up.\"",
-      caption: 'The house · since 1972',
+      caption: 'The house · since 1911',
     },
     valeurs: {
       sectionLabel: 'Our principles',
@@ -176,7 +175,7 @@ export const en: Messages = {
       },
       '3': {
         title: 'Rooted',
-        text: "Saint-Raymond has been home since 1972. We know the river, the job sites and the people who work there.",
+        text: "Saint-Raymond has been home since 1911. We know the river, the job sites and the people who work there.",
       },
     },
     ancrage: {
@@ -209,7 +208,7 @@ export const en: Messages = {
     seo: {
       title: 'The property — Auberge du Vieux Pont',
       description:
-        "Explore the Auberge du Vieux Pont: soundproofed rooms, shared kitchen, laundry, drying room and common lounge, on the Sainte-Anne River in Saint-Raymond.",
+        "Explore the Auberge du Vieux Pont: private rooms, shared kitchen, laundry, drying room and common lounge, on the Sainte-Anne River in Saint-Raymond.",
     },
     inpageNav: {
       ariaLabel: 'On this page',
@@ -237,7 +236,7 @@ export const en: Messages = {
     lieu: {
       sectionLabel: 'The location',
       heading: 'An old bridge on the Sainte-Anne',
-      p1: "Since 1972, the Auberge du Vieux Pont has overlooked the Sainte-Anne River in the heart of Saint-Raymond. Stone, wood, wrought iron — the materials speak for themselves. Close to the main forestry job sites and the Portneuf hydroelectric network lines.",
+      p1: "Since 1911, the Auberge du Vieux Pont has overlooked the Sainte-Anne River in the heart of Saint-Raymond. Stone, wood, wrought iron — the materials speak for themselves. Close to the main forestry job sites and the Portneuf hydroelectric network lines.",
       p2: "A place calibrated for those who leave early and get back late, with concrete you can hose down.",
       image: {
         alt: "Exterior view of the Auberge du Vieux Pont on the Sainte-Anne River",
@@ -275,9 +274,9 @@ export const en: Messages = {
     },
     chambre: {
       label: 'Bedroom',
-      blurb: 'Soundproofed rooms with blackout curtains — designed for those who sleep during the day.',
+      blurb: 'Rooms with blackout curtains — designed for those who sleep during the day.',
       images: {
-        bedroom: { alt: 'Private room with queen bed and blackout curtains', caption: 'Standard room · soundproofed' },
+        bedroom: { alt: 'Private room with queen bed and blackout curtains', caption: 'Standard room' },
       },
     },
     'salle-de-bain': {
@@ -298,7 +297,7 @@ export const en: Messages = {
     },
     exterieur: {
       label: 'Exterior',
-      blurb: "On the Sainte-Anne River, at the foot of the old bridge — stone, wood and wrought iron since 1972.",
+      blurb: "On the Sainte-Anne River, at the foot of the old bridge — stone, wood and wrought iron since 1911.",
       images: {
         'auberge-exterior': { alt: "Exterior view of the Auberge du Vieux Pont", caption: "The inn on the Sainte-Anne" },
         'auberge-porch': { alt: "Covered porch at the inn entrance", caption: "Entrance porch" },
@@ -655,7 +654,7 @@ export const en: Messages = {
       title: 'Rest hours',
       items: {
         '0': 'Quiet hours from 10:00 PM to 7:00 AM, out of respect for shift workers.',
-        '1': 'Soundproofed rooms remain a rest space at all times.',
+        '1': 'Rooms remain a rest space at all times.',
       },
     },
     'P-04': {

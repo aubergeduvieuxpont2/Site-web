@@ -8,7 +8,7 @@ export const SITE = {
   name: "L'Auberge du Vieux Pont",
   shortName: "Le Vieux Pont",
   tagline: "Pas de luxe — tout le confort fonctionnel.",
-  established: "1972",
+  established: "1911",
   region: "Saint-Raymond · Portneuf · Québec",
   address: {
     street: "111, avenue Saint-Michel",
@@ -60,7 +60,7 @@ export const FAQ: Faq[] = [
   {
     question: "Peut-on arriver tard ou loger pour un quart de nuit ?",
     answer:
-      "Oui. Nos chambres sont insonorisées et équipées de rideaux occultants, pensées pour les travailleurs de quart qui doivent dormir le jour.",
+      "Oui. Nos chambres sont équipées de rideaux occultants, pensées pour les travailleurs de quart qui doivent dormir le jour.",
   },
   {
     question: "Y a-t-il du rangement pour l'équipement et les outils ?",
@@ -70,12 +70,12 @@ export const FAQ: Faq[] = [
   {
     question: "Quels services sont inclus et à partir de quel tarif ?",
     answer:
-      "Les chambres débutent à 89 $ la nuit. La cuisine partagée, la buanderie, le café en libre-service et le WiFi sont inclus.",
+      "Consulter la page de réservation pour les tarifs à jour. La cuisine partagée, la buanderie et le WiFi sont inclus.",
   },
 ];
 
 export const DEFAULTS = {
-  nightlyPrice: 89,
+  nightlyPrice: 100,
   contactEmail: "info@aubergeduvieuxpont.ca",
   publicRoomCount: 12,
   tps: 5,
@@ -238,7 +238,7 @@ export const PROPERTY_AREAS: PropertyArea[] = [
     id: "chambre",
     label: "Chambre",
     blurb:
-      "Chambres insonorisées et rideaux occultants — pensées pour ceux qui dorment le jour.",
+      "Chambres avec rideaux occultants — pensées pour ceux qui dorment le jour.",
     images: [
       {
         key: "bedroom.jpg",
@@ -347,7 +347,7 @@ export const AMENITIES: Amenity[] = [
   },
   {
     code: "A-05",
-    title: "Chambres insonorisées",
+    title: "Chambres",
     text: "Repos réparateur garanti, même pour ceux qui dorment de jour.",
     icon: "moon",
   },
@@ -473,7 +473,7 @@ export const POLICIES: PolicySection[] = [
     title: "Heures de repos",
     items: [
       "Heures de silence de 22 h 00 à 7 h 00, par respect pour les travailleurs de quart.",
-      "Les chambres insonorisées restent un espace de repos en tout temps.",
+      "Les chambres restent un espace de repos en tout temps.",
     ],
   },
   {
