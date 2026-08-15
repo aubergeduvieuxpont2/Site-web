@@ -16,6 +16,24 @@
 
   const featuredRooms = ROOMS.slice(0, 3);
 
+  // Hero backdrop. The original in R2 is a ~11 MB JPEG, so it is always served
+  // through Cloudflare's image resizer (AVIF/WebP negotiated per browser).
+  // /cdn-cgi/ only exists on the deployed zone — locally the resized URL 404s
+  // and we fall back to the untouched original.
+  const HERO_IMG_KEY = 'hero_main.jpeg';
+  const HERO_WIDTHS = [960, 1440, 1920, 2560];
+  const heroImg = (w: number) =>
+    `/cdn-cgi/image/width=${w},quality=70,format=auto/img/${HERO_IMG_KEY}`;
+
+  function heroImgFallback(event: Event) {
+    const img = event.currentTarget as HTMLImageElement;
+    const original = `/img/${HERO_IMG_KEY}`;
+    if (img.src.endsWith(original)) return;
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
+    img.src = original;
+  }
+
   // Build stats with the rooms count from settings. $derived (not a plain
   // const) because loadSettings() resolves after mount; the year keeps its
   // digits unlocalized so countUp doesn't render "1 972".
@@ -37,6 +55,19 @@
   >
     <div class="page-accueil__hero-shader-wrap">
       <HeroShader />
+    </div>
+
+    <div class="page-accueil__hero-bg" aria-hidden="true">
+      <img
+        class="page-accueil__hero-bg-img"
+        src={heroImg(1600)}
+        srcset={HERO_WIDTHS.map((w) => `${heroImg(w)} ${w}w`).join(', ')}
+        sizes="100vw"
+        alt=""
+        fetchpriority="high"
+        onerror={heroImgFallback}
+        data-testid="hero-bg-img"
+      />
     </div>
 
     <div class="page-accueil__hero-content">
@@ -257,6 +288,35 @@
     inset: 0;
     overflow: hidden;
     pointer-events: none;
+  }
+
+  /* Photo backdrop, on top of the shader but under the copy. The radial mask
+     dissolves all four edges into --color-surface so the hero has no visible
+     boundary; the low opacity keeps the ink contrast of the heading intact. */
+  .page-accueil__hero-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.18;
+    -webkit-mask-image: radial-gradient(
+      ellipse 66% 66% at 50% 45%,
+      #000 30%,
+      transparent 96%
+    );
+    mask-image: radial-gradient(
+      ellipse 66% 66% at 50% 45%,
+      #000 30%,
+      transparent 96%
+    );
+  }
+
+  .page-accueil__hero-bg-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
   .page-accueil__hero-content {

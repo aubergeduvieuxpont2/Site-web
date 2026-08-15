@@ -32,6 +32,23 @@ describe('+page.svelte (page-accueil SSR)', () => {
       expect(html).toContain("L'art de recevoir");
     });
 
+    it('renders the hero backdrop image through the Cloudflare resizer', () => {
+      const html = renderPage();
+      expect(html).toContain('data-testid="hero-bg-img"');
+      expect(html).toContain(
+        '/cdn-cgi/image/width=1600,quality=70,format=auto/img/hero_main.jpeg'
+      );
+    });
+
+    it('hero backdrop offers a responsive srcset and is decorative', () => {
+      const html = renderPage();
+      for (const w of [960, 1440, 1920, 2560]) {
+        expect(html).toContain(`/cdn-cgi/image/width=${w},`);
+        expect(html).toContain(`${w}w`);
+      }
+      expect(html).toContain('alt=""');
+    });
+
     it('renders hero eyebrow with location text', () => {
       expect(renderPage()).toContain('Saint-Raymond · Portneuf · Québec');
     });
