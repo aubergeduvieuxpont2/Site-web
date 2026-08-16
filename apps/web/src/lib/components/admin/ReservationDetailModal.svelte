@@ -57,7 +57,7 @@
   });
 
   async function sendReviewRequest() {
-    if (!row || reviewBusy) return;
+    if (!row || reviewBusy || reviewBlockedReason) return;
     reviewBusy = true;
     reviewError = '';
     const result = await onSendReviewRequest(row.id);

@@ -260,6 +260,14 @@ describe("ReservationDetailModal", () => {
     expect(screen.getByTestId("btn-review-request").textContent).toContain("Demander un avis");
   });
 
+  it("leaves the button enabled when both email and code are present", () => {
+    render(ReservationDetailModal, {
+      props: props({ code: "AVP-ABC123", review_sent_at: null }),
+    });
+    expect(screen.getByTestId("btn-review-request").hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByTestId("rdm-review-blocked")).toBeNull();
+  });
+
   it("shows the sent date and a resend action once requested", () => {
     render(ReservationDetailModal, { props: props({ review_sent_at: "2026-08-01T18:00:00Z" }) });
     expect(screen.getByTestId("rdm-review-state").textContent).toContain("Demande envoyée");
@@ -299,6 +307,34 @@ describe("ReservationDetailModal", () => {
     const btn = screen.getByTestId("btn-review-request");
     expect(btn.hasAttribute("disabled")).toBe(true);
     expect(screen.getByTestId("rdm-review-blocked").textContent).toContain("code");
+  });
+
+  // Pins the in-function reviewBlockedReason guard in
+  // ReservationDetailModal.svelte's sendReviewRequest(). Verified this is a
+  // real pin, not a redundant assertion: in this jsdom + @testing-library/
+  // svelte setup, fireEvent.click on a disabled <button> DOES still invoke
+  // its onclick handler (jsdom does not enforce the browser's "disabled
+  // suppresses activation behaviour" semantics the way a real browser does)
+  // — removing the `reviewBlockedReason` check from the guard while keeping
+  // this test reproduces the exact crash the guard prevents
+  // (`onSendReviewRequest` gets called and its unmocked-return `undefined`
+  // blows up `'error' in result`), and this test fails accordingly.
+  it("does not call onSendReviewRequest when clicked while blocked (no email)", async () => {
+    const onSendReviewRequest = vi.fn();
+    render(ReservationDetailModal, {
+      props: { ...props({ email: "" }), onSendReviewRequest },
+    });
+    await fireEvent.click(screen.getByTestId("btn-review-request"));
+    expect(onSendReviewRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not call onSendReviewRequest when clicked while blocked (no code)", async () => {
+    const onSendReviewRequest = vi.fn();
+    render(ReservationDetailModal, {
+      props: { ...props({ code: null }), onSendReviewRequest },
+    });
+    await fireEvent.click(screen.getByTestId("btn-review-request"));
+    expect(onSendReviewRequest).not.toHaveBeenCalled();
   });
 
   it("sends the review request and swaps in a resend state on success", async () => {
