@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { enqueueReviewRequests } from "../src/reviewRequests";
+import { enqueueReviewRequests, CATCHUP_WINDOW_DAYS } from "../src/reviewRequests";
 
 // ---------------------------------------------------------------------------
 // Mock enqueueEmail from emailOutbox so we don't hit the settings toggle or DB
@@ -321,6 +321,135 @@ describe("enqueueReviewRequests", () => {
     const call = mockEnqueueEmail.mock.calls[0];
     expect(call[1].payload.checkIn).toBe("2025-12-20");
     expect(call[1].payload.checkOut).toBe("2025-12-25");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reminder pass — catch-up bound (INV-reminder-no-backlog-flush)
+// ---------------------------------------------------------------------------
+
+describe("enqueueReviewRequests — reminder catch-up bound", () => {
+  it("excludes a review_requests row whose sent_at is far older than the reminder+catch-up window", async () => {
+    // Simulates the real WHERE clause using the actual bound values the
+    // implementation passes: rr.sent_at + reminderDelayDays <= now() AND
+    // rr.sent_at > now() - (reminderDelayDays + CATCHUP_WINDOW_DAYS). A row
+    // sent 60 days ago must not come back once a reminder delay + catch-up
+    // window of well under 60 days is in effect — this is exactly the
+    // "toggle off, then back on a month later" backlog-flush scenario.
+    const oldReminderRow = {
+      id: 90,
+      email: "stale@example.com",
+      first_name: "Stale",
+      name: "Stale Guest",
+      code: "AVP-STALE01",
+      arrive: "2025-05-01",
+      depart: "2025-05-04",
+    };
+    const sentAt = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 days ago
+
+    const sql = makeSql((q, vals) => {
+      if (q.includes("email_review_request_enabled")) {
+        return [
+          { key: "email_review_request_enabled", value: "true" },
+          { key: "review_reminder_delay_days", value: "7" },
+        ];
+      }
+      if (q.includes("FROM reservations")) return []; // no first-pass sends this run
+      if (q.includes("FROM review_requests rr")) {
+        const [reminderDelayDays, catchupBoundDays] = vals as number[];
+        const dueMs = sentAt.getTime() + reminderDelayDays * 86400000;
+        const catchupCutoffMs = Date.now() - catchupBoundDays * 86400000;
+        const isDue = dueMs <= Date.now();
+        const isWithinCatchup = sentAt.getTime() > catchupCutoffMs;
+        return isDue && isWithinCatchup ? [oldReminderRow] : [];
+      }
+      return [];
+    });
+
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.reminded).toBe(0);
+    expect(mockEnqueueEmail).not.toHaveBeenCalled();
+  });
+
+  it("includes a review_requests row whose sent_at is within the reminder+catch-up window", async () => {
+    const recentReminderRow = {
+      id: 91,
+      email: "recent@example.com",
+      first_name: "Recent",
+      name: "Recent Guest",
+      code: "AVP-RECENT1",
+      arrive: "2026-07-01",
+      depart: "2026-07-04",
+    };
+    const sentAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000); // 8 days ago
+
+    const sql = makeSql((q, vals) => {
+      if (q.includes("email_review_request_enabled")) {
+        return [
+          { key: "email_review_request_enabled", value: "true" },
+          { key: "review_reminder_delay_days", value: "7" },
+        ];
+      }
+      if (q.includes("FROM reservations")) return [];
+      if (q.includes("FROM review_requests rr")) {
+        const [reminderDelayDays, catchupBoundDays] = vals as number[];
+        const dueMs = sentAt.getTime() + reminderDelayDays * 86400000;
+        const catchupCutoffMs = Date.now() - catchupBoundDays * 86400000;
+        const isDue = dueMs <= Date.now();
+        const isWithinCatchup = sentAt.getTime() > catchupCutoffMs;
+        return isDue && isWithinCatchup ? [recentReminderRow] : [];
+      }
+      return [];
+    });
+
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.reminded).toBe(1);
+    expect(mockEnqueueEmail).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ template: "review-reminder", to: "recent@example.com" })
+    );
+  });
+
+  it("passes reminderDelayDays + CATCHUP_WINDOW_DAYS as the second bound value on the reminder SELECT", async () => {
+    let capturedVals: unknown[] | null = null;
+    const sql = makeSql((q, vals) => {
+      if (q.includes("email_review_request_enabled")) {
+        return [
+          { key: "email_review_request_enabled", value: "true" },
+          { key: "review_reminder_delay_days", value: "10" },
+        ];
+      }
+      if (q.includes("FROM reservations")) return [];
+      if (q.includes("FROM review_requests rr")) {
+        capturedVals = vals;
+        return [];
+      }
+      return [];
+    });
+
+    await enqueueReviewRequests(sql as any);
+    expect(capturedVals).toEqual([10, 10 + CATCHUP_WINDOW_DAYS]);
+  });
+
+  it("filters the reminder SELECT to confirmed reservations", async () => {
+    let capturedQuery = "";
+    const sql = makeSql((q) => {
+      if (q.includes("email_review_request_enabled")) {
+        return [
+          { key: "email_review_request_enabled", value: "true" },
+          { key: "review_reminder_delay_days", value: "7" },
+        ];
+      }
+      if (q.includes("FROM reservations")) return [];
+      if (q.includes("FROM review_requests rr")) {
+        capturedQuery = q;
+        return [];
+      }
+      return [];
+    });
+
+    await enqueueReviewRequests(sql as any);
+    expect(capturedQuery).toContain("r.status = 'confirmed'");
   });
 });
 

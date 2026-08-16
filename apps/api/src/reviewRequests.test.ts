@@ -4,7 +4,12 @@ vi.mock("./emailOutbox", () => ({ enqueueEmail: vi.fn() }));
 vi.mock("./provisioning", () => ({ SITE_ORIGIN: "https://test.auberge.example.com" }));
 
 import { enqueueEmail } from "./emailOutbox";
-import { enqueueReviewRequests } from "./reviewRequests";
+import {
+  enqueueReviewRequests,
+  REVIEW_SEND_HOUR_LOCAL,
+  REVIEW_TIMEZONE,
+  CATCHUP_WINDOW_DAYS,
+} from "./reviewRequests";
 
 const mockEnqueueEmail = vi.mocked(enqueueEmail);
 
@@ -432,5 +437,106 @@ describe("enqueueReviewRequests — SQL shape", () => {
     await enqueueReviewRequests(sql as any);
     const firstSelect = String(sql.mock.calls[1][0]);
     expect(firstSelect).toContain("lower(r2.email)");
+  });
+
+  // The two tests above only check the query TEXT (TemplateStringsArray),
+  // which drops every interpolated value — they'd pass unchanged even with
+  // an inverted timezone conversion or a wrong catch-up bound. Assert on the
+  // actual bound VALUES (sql.mock.calls[n].slice(1)) so a regression there
+  // fails the suite.
+  it("binds the exact interpolated values into the first-request SELECT, in order", async () => {
+    const sql = makeSql([
+      [{ key: "email_review_request_enabled", value: "true" }],
+      [],
+    ]);
+    await enqueueReviewRequests(sql as any);
+    const boundValues = sql.mock.calls[1].slice(1);
+    // delayDays (default 0) x2, REVIEW_SEND_HOUR_LOCAL x2, REVIEW_TIMEZONE x2,
+    // then CATCHUP_WINDOW_DAYS, then suppressionMonths (default 6) x2 —
+    // matches the ${...} interpolation order in the reservations query.
+    expect(boundValues).toEqual([
+      0,
+      REVIEW_SEND_HOUR_LOCAL,
+      REVIEW_TIMEZONE,
+      0,
+      REVIEW_SEND_HOUR_LOCAL,
+      REVIEW_TIMEZONE,
+      CATCHUP_WINDOW_DAYS,
+      6,
+      6,
+    ]);
+  });
+
+  it("binds the reminder-delay and reminder catch-up bound into the reminder SELECT, in order", async () => {
+    const sql = makeSql([
+      [
+        { key: "email_review_request_enabled", value: "true" },
+        { key: "review_reminder_delay_days", value: "9" },
+      ],
+      [], // first-request select
+      [], // reminder select
+    ]);
+    await enqueueReviewRequests(sql as any);
+    const reminderBoundValues = sql.mock.calls[2].slice(1);
+    expect(reminderBoundValues).toEqual([9, 9 + CATCHUP_WINDOW_DAYS]);
+  });
+});
+
+// ── Intra-run suppression (INV-one-request-per-guest-per-run) ───────────────
+
+describe("enqueueReviewRequests — intra-run suppression", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockEnqueueEmail.mockResolvedValue({ enqueued: true });
+  });
+
+  it("enqueues only one email when the same guest email appears twice in one run, case-insensitively", async () => {
+    // The suppression subquery in the SQL only sees review_requests rows
+    // that existed BEFORE this run started, so two reservations for the
+    // same guest whose send times both fall inside the catch-up window can
+    // both come back from a single SELECT. Without an in-process guard,
+    // both would be emailed in the same cron tick.
+    const res1 = { ...RESERVATION, id: 1, email: "Marie@example.com" };
+    const res2 = { ...RESERVATION, id: 2, email: "marie@example.com" };
+    const sql = makeSql([
+      [{ key: "email_review_request_enabled", value: "true" }],
+      [res1, res2],
+      [], // INSERT review_requests for res1 (res2 is skipped before reaching the INSERT)
+      [], // reminder select
+    ]);
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.enqueued).toBe(1);
+    expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not guard across different guest emails", async () => {
+    const res1 = { ...RESERVATION, id: 1, email: "marie@example.com" };
+    const res2 = { ...RESERVATION, id: 2, email: "jean@example.com" };
+    const sql = makeSql([
+      [{ key: "email_review_request_enabled", value: "true" }],
+      [res1, res2],
+      [], // INSERT for res1
+      [], // INSERT for res2
+      [], // reminder select
+    ]);
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.enqueued).toBe(2);
+  });
+
+  it("does not suppress duplicate emails in one run when review_suppression_months is 0", async () => {
+    const res1 = { ...RESERVATION, id: 1, email: "marie@example.com" };
+    const res2 = { ...RESERVATION, id: 2, email: "marie@example.com" };
+    const sql = makeSql([
+      [
+        { key: "email_review_request_enabled", value: "true" },
+        { key: "review_suppression_months", value: "0" },
+      ],
+      [res1, res2],
+      [], // INSERT for res1
+      [], // INSERT for res2
+      [], // reminder select
+    ]);
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.enqueued).toBe(2);
   });
 });

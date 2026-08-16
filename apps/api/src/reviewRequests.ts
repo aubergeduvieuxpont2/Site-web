@@ -10,7 +10,7 @@ export const REVIEW_TIMEZONE = "America/Toronto";
 
 // A cron that was down should still catch up, but must not fire requests for
 // long-past stays.
-const CATCHUP_WINDOW_DAYS = 7;
+export const CATCHUP_WINDOW_DAYS = 7;
 
 export interface ReservationForReview {
   id: number;
@@ -41,7 +41,8 @@ function buildReviewPayload(res: ReservationForReview) {
 // passed — then follow up with a reminder for guests who have not yet
 // responded.
 //
-// Settings read once up front (all follow the "0 means disabled" sentinel):
+// Settings read once up front (the reminder and suppression settings use a
+// "0 means disabled" sentinel; review_request_delay_days does not):
 //   - review_request_delay_days:  days after depart before the first email (0 = depart day)
 //   - review_reminder_delay_days: days after the first email before a reminder; 0 disables the reminder pass entirely
 //   - review_suppression_months:  months to avoid re-asking the same email address; 0 disables suppression
@@ -119,7 +120,17 @@ export async function enqueueReviewRequests(
 
   let enqueued = 0;
 
+  // Per-run guard: the suppression subquery above only sees review_requests
+  // rows that existed before this run started, so two reservations for the
+  // same guest whose send times both land inside the catch-up window would
+  // otherwise both pass it and both get emailed in this same run.
+  const seenEmails = new Set<string>();
+
   for (const res of reservations) {
+    const emailKey = res.email.toLowerCase();
+    if (suppressionMonths > 0 && seenEmails.has(emailKey)) continue;
+    seenEmails.add(emailKey);
+
     // Insert the dedupe row first (ON CONFLICT DO NOTHING is idempotent).
     await sql`
       INSERT INTO review_requests (reservation_id, channel, sent_at)
@@ -145,9 +156,11 @@ export async function enqueueReviewRequests(
              to_char(r.depart, 'YYYY-MM-DD')  AS depart
       FROM review_requests rr
       JOIN reservations r ON r.id = rr.reservation_id
-      WHERE rr.reminder_sent_at IS NULL
+      WHERE r.status = 'confirmed'
+        AND rr.reminder_sent_at IS NULL
         AND rr.responded_at IS NULL
         AND rr.sent_at + make_interval(days => ${reminderDelayDays}) <= now()
+        AND rr.sent_at > now() - make_interval(days => ${reminderDelayDays + CATCHUP_WINDOW_DAYS})
         AND r.email IS NOT NULL AND r.email <> ''
         AND r.code IS NOT NULL
         AND NOT EXISTS (
