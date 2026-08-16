@@ -315,12 +315,29 @@ one switch controls both emails. `precompiled.ts` is regenerated via
 Its payload matches `review-request` (`firstName`, `checkIn`, `checkOut`,
 `reviewUrl`) so the two share an enqueue helper.
 
-**Existing inconsistency fixed:** the manifest declares `roomLabel` in
-`review-request`'s `requiredFields`, but `reviewRequests.ts` has never sent it.
-This is harmless today because `requiredFields` drives only admin preview, not
-delivery — but copying the pattern into `review-reminder` would spread it.
-`roomLabel` is dropped from `requiredFields`, since the template body does not
-reference it.
+**Existing bug fixed (corrected 2026-08-16 during planning).** An earlier draft
+of this section claimed the `roomLabel` mismatch was harmless. It is not. Both
+`apps/api/emails/templates/review-request.fr.hbs:8` and `review-request.en.hbs:8`
+render a room line:
+
+```hbs
+<p style="margin: 0 0 10px 0;"><strong>Chambre :</strong> {{roomLabel}}</p>
+```
+
+`reviewRequests.ts` has never put `roomLabel` in the payload, so **every real
+review-request email renders "Chambre :" followed by nothing.** The manifest
+lists `roomLabel` in `requiredFields`, which is why admin preview looks correct
+while live sends do not — the preview uses the sample JSON, which does supply it.
+
+Fix: delete the room line from both `review-request` templates, drop
+`roomLabel` from that template's `requiredFields` and from
+`apps/api/emails/samples/review-request.json`. The dates line stays. A feedback
+email does not need to restate which room they had, and dropping it keeps the
+`review-request` and `review-reminder` payloads identical so both can share one
+enqueue helper.
+
+`reservation-confirmation` and `room-assigned` also use `{{roomLabel}}`; both
+genuinely supply it and are left alone.
 
 ## Non-goals
 
