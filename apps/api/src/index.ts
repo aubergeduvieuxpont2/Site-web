@@ -2707,6 +2707,9 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_review_request_enabled', ${data.emailReviewRequestEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_request_delay_days', ${data.reviewRequestDelayDays.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_reminder_delay_days', ${data.reviewReminderDelayDays.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_suppression_months', ${data.reviewSuppressionMonths.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     // `assignable_room_count` is derived, never taken from the request body:

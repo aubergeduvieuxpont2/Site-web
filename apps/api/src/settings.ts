@@ -15,6 +15,9 @@ export const SETTINGS_DEFAULTS = {
   email_room_assignment_enabled: false,
   email_welcome_enabled: false,
   email_review_request_enabled: false,
+  review_request_delay_days: 0,
+  review_reminder_delay_days: 7,
+  review_suppression_months: 6,
 } as const;
 
 export const PUBLIC_SETTING_KEYS = [
@@ -70,6 +73,9 @@ export const SettingsUpdateSchema = z.object({
   emailRoomAssignmentEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
   emailWelcomeEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
   emailReviewRequestEnabled: z.preprocess(coerceBoolLoose, z.boolean()),
+  reviewRequestDelayDays: z.coerce.number().int().min(0).max(365),
+  reviewReminderDelayDays: z.coerce.number().int().min(0).max(365),
+  reviewSuppressionMonths: z.coerce.number().int().min(0).max(60),
 });
 
 export const settingsHook = (result: any, c: any) =>
@@ -98,6 +104,9 @@ export interface AdminSettings {
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
   emailReviewRequestEnabled: boolean;
+  reviewRequestDelayDays: number;
+  reviewReminderDelayDays: number;
+  reviewSuppressionMonths: number;
 }
 
 export interface PublicSettings {
@@ -113,6 +122,13 @@ export interface PublicSettings {
   // when the count query fails so the endpoint never 500s and the frontend
   // fallback (DEFAULTS.publicRoomCount) can take over.
   publicRoomCount?: number;
+}
+
+// settings values are TEXT; fall back to the default when a row is absent or
+// holds something that is not an integer.
+export function intSetting(raw: string | undefined, fallback: number): number {
+  const n = parseInt(raw ?? "", 10);
+  return Number.isFinite(n) ? n : fallback;
 }
 
 export function rowsToAdminSettings(
@@ -163,6 +179,18 @@ export function rowsToAdminSettings(
     ),
     emailReviewRequestEnabled: parseBool(
       rowMap.get("email_review_request_enabled") ?? "false"
+    ),
+    reviewRequestDelayDays: intSetting(
+      rowMap.get("review_request_delay_days"),
+      SETTINGS_DEFAULTS.review_request_delay_days
+    ),
+    reviewReminderDelayDays: intSetting(
+      rowMap.get("review_reminder_delay_days"),
+      SETTINGS_DEFAULTS.review_reminder_delay_days
+    ),
+    reviewSuppressionMonths: intSetting(
+      rowMap.get("review_suppression_months"),
+      SETTINGS_DEFAULTS.review_suppression_months
     ),
   };
 }
