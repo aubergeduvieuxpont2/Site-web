@@ -161,12 +161,12 @@ Extend `SettingsUpdateSchema` (after `emailReviewRequestEnabled`):
 
 - [ ] **Step 5: Add the row mapping**
 
-In `rowsToAdminSettings`, after `emailReviewRequestEnabled`. `parseInt` returns `NaN` for unparseable text, so guard with a helper defined just above the function:
+In `rowsToAdminSettings`, after `emailReviewRequestEnabled`. `parseInt` returns `NaN` for unparseable text, so guard with a helper defined just above the function. **Export it** — Task 5 imports this exact function rather than redefining it:
 
 ```ts
 // settings values are TEXT; fall back to the default when a row is absent or
 // holds something that is not an integer.
-function intSetting(raw: string | undefined, fallback: number): number {
+export function intSetting(raw: string | undefined, fallback: number): number {
   const n = parseInt(raw ?? "", 10);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -335,7 +335,7 @@ In `apps/api/src/emailOutbox.ts`, add `| "review-reminder"` to the `EmailTemplat
 - [ ] **Step 6: Regenerate precompiled templates**
 
 Run: `cd apps/api && npm run precompile:emails`
-Expected: prints a `Precompiled N templates` line with N four higher than before (two new locales × … the script counts `KEYS.length * 2 + 5`, so N increases by 2).
+Expected: prints a `Precompiled N templates` line. The script computes `KEYS.length * 2 + 5`, and this task adds exactly one key, so **N increases by 2** over the previous run.
 
 - [ ] **Step 7: Run the email test suite**
 
@@ -590,18 +590,21 @@ Replace the toggle-only SELECT with one that reads all four keys at once:
   `) as { key: string; value: string }[];
 
   const setting = (k: string) => settingRows.find((r) => r.key === k)?.value;
-  const intSetting = (k: string, fallback: number) => {
-    const n = parseInt(setting(k) ?? "", 10);
-    return Number.isFinite(n) ? n : fallback;
-  };
 
   if (setting("email_review_request_enabled") !== "true") {
     return { enqueued: 0, reminded: 0 };
   }
 
-  const delayDays = intSetting("review_request_delay_days", 0);
-  const reminderDelayDays = intSetting("review_reminder_delay_days", 7);
-  const suppressionMonths = intSetting("review_suppression_months", 6);
+  const delayDays = intSetting(setting("review_request_delay_days"), 0);
+  const reminderDelayDays = intSetting(setting("review_reminder_delay_days"), 7);
+  const suppressionMonths = intSetting(setting("review_suppression_months"), 6);
+```
+
+`intSetting` is imported from `./settings` (Task 2 exports it) — do **not**
+redefine it here:
+
+```ts
+import { intSetting } from "./settings";
 ```
 
 - [ ] **Step 4: Implement the first-request pass**
@@ -1303,12 +1306,21 @@ git commit -m "feat(web): manual review-request action in reservation detail mod
 ### Task 10: Admin UI — Paramètres inputs
 
 **Files:**
-- Modify: `apps/web/src/lib/components/admin/AdminParametresTab.svelte`
-- Modify: `apps/web/src/lib/settings.svelte.ts` (if it mirrors the admin settings shape)
+- Modify: `apps/web/src/lib/api.ts` — the `AdminSettings` interface at line 121
+- Modify: `apps/web/src/lib/components/admin/AdminParametresTab.svelte` — **five** sites, not just markup:
+  - the local settings Props type (~line 24)
+  - the local defaults object (~line 40)
+  - the hydration mapper that reads the API response (~line 92)
+  - the save-payload mapper (~line 156)
+  - the markup, after the `pt-email-review-request` toggle row
 - Test: `apps/web/src/lib/components/admin/__tests__/AdminParametresTab.test.ts`
 
 **Interfaces:**
 - Consumes: `reviewRequestDelayDays`, `reviewReminderDelayDays`, `reviewSuppressionMonths` from Task 2.
+
+Miss any of the four non-markup sites and the inputs will render but silently
+fail to load or save. `settings.svelte.ts` is the *public* settings store and
+must NOT be touched — these three keys are admin-only.
 
 - [ ] **Step 1: Write failing tests**
 
