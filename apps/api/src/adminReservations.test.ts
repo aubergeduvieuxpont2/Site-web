@@ -308,7 +308,17 @@ describe("GET /api/admin/reservations (OP-Reservation.listAdmin)", () => {
       ENV,
     );
 
-    expect(capturedQuery).toContain("review_requests");
+    // Pin the exact join, not just a substring: a wrong ON clause, a wrong
+    // alias, or an INNER JOIN silently substituted for LEFT JOIN would all
+    // still contain "review_requests" but must not pass this check.
+    const normalizedQuery = capturedQuery.replace(/\s+/g, " ").trim();
+    expect(normalizedQuery).toContain(
+      "LEFT JOIN review_requests rr ON rr.reservation_id = r.id",
+    );
+    expect(normalizedQuery).toContain("review_sent_at");
+    expect(normalizedQuery).toContain("review_reminder_sent_at");
+    expect(normalizedQuery).toContain("review_responded_at");
+
     const body = (await res.json()) as any;
     expect(body.reservations[0]).toHaveProperty("review_sent_at");
     expect(body.reservations[0].review_sent_at).toBe("2026-07-20T10:00:00Z");
