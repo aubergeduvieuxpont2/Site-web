@@ -60,7 +60,16 @@ export const MANIFEST: Record<TemplateKey, ManifestEntry> = {
     name: { fr: "Demande d'avis", en: "Review Request" },
     subject: { fr: "Partagez votre avis sur votre séjour", en: "Share your feedback on your stay" },
     sampleFile: "review-request.json",
-    requiredFields: ["firstName", "checkIn", "checkOut", "roomLabel", "reviewUrl"],
+    requiredFields: ["firstName", "checkIn", "checkOut", "reviewUrl"],
+  },
+  "review-reminder": {
+    name: { fr: "Rappel d'avis", en: "Review Reminder" },
+    subject: {
+      fr: "Un mot sur votre séjour ?",
+      en: "A word about your stay?",
+    },
+    sampleFile: "review-reminder.json",
+    requiredFields: ["firstName", "checkIn", "checkOut", "reviewUrl"],
   },
   "room-assigned": {
     name: { fr: "Chambre assignée", en: "Room Assigned" },
@@ -106,6 +115,7 @@ export const TEMPLATE_KEYS: TemplateKey[] = [
   "reservation-cancellation",
   "invoice-receipt",
   "review-request",
+  "review-reminder",
   "room-assigned",
   "ota-welcome",
   "email-verification",

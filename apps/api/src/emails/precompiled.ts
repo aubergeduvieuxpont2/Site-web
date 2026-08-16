@@ -29,7 +29,7 @@ export const BASE = Handlebars.template({"compiler":[8,">= 4.3.0"],"main":functi
 
 export const PARTIALS: Record<Locale, { header: HandlebarsTemplateDelegate; footer: HandlebarsTemplateDelegate }> = {
   fr: { header: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
-    return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Gîte champêtre en Mauricie\n    </div>\n  </td>\n</tr>\n";
+    return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Gîte champêtre dans la Région de la Capitale\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}), footer: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
     var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
         if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
@@ -49,7 +49,7 @@ export const PARTIALS: Record<Locale, { header: HandlebarsTemplateDelegate; foot
     + "</a>\n    </div>\n    <div style=\"color: #304542; margin-bottom: 12px;\">\n      <strong>CITQ #304542</strong>\n    </div>\n    <div style=\"font-size: 11px; color: #6b7c81;\">\n      © 2026 L'Auberge du Vieux Pont. Tous droits réservés.\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}) },
   en: { header: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
-    return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Rural inn in Mauricie\n    </div>\n  </td>\n</tr>\n";
+    return "<tr>\n  <td style=\"background-color: #9d4300; padding: 20px; text-align: center;\">\n    <div style=\"color: white; font-size: 24px; font-weight: bold;\">\n      L'Auberge du Vieux Pont\n    </div>\n    <div style=\"color: #f0e5d8; font-size: 14px; margin-top: 4px;\">\n      Rural inn in the Capital Region\n    </div>\n  </td>\n</tr>\n";
 },"useData":true}), footer: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
     var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
         if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
@@ -370,14 +370,12 @@ export const TEMPLATES: Record<TemplateKey, Record<Locale, HandlebarsTemplateDel
 
   return "<p>Bonjour "
     + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":11},"end":{"line":1,"column":24}}}) : helper)))
-    + ",</p>\n\n<p>Merci d'avoir séjourné à L'Auberge du Vieux Pont !</p>\n\n<p>Nous aimerions connaître votre avis sur votre expérience. Votre retour nous aide à améliorer nos services.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0 0 10px 0;\"><strong>Chambre :</strong> "
-    + alias4(((helper = (helper = lookupProperty(helpers,"roomLabel") || (depth0 != null ? lookupProperty(depth0,"roomLabel") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"roomLabel","hash":{},"data":data,"loc":{"start":{"line":8,"column":60},"end":{"line":8,"column":73}}}) : helper)))
-    + "</p>\n  <p style=\"margin: 0;\"><strong>Dates :</strong> "
-    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":49},"end":{"line":9,"column":71}}}))
+    + ",</p>\n\n<p>Merci d'avoir séjourné à L'Auberge du Vieux Pont !</p>\n\n<p>Nous aimerions connaître votre avis sur votre expérience. Votre retour nous aide à améliorer nos services.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0;\"><strong>Dates :</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":49},"end":{"line":8,"column":71}}}))
     + " - "
-    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":74},"end":{"line":9,"column":97}}}))
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":74},"end":{"line":8,"column":97}}}))
     + "</p>\n</div>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
-    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":13,"column":11},"end":{"line":13,"column":24}}}) : helper)))
+    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":12,"column":11},"end":{"line":12,"column":24}}}) : helper)))
     + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Laisser un avis</a>\n</p>\n\n<p>Merci !</p>\n\n<p>Cordialement,<br/>\nL'équipe du Vieux Pont</p>\n";
 },"useData":true}), en: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
     var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
@@ -389,15 +387,48 @@ export const TEMPLATES: Record<TemplateKey, Record<Locale, HandlebarsTemplateDel
 
   return "<p>Hello "
     + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":9},"end":{"line":1,"column":22}}}) : helper)))
-    + ",</p>\n\n<p>Thank you for staying at L'Auberge du Vieux Pont!</p>\n\n<p>We would like to know your thoughts about your experience. Your feedback helps us improve our services.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0 0 10px 0;\"><strong>Room:</strong> "
-    + alias4(((helper = (helper = lookupProperty(helpers,"roomLabel") || (depth0 != null ? lookupProperty(depth0,"roomLabel") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"roomLabel","hash":{},"data":data,"loc":{"start":{"line":8,"column":56},"end":{"line":8,"column":69}}}) : helper)))
-    + "</p>\n  <p style=\"margin: 0;\"><strong>Dates:</strong> "
-    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":48},"end":{"line":9,"column":70}}}))
+    + ",</p>\n\n<p>Thank you for staying at L'Auberge du Vieux Pont!</p>\n\n<p>We would like to know your thoughts about your experience. Your feedback helps us improve our services.</p>\n\n<div style=\"background-color: #f0f0f0; padding: 15px; border-radius: 4px; margin: 20px 0;\">\n  <p style=\"margin: 0;\"><strong>Dates:</strong> "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":48},"end":{"line":8,"column":70}}}))
     + " - "
-    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":9,"column":73},"end":{"line":9,"column":96}}}))
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":8,"column":73},"end":{"line":8,"column":96}}}))
     + "</p>\n</div>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
-    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":13,"column":11},"end":{"line":13,"column":24}}}) : helper)))
+    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":12,"column":11},"end":{"line":12,"column":24}}}) : helper)))
     + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Leave a review</a>\n</p>\n\n<p>Thank you!</p>\n\n<p>Best regards,<br/>\nThe Vieux Pont team</p>\n";
+},"useData":true}) },
+  "review-reminder": { fr: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Bonjour "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":11},"end":{"line":1,"column":24}}}) : helper)))
+    + ",</p>\n\n<p>Nous vous avons écrit il y a quelques jours au sujet de votre séjour à L'Auberge du Vieux Pont, du "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":3,"column":102},"end":{"line":3,"column":124}}}))
+    + " au "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":3,"column":128},"end":{"line":3,"column":151}}}))
+    + ".</p>\n\n<p>Si vous avez un moment, votre avis nous serait très utile. Cela ne prend qu'une minute.</p>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":8,"column":11},"end":{"line":8,"column":24}}}) : helper)))
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Laisser un avis</a>\n</p>\n\n<p>Si vous avez déjà répondu, merci — vous pouvez ignorer ce message.</p>\n\n<p>Cordialement,<br/>\nL'équipe du Vieux Pont</p>\n";
+},"useData":true}), en: Handlebars.template({"compiler":[8,">= 4.3.0"],"main":function(container,depth0,helpers,partials,data) {
+    var helper, alias1=depth0 != null ? depth0 : (container.nullContext || {}), alias2=container.hooks.helperMissing, alias3="function", alias4=container.escapeExpression, lookupProperty = container.lookupProperty || function(parent, propertyName) {
+        if (Object.prototype.hasOwnProperty.call(parent, propertyName)) {
+          return parent[propertyName];
+        }
+        return undefined
+    };
+
+  return "<p>Hello "
+    + alias4(((helper = (helper = lookupProperty(helpers,"firstName") || (depth0 != null ? lookupProperty(depth0,"firstName") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"firstName","hash":{},"data":data,"loc":{"start":{"line":1,"column":9},"end":{"line":1,"column":22}}}) : helper)))
+    + ",</p>\n\n<p>We wrote to you a few days ago about your stay at L'Auberge du Vieux Pont, from "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkIn") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":3,"column":83},"end":{"line":3,"column":105}}}))
+    + " to "
+    + alias4((lookupProperty(helpers,"formatDate")||(depth0 && lookupProperty(depth0,"formatDate"))||alias2).call(alias1,(depth0 != null ? lookupProperty(depth0,"checkOut") : depth0),{"name":"formatDate","hash":{},"data":data,"loc":{"start":{"line":3,"column":109},"end":{"line":3,"column":132}}}))
+    + ".</p>\n\n<p>If you have a moment, we would really value your feedback. It only takes a minute.</p>\n\n<p style=\"text-align: center; margin: 20px 0;\">\n  <a href=\""
+    + alias4(((helper = (helper = lookupProperty(helpers,"reviewUrl") || (depth0 != null ? lookupProperty(depth0,"reviewUrl") : depth0)) != null ? helper : alias2),(typeof helper === alias3 ? helper.call(alias1,{"name":"reviewUrl","hash":{},"data":data,"loc":{"start":{"line":8,"column":11},"end":{"line":8,"column":24}}}) : helper)))
+    + "\" style=\"display: inline-block; padding: 12px 30px; background-color: #9d4300; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;\">Leave review</a>\n</p>\n\n<p>If you already replied, thank you — please ignore this message.</p>\n\n<p>Best regards,<br/>\nVieux Pont team</p>\n";
 },"useData":true}) },
   "room-assigned": { fr: Handlebars.template({"0":function(container,depth0,helpers,partials,data) {
     var helper, lookupProperty = container.lookupProperty || function(parent, propertyName) {
