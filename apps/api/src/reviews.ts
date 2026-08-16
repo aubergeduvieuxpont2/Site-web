@@ -203,6 +203,18 @@ export function createReviewsRouter(deps: {
         throw err;
       }
 
+      // Mark the outstanding review request as responded so the 7-day
+      // reminder pass (see reminders.ts) stops nudging this guest and the
+      // admin UI shows "Avis reçu" instead of a resend action. Guarded by
+      // IS NULL so an already-stamped row (e.g. a second review attempt
+      // that somehow reaches this point) keeps its original timestamp.
+      // No-op when the guest was never sent a request.
+      await sql`
+        UPDATE review_requests
+        SET responded_at = now()
+        WHERE reservation_id = ${reservation.id} AND responded_at IS NULL
+      `;
+
       return c.json({ ok: true }, 201);
     }
   );
