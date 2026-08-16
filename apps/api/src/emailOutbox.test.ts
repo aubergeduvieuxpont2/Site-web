@@ -341,6 +341,11 @@ describe("enqueueEmail", () => {
       });
       // Only INSERT should run — no toggle SELECT.
       expect(sql).toHaveBeenCalledTimes(1);
+      // Verify the single call is INSERT (4+ args: strings + to, template, locale, payload),
+      // not SELECT (2 args: strings + toggleKey "email_review_request_enabled")
+      expect(sql.mock.calls[0].length).toBeGreaterThan(2);
+      // If it were a SELECT, the second argument would be the toggle key
+      expect(sql.mock.calls[0][1]).not.toBe("email_review_request_enabled");
     });
   });
 });
