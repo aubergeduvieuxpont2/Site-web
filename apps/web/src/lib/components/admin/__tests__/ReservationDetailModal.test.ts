@@ -57,6 +57,9 @@ function props(overrides: Partial<ReservationRow> = {}) {
     row: baseRow(overrides),
     onClose: vi.fn(),
     onCreateInvoice: vi.fn(),
+    onSendReviewRequest: vi
+      .fn()
+      .mockResolvedValue({ sent: true, sentAt: "2026-08-01T18:00:00.000Z", resent: false }),
   };
 }
 
@@ -227,7 +230,13 @@ describe("ReservationDetailModal", () => {
     const rowWithoutUrl = baseRow();
     delete (rowWithoutUrl as Partial<typeof rowWithoutUrl>).hosted_invoice_url;
     render(ReservationDetailModal, {
-      props: { open: true, row: rowWithoutUrl, onClose: vi.fn(), onCreateInvoice: vi.fn() },
+      props: {
+        open: true,
+        row: rowWithoutUrl,
+        onClose: vi.fn(),
+        onCreateInvoice: vi.fn(),
+        onSendReviewRequest: vi.fn(),
+      },
     });
     expect(screen.queryByTestId("rdm-hosted-invoice-url")).toBeNull();
   });
@@ -241,5 +250,81 @@ describe("ReservationDetailModal", () => {
     });
     expect(screen.getByTestId("rdm-stripe-invoice-id")).toBeTruthy();
     expect(screen.getByTestId("rdm-hosted-invoice-url")).toBeTruthy();
+  });
+
+  // ── Avis (review-request) action ──
+
+  it("offers to request a review when none was ever sent", () => {
+    render(ReservationDetailModal, { props: props({ review_sent_at: null }) });
+    expect(screen.getByTestId("btn-review-request")).toBeTruthy();
+    expect(screen.getByTestId("btn-review-request").textContent).toContain("Demander un avis");
+  });
+
+  it("shows the sent date and a resend action once requested", () => {
+    render(ReservationDetailModal, { props: props({ review_sent_at: "2026-08-01T18:00:00Z" }) });
+    expect(screen.getByTestId("rdm-review-state").textContent).toContain("Demande envoyée");
+    expect(screen.getByTestId("btn-review-resend")).toBeTruthy();
+  });
+
+  it("shows the reminder date when a reminder went out", () => {
+    render(ReservationDetailModal, {
+      props: props({
+        review_sent_at: "2026-08-01T18:00:00Z",
+        review_reminder_sent_at: "2026-08-08T18:00:00Z",
+      }),
+    });
+    expect(screen.getByTestId("rdm-review-state").textContent).toContain("Rappel envoyé");
+  });
+
+  it("shows the response and offers no resend once answered", () => {
+    render(ReservationDetailModal, {
+      props: props({
+        review_sent_at: "2026-08-01T18:00:00Z",
+        review_responded_at: "2026-08-03T12:00:00Z",
+      }),
+    });
+    expect(screen.getByTestId("rdm-review-state").textContent).toContain("Avis reçu");
+    expect(screen.queryByTestId("btn-review-resend")).toBeNull();
+  });
+
+  it("disables the action with a reason when the reservation has no email", () => {
+    render(ReservationDetailModal, { props: props({ email: "" }) });
+    const btn = screen.getByTestId("btn-review-request");
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("rdm-review-blocked").textContent).toContain("courriel");
+  });
+
+  it("disables the action with a reason when the reservation has no code", () => {
+    render(ReservationDetailModal, { props: props({ code: null }) });
+    const btn = screen.getByTestId("btn-review-request");
+    expect(btn.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByTestId("rdm-review-blocked").textContent).toContain("code");
+  });
+
+  it("sends the review request and swaps in a resend state on success", async () => {
+    const onSendReviewRequest = vi
+      .fn()
+      .mockResolvedValue({ sent: true, sentAt: "2026-08-16T10:00:00.000Z", resent: false });
+    render(ReservationDetailModal, {
+      props: {
+        ...props({ code: "AVP-ABC123", review_sent_at: null }),
+        onSendReviewRequest,
+      },
+    });
+    await fireEvent.click(screen.getByTestId("btn-review-request"));
+    expect(onSendReviewRequest).toHaveBeenCalledWith(7);
+    expect(screen.getByTestId("btn-review-resend")).toBeTruthy();
+  });
+
+  it("shows a server error message when the review request fails", async () => {
+    const onSendReviewRequest = vi.fn().mockResolvedValue({ error: "Déjà répondu" });
+    render(ReservationDetailModal, {
+      props: {
+        ...props({ code: "AVP-ABC123", review_sent_at: null }),
+        onSendReviewRequest,
+      },
+    });
+    await fireEvent.click(screen.getByTestId("btn-review-request"));
+    expect(screen.getByTestId("rdm-review-error").textContent).toContain("Déjà répondu");
   });
 });

@@ -16,11 +16,27 @@
     row: ReservationRow | null;
     onClose: () => void;
     onCreateInvoice: (reservationId: number, req: InvoiceRequest) => Promise<InvoiceResult>;
+    onSendReviewRequest: (
+      reservationId: number,
+    ) => Promise<{ sent: true; sentAt: string; resent: boolean } | { error: string }>;
   }
 
-  let { open, row, onClose, onCreateInvoice }: Props = $props();
+  let { open, row, onClose, onCreateInvoice, onSendReviewRequest }: Props = $props();
 
   let factureOpen = $state(false);
+
+  let reviewBusy = $state(false);
+  let reviewError = $state('');
+  let reviewSentAt = $state<string | null>(null);
+
+  // Server value, overridden locally after a successful send so the button
+  // reflects the new state without refetching the whole list.
+  const sentAt = $derived(reviewSentAt ?? row?.review_sent_at ?? null);
+  const respondedAt = $derived(row?.review_responded_at ?? null);
+  const reminderAt = $derived(row?.review_reminder_sent_at ?? null);
+  const reviewBlockedReason = $derived(
+    !row ? '' : !row.email ? 'Aucun courriel au dossier' : !row.code ? 'Aucun code de réservation' : '',
+  );
 
   const displayName = $derived(row ? displayNameOf(row) : '');
 
@@ -29,6 +45,29 @@
   $effect(() => {
     if (!open) factureOpen = false;
   });
+
+  // Reset the Avis panel's local send state the same way, so the button
+  // reflects the freshly-fetched row rather than a stale in-progress send.
+  $effect(() => {
+    if (!open) {
+      reviewBusy = false;
+      reviewError = '';
+      reviewSentAt = null;
+    }
+  });
+
+  async function sendReviewRequest() {
+    if (!row || reviewBusy) return;
+    reviewBusy = true;
+    reviewError = '';
+    const result = await onSendReviewRequest(row.id);
+    reviewBusy = false;
+    if ('error' in result) {
+      reviewError = result.error;
+      return;
+    }
+    reviewSentAt = result.sentAt;
+  }
 
   function formatDateTime(iso: string | null | undefined): string {
     if (!iso) return '—';
@@ -244,6 +283,44 @@
                 onClose={() => (factureOpen = false)}
               />
             </div>
+          {/if}
+        </section>
+
+        <hr class="rdm__divider" aria-hidden="true" />
+
+        <!-- ── Avis section ── -->
+        <section class="rdm__section" aria-labelledby="rdm-avis-heading">
+          <h3 id="rdm-avis-heading" class="rdm__section-heading">Avis</h3>
+
+          {#if respondedAt}
+            <p class="rdm__review-state" data-testid="rdm-review-state">
+              Avis reçu le {formatDateTime(respondedAt)}
+            </p>
+          {:else}
+            {#if sentAt}
+              <p class="rdm__review-state" data-testid="rdm-review-state">
+                Demande envoyée le {formatDateTime(sentAt)}
+                {#if reminderAt}<br />Rappel envoyé le {formatDateTime(reminderAt)}{/if}
+              </p>
+            {/if}
+
+            <button
+              type="button"
+              class="rdm__facture-btn"
+              data-testid={sentAt ? 'btn-review-resend' : 'btn-review-request'}
+              disabled={reviewBusy || reviewBlockedReason !== ''}
+              onclick={sendReviewRequest}
+            >
+              {reviewBusy ? 'Envoi…' : sentAt ? 'Renvoyer la demande' : 'Demander un avis'}
+            </button>
+
+            {#if reviewBlockedReason}
+              <p class="rdm__review-blocked" data-testid="rdm-review-blocked">{reviewBlockedReason}</p>
+            {/if}
+          {/if}
+
+          {#if reviewError}
+            <p class="rdm__review-error" role="alert" data-testid="rdm-review-error">{reviewError}</p>
           {/if}
         </section>
 
@@ -530,6 +607,34 @@
   .rdm__facture-btn:focus-visible {
     outline: 2px solid #7b4628;
     outline-offset: 3px;
+  }
+
+  .rdm__facture-btn:disabled {
+    background: #c4baa8;
+    color: #695e51;
+    cursor: not-allowed;
+  }
+
+  /* ── Avis (review-request) section ── */
+  .rdm__review-state {
+    font-family: 'Jost', ui-sans-serif, system-ui, sans-serif;
+    font-size: 13px;
+    color: #695e51;
+    margin: 0 0 10px;
+  }
+
+  .rdm__review-blocked {
+    font-family: 'Jost', ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    color: #695e51;
+    margin: 8px 0 0;
+  }
+
+  .rdm__review-error {
+    font-family: 'Jost', ui-sans-serif, system-ui, sans-serif;
+    font-size: 12px;
+    color: #ba1a1a;
+    margin: 8px 0 0;
   }
 
   /* ── Responsive ── */

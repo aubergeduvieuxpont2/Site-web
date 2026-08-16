@@ -20,6 +20,7 @@
     adminOutbox,
     requeueOutbox,
     adminCreateInvoice,
+    adminSendReviewRequest,
     isError,
   } from "$lib/api";
   import type { ReservationRow, OutboxRow } from "$lib/api";
@@ -93,6 +94,18 @@
   // ─── Data loaders ───
   async function createInvoice(reservationId: number, req: InvoiceRequest): Promise<InvoiceResult> {
     return adminCreateInvoice(reservationId, req.type, req.depositPercent);
+  }
+
+  // Refetches the reservations list (silently) after a successful send so
+  // `review_sent_at`/`review_reminder_sent_at` are authoritative from the
+  // server the next time the modal is opened, rather than relying on the
+  // modal's local optimistic state.
+  async function sendReviewRequest(reservationId: number) {
+    const res = await adminSendReviewRequest(reservationId);
+    if (!isError(res)) {
+      loadReservations(searchQuery.trim() || undefined, { silent: true });
+    }
+    return res;
   }
 
   // `silent` background refreshes (the auto-poll) don't toggle the loading
@@ -522,6 +535,7 @@
             row={detailRow}
             onClose={() => (detailRow = null)}
             onCreateInvoice={createInvoice}
+            onSendReviewRequest={sendReviewRequest}
           />
         </div>
       </div>
