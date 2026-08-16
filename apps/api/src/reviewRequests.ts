@@ -22,7 +22,7 @@ export interface ReservationForReview {
   depart: string | null;
 }
 
-function buildReviewPayload(res: ReservationForReview) {
+export function buildReviewPayload(res: ReservationForReview) {
   const firstName =
     res.first_name?.trim() ||
     (res.name ?? "").trim().split(/\s+/)[0] ||

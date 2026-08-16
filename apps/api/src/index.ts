@@ -10,7 +10,11 @@ import { resolveLocale } from "./emailLocale";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { generateCode } from "./reservationCode";
-import { enqueueReviewRequests } from "./reviewRequests";
+import {
+  enqueueReviewRequests,
+  buildReviewPayload,
+  type ReservationForReview,
+} from "./reviewRequests";
 import { hashPassword, verifyPassword, needsRehash } from "./auth/password";
 import { isPasswordBreached } from "./auth/hibp";
 import {
@@ -2472,6 +2476,63 @@ app.patch(
     return c.json({ reservation: rows[0] });
   }
 );
+
+// Admin-initiated review request. Deliberately ignores the send-timing
+// settings, the per-guest suppression window, and the email toggle — an admin
+// pressing this button IS the operator expressing intent. It does not ignore
+// `responded_at`: re-asking someone who already answered is pure noise.
+app.post("/api/admin/reservations/:id/review-request", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const reservationId = parseIdParam(c.req.param("id"));
+  if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
+
+  const sql = neon(c.env.DB_CONN);
+
+  const rows = (await sql`
+    SELECT r.id, r.email, r.first_name, r.name, r.code,
+           to_char(r.arrive, 'YYYY-MM-DD') AS arrive,
+           to_char(r.depart, 'YYYY-MM-DD')  AS depart,
+           rr.reservation_id IS NOT NULL AS has_request,
+           rr.responded_at
+    FROM reservations r
+    LEFT JOIN review_requests rr ON rr.reservation_id = r.id
+    WHERE r.id = ${reservationId}
+    LIMIT 1
+  `) as (ReservationForReview & {
+    has_request: boolean;
+    responded_at: string | null;
+  })[];
+
+  const res = rows[0];
+  if (!res) return c.json({ error: "Reservation not found" }, 404);
+  if (!res.email) return c.json({ error: "Cette réservation n'a pas de courriel" }, 400);
+  if (!res.code) return c.json({ error: "Cette réservation n'a pas de code" }, 400);
+  if (res.responded_at) {
+    return c.json({ error: "Le client a déjà laissé un avis" }, 409);
+  }
+
+  const resent = res.has_request;
+
+  // Upsert restarts the reminder clock from this send.
+  await sql`
+    INSERT INTO review_requests (reservation_id, channel, sent_at)
+    VALUES (${res.id}, 'email', now())
+    ON CONFLICT (reservation_id)
+    DO UPDATE SET sent_at = now(), reminder_sent_at = NULL
+  `;
+
+  await enqueueEmail(sql, {
+    template: "review-request",
+    to: res.email,
+    payload: buildReviewPayload(res),
+    force: true,
+  });
+
+  return c.json({ sent: true, sentAt: new Date().toISOString(), resent });
+});
 
 // Admin blackout endpoints
 app.get("/api/admin/blackouts", async (c) => {
