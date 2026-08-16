@@ -22,6 +22,9 @@
     emailRoomAssignmentEnabled: boolean;
     emailWelcomeEnabled: boolean;
     emailReviewRequestEnabled: boolean;
+    reviewRequestDelayDays: number;
+    reviewReminderDelayDays: number;
+    reviewSuppressionMonths: number;
   };
 
   const DEFAULTS: LocalSettings = {
@@ -38,6 +41,9 @@
     emailRoomAssignmentEnabled: false,
     emailWelcomeEnabled: false,
     emailReviewRequestEnabled: false,
+    reviewRequestDelayDays: 0,
+    reviewReminderDelayDays: 7,
+    reviewSuppressionMonths: 6,
   };
 
   // ── Settings state ──────────────────────────────────────────────────────────
@@ -90,6 +96,9 @@
       emailRoomAssignmentEnabled: res.emailRoomAssignmentEnabled,
       emailWelcomeEnabled: res.emailWelcomeEnabled,
       emailReviewRequestEnabled: res.emailReviewRequestEnabled ?? false,
+      reviewRequestDelayDays: res.reviewRequestDelayDays ?? DEFAULTS.reviewRequestDelayDays,
+      reviewReminderDelayDays: res.reviewReminderDelayDays ?? DEFAULTS.reviewReminderDelayDays,
+      reviewSuppressionMonths: res.reviewSuppressionMonths ?? DEFAULTS.reviewSuppressionMonths,
     };
     assignableRoomCount = res.assignableRoomCount;
   }
@@ -154,6 +163,9 @@
       emailRoomAssignmentEnabled: s.emailRoomAssignmentEnabled,
       emailWelcomeEnabled: s.emailWelcomeEnabled,
       emailReviewRequestEnabled: s.emailReviewRequestEnabled,
+      reviewRequestDelayDays: s.reviewRequestDelayDays,
+      reviewReminderDelayDays: s.reviewReminderDelayDays,
+      reviewSuppressionMonths: s.reviewSuppressionMonths,
     } as unknown as AdminSettings;
 
     const res = await adminUpdateSettings(payload);
@@ -461,6 +473,54 @@
           <label for="pt-email-review-request" class="params-tab__toggle-label">
             Demande d'avis après séjour
           </label>
+        </div>
+
+        <div class="params-tab__field">
+          <label class="params-tab__label" for="pt-review-request-delay">
+            Délai avant la demande d'avis (jours)
+            <span class="params-tab__hint">(0 = le jour du départ, à 14 h)</span>
+          </label>
+          <input
+            id="pt-review-request-delay"
+            type="number"
+            min="0"
+            max="365"
+            bind:value={s.reviewRequestDelayDays}
+            class="params-tab__input params-tab__input--num"
+            data-testid="input-review-request-delay"
+          />
+        </div>
+
+        <div class="params-tab__field">
+          <label class="params-tab__label" for="pt-review-reminder-delay">
+            Délai avant le rappel (jours)
+            <span class="params-tab__hint">(compté depuis la première demande — 0 = aucun rappel)</span>
+          </label>
+          <input
+            id="pt-review-reminder-delay"
+            type="number"
+            min="0"
+            max="365"
+            bind:value={s.reviewReminderDelayDays}
+            class="params-tab__input params-tab__input--num"
+            data-testid="input-review-reminder-delay"
+          />
+        </div>
+
+        <div class="params-tab__field">
+          <label class="params-tab__label" for="pt-review-suppression-months">
+            Ne pas redemander avant (mois)
+            <span class="params-tab__hint">(un client qui revient n'est pas resollicité — 0 = aucune suppression)</span>
+          </label>
+          <input
+            id="pt-review-suppression-months"
+            type="number"
+            min="0"
+            max="60"
+            bind:value={s.reviewSuppressionMonths}
+            class="params-tab__input params-tab__input--num"
+            data-testid="input-review-suppression-months"
+          />
         </div>
 
       </div>

@@ -242,6 +242,9 @@ describe("Settings", () => {
         emailRoomAssignmentEnabled: false,
         emailWelcomeEnabled: false,
         emailReviewRequestEnabled: false,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
 
       const result = await adminUpdateSettings(payload);
@@ -276,6 +279,9 @@ describe("Settings", () => {
         emailRoomAssignmentEnabled: false,
         emailWelcomeEnabled: false,
         emailReviewRequestEnabled: false,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
 
       await adminUpdateSettings(payload);
@@ -306,6 +312,9 @@ describe("Settings", () => {
         emailRoomAssignmentEnabled: false,
         emailWelcomeEnabled: false,
         emailReviewRequestEnabled: false,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
 
       const result = await adminUpdateSettings(payload);

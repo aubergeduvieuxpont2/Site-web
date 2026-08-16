@@ -71,6 +71,9 @@ function adminSettings(over: Partial<AdminSettings> = {}): AdminSettings {
     emailRoomAssignmentEnabled: false,
     emailWelcomeEnabled: false,
     emailReviewRequestEnabled: false,
+    reviewRequestDelayDays: 0,
+    reviewReminderDelayDays: 7,
+    reviewSuppressionMonths: 6,
     ...over,
   };
 }

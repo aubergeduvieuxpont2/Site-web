@@ -137,6 +137,9 @@ export interface AdminSettings {
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
   emailReviewRequestEnabled: boolean;
+  reviewRequestDelayDays: number;
+  reviewReminderDelayDays: number;
+  reviewSuppressionMonths: number;
 }
 
 /**
