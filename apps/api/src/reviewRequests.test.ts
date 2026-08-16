@@ -103,7 +103,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [], // INSERT review_requests
+      [{ reservation_id: 1 }], // INSERT review_requests (row claimed)
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);
@@ -115,7 +115,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -127,7 +127,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [{ ...RESERVATION, email: "jean@example.com" }],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -139,7 +139,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -152,7 +152,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -164,7 +164,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -176,7 +176,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [{ ...RESERVATION, first_name: null, name: "Robert Gagnon" }],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -188,7 +188,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [{ ...RESERVATION, first_name: null, name: "" }],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -200,7 +200,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -217,7 +217,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [],
+      [{ reservation_id: 1 }],
       [],
     ]);
     await enqueueReviewRequests(sql as any);
@@ -244,7 +244,7 @@ describe("enqueueReviewRequests — toggle enabled, one eligible reservation", (
       .mockImplementationOnce(() => {
         // INSERT review_requests
         callOrder.push("insert");
-        return Promise.resolve([]);
+        return Promise.resolve([{ reservation_id: 1 }]);
       })
       .mockImplementationOnce(() => Promise.resolve([])); // reminder select
 
@@ -273,8 +273,8 @@ describe("enqueueReviewRequests — multiple eligible reservations", () => {
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [res1, res2],
-      [], // INSERT for res1
-      [], // INSERT for res2
+      [{ reservation_id: 1 }], // INSERT for res1
+      [{ reservation_id: 2 }], // INSERT for res2
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);
@@ -288,8 +288,8 @@ describe("enqueueReviewRequests — multiple eligible reservations", () => {
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [res1, res2],
-      [],
-      [],
+      [{ reservation_id: 1 }],
+      [{ reservation_id: 2 }],
       [],
     ]);
     mockEnqueueEmail
@@ -322,20 +322,33 @@ describe("enqueueReviewRequests — cron-window dedupe (INV-one-request-per-rese
     expect(mockEnqueueEmail).not.toHaveBeenCalled();
   });
 
-  it("uses ON CONFLICT DO NOTHING to handle concurrent cron runs safely", async () => {
-    // The INSERT uses ON CONFLICT DO NOTHING — verify the sql call is made
-    // (deduplication at DB level; the enqueueEmail call still runs after insert)
+  it("uses ON CONFLICT DO NOTHING + RETURNING to handle concurrent cron runs safely: still sends when this call wins the insert", async () => {
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [RESERVATION],
-      [], // INSERT review_requests (no-op on conflict in real DB, returns [] here)
+      [{ reservation_id: RESERVATION.id }], // INSERT won the row — RETURNING gives it back
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);
-    // Even though the INSERT was a no-op (or not — we can't tell in JS unit test),
-    // the function still continues and calls enqueueEmail
     expect(sql).toHaveBeenCalledTimes(4); // settings + first-request select + INSERT + reminder select
     expect(result.enqueued).toBe(1);
+    expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+  });
+
+  // Two overlapping per-minute cron ticks can both select the same reservation
+  // before either has inserted its review_requests row. RETURNING on the
+  // INSERT ... ON CONFLICT DO NOTHING lets the loser detect it lost the race
+  // (nothing comes back) and skip sending, closing the double-send gap.
+  it("skips sending when this call loses the INSERT race to a concurrent cron tick", async () => {
+    const sql = makeSql([
+      [{ key: "email_review_request_enabled", value: "true" }],
+      [RESERVATION],
+      [], // INSERT conflicted — another tick already claimed this row
+      [], // reminder select
+    ]);
+    const result = await enqueueReviewRequests(sql as any);
+    expect(result.enqueued).toBe(0);
+    expect(mockEnqueueEmail).not.toHaveBeenCalled();
   });
 });
 
@@ -380,7 +393,7 @@ describe("enqueueReviewRequests — reminder pass", () => {
       ],
       [], // first-request select
       [RESERVATION], // reminder select
-      [], // UPDATE reminder_sent_at
+      [{ reservation_id: RESERVATION.id }], // UPDATE reminder_sent_at (row claimed)
     ]);
     const result = await enqueueReviewRequests(sql as any);
     expect(result.reminded).toBe(1);
@@ -399,7 +412,7 @@ describe("enqueueReviewRequests — reminder pass", () => {
       ],
       [],
       [RESERVATION],
-      [],
+      [{ reservation_id: RESERVATION.id }],
     ]);
     await enqueueReviewRequests(sql as any);
     const updateCallIndex = sql.mock.calls.findIndex((c: any[]) =>
@@ -501,7 +514,7 @@ describe("enqueueReviewRequests — intra-run suppression", () => {
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [res1, res2],
-      [], // INSERT review_requests for res1 (res2 is skipped before reaching the INSERT)
+      [{ reservation_id: 1 }], // INSERT review_requests for res1 (res2 is skipped before reaching the INSERT)
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);
@@ -515,8 +528,8 @@ describe("enqueueReviewRequests — intra-run suppression", () => {
     const sql = makeSql([
       [{ key: "email_review_request_enabled", value: "true" }],
       [res1, res2],
-      [], // INSERT for res1
-      [], // INSERT for res2
+      [{ reservation_id: 1 }], // INSERT for res1
+      [{ reservation_id: 2 }], // INSERT for res2
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);
@@ -532,8 +545,8 @@ describe("enqueueReviewRequests — intra-run suppression", () => {
         { key: "review_suppression_months", value: "0" },
       ],
       [res1, res2],
-      [], // INSERT for res1
-      [], // INSERT for res2
+      [{ reservation_id: 1 }], // INSERT for res1
+      [{ reservation_id: 2 }], // INSERT for res2
       [], // reminder select
     ]);
     const result = await enqueueReviewRequests(sql as any);

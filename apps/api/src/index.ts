@@ -2506,7 +2506,10 @@ app.post("/api/admin/reservations/:id/review-request", async (c) => {
            to_char(r.arrive, 'YYYY-MM-DD') AS arrive,
            to_char(r.depart, 'YYYY-MM-DD')  AS depart,
            rr.reservation_id IS NOT NULL AS has_request,
-           rr.responded_at
+           rr.responded_at,
+           EXISTS (
+             SELECT 1 FROM reviews rv WHERE rv.reservation_id = r.id
+           ) AS has_review
     FROM reservations r
     LEFT JOIN review_requests rr ON rr.reservation_id = r.id
     WHERE r.id = ${reservationId}
@@ -2514,13 +2517,17 @@ app.post("/api/admin/reservations/:id/review-request", async (c) => {
   `) as (ReservationForReview & {
     has_request: boolean;
     responded_at: string | null;
+    has_review: boolean;
   })[];
 
   const res = rows[0];
   if (!res) return c.json({ error: "Reservation not found" }, 404);
   if (!res.email) return c.json({ error: "Cette réservation n'a pas de courriel" }, 400);
   if (!res.code) return c.json({ error: "Cette réservation n'a pas de code" }, 400);
-  if (res.responded_at) {
+  // `responded_at` is only backfilled going forward (migration 0046); a
+  // guest who reviewed before that migration ran has a `reviews` row but no
+  // `responded_at` stamp, so both must be checked to avoid re-soliciting them.
+  if (res.responded_at || res.has_review) {
     return c.json({ error: "Le client a déjà laissé un avis" }, 409);
   }
 
@@ -3029,10 +3036,17 @@ export default {
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
     // Enqueue review-request and reminder emails first so the drain pass
     // picks them up in the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
+    // Each pass is caught independently — a throw in one (e.g. enqueueing
+    // review requests) must not prevent the others from running, since they
+    // are otherwise-unrelated cron duties sharing one invocation.
     ctx.waitUntil((async () => {
-      await enqueueReviewRequests(neon(env.DB_CONN));
-      await releaseExpiredHolds(neon(env.DB_CONN));
-      await drainEmailOutbox(env);
+      await enqueueReviewRequests(neon(env.DB_CONN)).catch((e) =>
+        console.error("review_requests_failed", e)
+      );
+      await releaseExpiredHolds(neon(env.DB_CONN)).catch((e) =>
+        console.error("release_holds_failed", e)
+      );
+      await drainEmailOutbox(env).catch((e) => console.error("drain_outbox_failed", e));
     })());
   },
 } satisfies ExportedHandler<Bindings>;

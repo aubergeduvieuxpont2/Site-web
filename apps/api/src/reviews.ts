@@ -204,16 +204,28 @@ export function createReviewsRouter(deps: {
       }
 
       // Mark the outstanding review request as responded so the 7-day
-      // reminder pass (see reminders.ts) stops nudging this guest and the
-      // admin UI shows "Avis reçu" instead of a resend action. Guarded by
-      // IS NULL so an already-stamped row (e.g. a second review attempt
+      // reminder pass (see reviewRequests.ts) stops nudging this guest and
+      // the admin UI shows "Avis reçu" instead of a resend action. Guarded
+      // by IS NULL so an already-stamped row (e.g. a second review attempt
       // that somehow reaches this point) keeps its original timestamp.
       // No-op when the guest was never sent a request.
-      await sql`
-        UPDATE review_requests
-        SET responded_at = now()
-        WHERE reservation_id = ${reservation.id} AND responded_at IS NULL
-      `;
+      //
+      // Best-effort: the review itself is already committed above, so a
+      // failure here must not turn a successful submission into a 500 (and
+      // a subsequent retry into a permanent 409 from the unique-violation
+      // branch). The reminder pass has its own redundant `NOT EXISTS
+      // (reviews)` guard, so a missed stamp here just means one extra
+      // reminder gets sent — never a resurfaced "leave a review" prompt to
+      // someone who already submitted one.
+      try {
+        await sql`
+          UPDATE review_requests
+          SET responded_at = now()
+          WHERE reservation_id = ${reservation.id} AND responded_at IS NULL
+        `;
+      } catch (err) {
+        console.error("review_request_responded_stamp_failed", reservation.id, err);
+      }
 
       return c.json({ ok: true }, 201);
     }

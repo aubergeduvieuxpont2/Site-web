@@ -131,20 +131,32 @@ export async function enqueueReviewRequests(
     if (suppressionMonths > 0 && seenEmails.has(emailKey)) continue;
     seenEmails.add(emailKey);
 
-    // Insert the dedupe row first (ON CONFLICT DO NOTHING is idempotent).
-    await sql`
-      INSERT INTO review_requests (reservation_id, channel, sent_at)
-      VALUES (${res.id}, 'email', now())
-      ON CONFLICT (reservation_id) DO NOTHING
-    `;
+    // A failing row (bad payload, transient DB error, etc.) must not abort
+    // the whole batch — log it and move on to the next reservation.
+    try {
+      // Insert the dedupe row first (ON CONFLICT DO NOTHING is idempotent).
+      // RETURNING lets us tell whether *this* call won the row: on a
+      // per-minute cron, two overlapping ticks can both select the same
+      // reservation before either has inserted, so without this check both
+      // would go on to send the email.
+      const claimed = (await sql`
+        INSERT INTO review_requests (reservation_id, channel, sent_at)
+        VALUES (${res.id}, 'email', now())
+        ON CONFLICT (reservation_id) DO NOTHING
+        RETURNING reservation_id
+      `) as { reservation_id: number }[];
+      if (claimed.length === 0) continue;
 
-    const result = await enqueueEmail(sql, {
-      template: "review-request",
-      to: res.email,
-      payload: buildReviewPayload(res),
-    });
+      const result = await enqueueEmail(sql, {
+        template: "review-request",
+        to: res.email,
+        payload: buildReviewPayload(res),
+      });
 
-    if (result.enqueued) enqueued++;
+      if (result.enqueued) enqueued++;
+    } catch (err) {
+      console.error("review_request_enqueue_failed", res.id, err);
+    }
   }
 
   let reminded = 0;
@@ -170,20 +182,31 @@ export async function enqueueReviewRequests(
     `) as ReservationForReview[];
 
     for (const res of dueReminders) {
-      // Stamp first, mirroring the first pass: a failure mid-loop must not
-      // leave the row eligible for a duplicate reminder.
-      await sql`
-        UPDATE review_requests SET reminder_sent_at = now()
-        WHERE reservation_id = ${res.id} AND reminder_sent_at IS NULL
-      `;
+      // A failing row must not abort the whole reminder pass — log it and
+      // move on to the next reservation.
+      try {
+        // Stamp first, mirroring the first pass: a failure mid-loop must not
+        // leave the row eligible for a duplicate reminder. RETURNING lets us
+        // tell whether *this* call won the claim: on a per-minute cron, two
+        // overlapping ticks can both select the same due reminder before
+        // either has stamped it, so without this check both would send.
+        const claimed = (await sql`
+          UPDATE review_requests SET reminder_sent_at = now()
+          WHERE reservation_id = ${res.id} AND reminder_sent_at IS NULL
+          RETURNING reservation_id
+        `) as { reservation_id: number }[];
+        if (claimed.length === 0) continue;
 
-      const result = await enqueueEmail(sql, {
-        template: "review-reminder",
-        to: res.email,
-        payload: buildReviewPayload(res),
-      });
+        const result = await enqueueEmail(sql, {
+          template: "review-reminder",
+          to: res.email,
+          payload: buildReviewPayload(res),
+        });
 
-      if (result.enqueued) reminded++;
+        if (result.enqueued) reminded++;
+      } catch (err) {
+        console.error("review_reminder_enqueue_failed", res.id, err);
+      }
     }
   }
 

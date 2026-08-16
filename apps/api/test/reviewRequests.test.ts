@@ -102,10 +102,10 @@ describe("enqueueReviewRequests", () => {
       },
     ];
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return reservations;
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -125,10 +125,10 @@ describe("enqueueReviewRequests", () => {
       depart: "2025-08-04",
     };
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -158,10 +158,10 @@ describe("enqueueReviewRequests", () => {
       depart: "2025-09-03",
     };
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -184,10 +184,10 @@ describe("enqueueReviewRequests", () => {
       depart: "2025-10-05",
     };
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -208,10 +208,10 @@ describe("enqueueReviewRequests", () => {
       depart: "2025-11-03",
     };
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -240,7 +240,7 @@ describe("enqueueReviewRequests", () => {
       if (q.includes("FROM reservations")) return Promise.resolve([reservation]);
       if (q.includes("INSERT INTO review_requests")) {
         callOrder.push("insert_request");
-        return Promise.resolve([]);
+        return Promise.resolve([{ reservation_id: values[0] }]);
       }
       return Promise.resolve([]);
     };
@@ -265,10 +265,10 @@ describe("enqueueReviewRequests", () => {
       { id: 72, email: "c@example.com", first_name: "C", name: "C", code: "AVP-CCCCCC", arrive: "2025-07-03", depart: "2025-07-05" },
     ];
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return reservations;
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -309,10 +309,10 @@ describe("enqueueReviewRequests", () => {
       depart: "2025-12-25",
     };
 
-    const sql = makeSql((q) => {
+    const sql = makeSql((q, vals) => {
       if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
-      if (q.includes("INSERT INTO review_requests")) return [];
+      if (q.includes("INSERT INTO review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
@@ -399,6 +399,7 @@ describe("enqueueReviewRequests — reminder catch-up bound", () => {
         const isWithinCatchup = sentAt.getTime() > catchupCutoffMs;
         return isDue && isWithinCatchup ? [recentReminderRow] : [];
       }
+      if (q.includes("UPDATE review_requests")) return [{ reservation_id: vals[0] }];
       return [];
     });
 
