@@ -2956,8 +2956,8 @@ export { app };
 export default {
   fetch: app.fetch,
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
-    // Enqueue review-request emails first so the drain pass picks them up in
-    // the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
+    // Enqueue review-request and reminder emails first so the drain pass
+    // picks them up in the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
     ctx.waitUntil((async () => {
       await enqueueReviewRequests(neon(env.DB_CONN));
       await releaseExpiredHolds(neon(env.DB_CONN));

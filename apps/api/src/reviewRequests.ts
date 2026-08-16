@@ -1,31 +1,92 @@
 import { enqueueEmail } from "./emailOutbox";
 import { SITE_ORIGIN } from "./provisioning";
+import { intSetting } from "./settings";
 
-// Enqueue review-request emails for confirmed reservations departed in the
-// last N days (N = 3 so a briefly-downed cron catches up without re-sending).
+// Review emails go out at a fixed wall-clock hour in the auberge's local zone.
+// Bare CURRENT_DATE would be UTC, which lands at 20:00 the previous evening in
+// Quebec — while the guest is still in the room.
+export const REVIEW_SEND_HOUR_LOCAL = 14;
+export const REVIEW_TIMEZONE = "America/Toronto";
+
+// A cron that was down should still catch up, but must not fire requests for
+// long-past stays.
+const CATCHUP_WINDOW_DAYS = 7;
+
+export interface ReservationForReview {
+  id: number;
+  email: string;
+  first_name: string | null;
+  name: string;
+  code: string;
+  arrive: string | null;
+  depart: string | null;
+}
+
+function buildReviewPayload(res: ReservationForReview) {
+  const firstName =
+    res.first_name?.trim() ||
+    (res.name ?? "").trim().split(/\s+/)[0] ||
+    "client";
+
+  return {
+    firstName,
+    checkIn: res.arrive ?? "",
+    checkOut: res.depart ?? "",
+    reviewUrl: `${SITE_ORIGIN}/avis/nouveau?code=${res.code}`,
+  };
+}
+
+// Enqueue review-request emails for confirmed reservations whose departure day
+// (plus a configurable delay), evaluated at a fixed local wall-clock hour, has
+// passed — then follow up with a reminder for guests who have not yet
+// responded.
 //
-// Prerequisites per row:
+// Settings read once up front (all follow the "0 means disabled" sentinel):
+//   - review_request_delay_days:  days after depart before the first email (0 = depart day)
+//   - review_reminder_delay_days: days after the first email before a reminder; 0 disables the reminder pass entirely
+//   - review_suppression_months:  months to avoid re-asking the same email address; 0 disables suppression
+//
+// Prerequisites per row (first pass):
 //   - status = 'confirmed'
-//   - depart between today-3 and today (inclusive)
+//   - depart + delay, evaluated at REVIEW_SEND_HOUR_LOCAL in REVIEW_TIMEZONE, has passed but is within the catch-up window
 //   - email column is non-empty
 //   - no existing row in review_requests (INV-request-dedupe)
 //   - no existing row in reviews (guest already submitted)
 //   - reservations.code is set (INV-code-format; rows without a code are skipped)
+//   - the guest's email has not received a review request within the suppression window
 //
-// The toggle (email_review_request_enabled) is checked first: if disabled,
-// no review_requests rows are created and the function returns early. This
-// preserves the 3-day catch-up window for when the toggle is later enabled.
+// The toggle (email_review_request_enabled) is checked first: if disabled, no
+// rows are written and the function returns early for BOTH passes. This
+// preserves the catch-up window for when the toggle is later enabled.
+//
+// The reminder pass deliberately skips the suppression check — it belongs to
+// the same conversation as a request already sent, not a fresh ask.
 //
 // Called from the worker's `scheduled` handler alongside drainEmailOutbox.
 export async function enqueueReviewRequests(
   sql: (...args: any[]) => any
-): Promise<{ enqueued: number }> {
-  // Check toggle before touching review_requests rows so we do not burn
+): Promise<{ enqueued: number; reminded: number }> {
+  // Check the toggle before touching review_requests rows so we do not burn
   // the dedupe slot for reservations when emailing is disabled.
-  const toggleRows = (await sql`
-    SELECT value FROM settings WHERE key = 'email_review_request_enabled' LIMIT 1
-  `) as { value: string }[];
-  if (toggleRows[0]?.value !== "true") return { enqueued: 0 };
+  const settingRows = (await sql`
+    SELECT key, value FROM settings
+    WHERE key IN (
+      'email_review_request_enabled',
+      'review_request_delay_days',
+      'review_reminder_delay_days',
+      'review_suppression_months'
+    )
+  `) as { key: string; value: string }[];
+
+  const setting = (k: string) => settingRows.find((r) => r.key === k)?.value;
+
+  if (setting("email_review_request_enabled") !== "true") {
+    return { enqueued: 0, reminded: 0 };
+  }
+
+  const delayDays = intSetting(setting("review_request_delay_days"), 0);
+  const reminderDelayDays = intSetting(setting("review_reminder_delay_days"), 7);
+  const suppressionMonths = intSetting(setting("review_suppression_months"), 6);
 
   const reservations = (await sql`
     SELECT r.id, r.email, r.first_name, r.name, r.code,
@@ -34,24 +95,27 @@ export async function enqueueReviewRequests(
     FROM reservations r
     WHERE r.status = 'confirmed'
       AND r.email IS NOT NULL AND r.email <> ''
-      AND r.depart BETWEEN (CURRENT_DATE - INTERVAL '3 days') AND CURRENT_DATE
       AND r.code IS NOT NULL
+      AND ((r.depart + make_interval(days => ${delayDays}))::timestamp
+            + make_interval(hours => ${REVIEW_SEND_HOUR_LOCAL}))
+          AT TIME ZONE ${REVIEW_TIMEZONE} <= now()
+      AND ((r.depart + make_interval(days => ${delayDays}))::timestamp
+            + make_interval(hours => ${REVIEW_SEND_HOUR_LOCAL}))
+          AT TIME ZONE ${REVIEW_TIMEZONE} > now() - make_interval(days => ${CATCHUP_WINDOW_DAYS})
       AND NOT EXISTS (
         SELECT 1 FROM review_requests rr WHERE rr.reservation_id = r.id
       )
       AND NOT EXISTS (
         SELECT 1 FROM reviews rv WHERE rv.reservation_id = r.id
       )
+      AND (${suppressionMonths} = 0 OR NOT EXISTS (
+        SELECT 1 FROM review_requests rr2
+        JOIN reservations r2 ON r2.id = rr2.reservation_id
+        WHERE lower(r2.email) = lower(r.email)
+          AND rr2.sent_at > now() - make_interval(months => ${suppressionMonths})
+      ))
     ORDER BY r.depart DESC
-  `) as {
-    id: number;
-    email: string;
-    first_name: string | null;
-    name: string;
-    code: string;
-    arrive: string | null;
-    depart: string | null;
-  }[];
+  `) as ReservationForReview[];
 
   let enqueued = 0;
 
@@ -63,26 +127,52 @@ export async function enqueueReviewRequests(
       ON CONFLICT (reservation_id) DO NOTHING
     `;
 
-    const firstName =
-      res.first_name?.trim() ||
-      (res.name ?? "").trim().split(/\s+/)[0] ||
-      "client";
-
-    const reviewUrl = `${SITE_ORIGIN}/avis/nouveau?code=${res.code}`;
-
     const result = await enqueueEmail(sql, {
       template: "review-request",
       to: res.email,
-      payload: {
-        firstName,
-        checkIn: res.arrive ?? "",
-        checkOut: res.depart ?? "",
-        reviewUrl,
-      },
+      payload: buildReviewPayload(res),
     });
 
     if (result.enqueued) enqueued++;
   }
 
-  return { enqueued };
+  let reminded = 0;
+
+  if (reminderDelayDays > 0) {
+    const dueReminders = (await sql`
+      SELECT r.id, r.email, r.first_name, r.name, r.code,
+             to_char(r.arrive, 'YYYY-MM-DD') AS arrive,
+             to_char(r.depart, 'YYYY-MM-DD')  AS depart
+      FROM review_requests rr
+      JOIN reservations r ON r.id = rr.reservation_id
+      WHERE rr.reminder_sent_at IS NULL
+        AND rr.responded_at IS NULL
+        AND rr.sent_at + make_interval(days => ${reminderDelayDays}) <= now()
+        AND r.email IS NOT NULL AND r.email <> ''
+        AND r.code IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM reviews rv WHERE rv.reservation_id = rr.reservation_id
+        )
+      ORDER BY rr.sent_at ASC
+    `) as ReservationForReview[];
+
+    for (const res of dueReminders) {
+      // Stamp first, mirroring the first pass: a failure mid-loop must not
+      // leave the row eligible for a duplicate reminder.
+      await sql`
+        UPDATE review_requests SET reminder_sent_at = now()
+        WHERE reservation_id = ${res.id} AND reminder_sent_at IS NULL
+      `;
+
+      const result = await enqueueEmail(sql, {
+        template: "review-reminder",
+        to: res.email,
+        payload: buildReviewPayload(res),
+      });
+
+      if (result.enqueued) reminded++;
+    }
+  }
+
+  return { enqueued, reminded };
 }

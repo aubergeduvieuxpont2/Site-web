@@ -47,12 +47,12 @@ function makeSql(script: (q: string, vals: unknown[]) => unknown[] | null) {
 describe("enqueueReviewRequests", () => {
   it("returns { enqueued: 0 } immediately when toggle is disabled", async () => {
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "false" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "false" }];
       return [];
     });
 
     const result = await enqueueReviewRequests(sql as any);
-    expect(result).toEqual({ enqueued: 0 });
+    expect(result).toEqual({ enqueued: 0, reminded: 0 });
     // enqueueEmail must never be called when the toggle is off
     expect(mockEnqueueEmail).not.toHaveBeenCalled();
   });
@@ -64,19 +64,19 @@ describe("enqueueReviewRequests", () => {
     });
 
     const result = await enqueueReviewRequests(sql as any);
-    expect(result).toEqual({ enqueued: 0 });
+    expect(result).toEqual({ enqueued: 0, reminded: 0 });
     expect(mockEnqueueEmail).not.toHaveBeenCalled();
   });
 
   it("returns { enqueued: 0 } when toggle is enabled but no eligible reservations", async () => {
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return []; // no eligible rows
       return [];
     });
 
     const result = await enqueueReviewRequests(sql as any);
-    expect(result).toEqual({ enqueued: 0 });
+    expect(result).toEqual({ enqueued: 0, reminded: 0 });
     expect(mockEnqueueEmail).not.toHaveBeenCalled();
   });
 
@@ -103,14 +103,14 @@ describe("enqueueReviewRequests", () => {
     ];
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return reservations;
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
     });
 
     const result = await enqueueReviewRequests(sql as any);
-    expect(result).toEqual({ enqueued: 2 });
+    expect(result).toEqual({ enqueued: 2, reminded: 0 });
     expect(mockEnqueueEmail).toHaveBeenCalledTimes(2);
   });
 
@@ -126,7 +126,7 @@ describe("enqueueReviewRequests", () => {
     };
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
@@ -159,7 +159,7 @@ describe("enqueueReviewRequests", () => {
     };
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
@@ -185,7 +185,7 @@ describe("enqueueReviewRequests", () => {
     };
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
@@ -209,7 +209,7 @@ describe("enqueueReviewRequests", () => {
     };
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
@@ -236,7 +236,7 @@ describe("enqueueReviewRequests", () => {
 
     const sql = (strings: TemplateStringsArray, ...values: unknown[]) => {
       const q = strings.join("");
-      if (q.includes("email_review_request_enabled")) return Promise.resolve([{ value: "true" }]);
+      if (q.includes("email_review_request_enabled")) return Promise.resolve([{ key: "email_review_request_enabled", value: "true" }]);
       if (q.includes("FROM reservations")) return Promise.resolve([reservation]);
       if (q.includes("INSERT INTO review_requests")) {
         callOrder.push("insert_request");
@@ -266,7 +266,7 @@ describe("enqueueReviewRequests", () => {
     ];
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return reservations;
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
@@ -286,7 +286,7 @@ describe("enqueueReviewRequests", () => {
     let requestInserted = false;
     const sql = (strings: TemplateStringsArray, ...values: unknown[]) => {
       const q = strings.join("");
-      if (q.includes("email_review_request_enabled")) return Promise.resolve([{ value: "false" }]);
+      if (q.includes("email_review_request_enabled")) return Promise.resolve([{ key: "email_review_request_enabled", value: "false" }]);
       if (q.includes("INSERT INTO review_requests")) {
         requestInserted = true;
         return Promise.resolve([]);
@@ -310,7 +310,7 @@ describe("enqueueReviewRequests", () => {
     };
 
     const sql = makeSql((q) => {
-      if (q.includes("email_review_request_enabled")) return [{ value: "true" }];
+      if (q.includes("email_review_request_enabled")) return [{ key: "email_review_request_enabled", value: "true" }];
       if (q.includes("FROM reservations")) return [reservation];
       if (q.includes("INSERT INTO review_requests")) return [];
       return [];
