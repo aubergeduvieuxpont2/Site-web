@@ -57,12 +57,19 @@ export async function enqueueEmail(
     to: string;
     locale?: "fr" | "en";
     payload: Record<string, unknown>;
+    /**
+     * Admin-initiated override to bypass the per-template settings toggle.
+     * When `true`, skips the EMAIL_TOGGLE_KEYS check only. Does not affect
+     * ALWAYS_SEND (security-critical templates), retry backoff, or max attempts.
+     */
+    force?: boolean;
   }
 ): Promise<{ enqueued: boolean }> {
-  const { template, to, locale = "fr", payload } = input;
+  const { template, to, locale = "fr", payload, force = false } = input;
 
   // Security-critical templates always send; the other four are opt-in gated.
-  if (!ALWAYS_SEND.has(template)) {
+  // `force` admin override — see field docs above.
+  if (!force && !ALWAYS_SEND.has(template)) {
     const toggleKey = EMAIL_TOGGLE_KEYS[template];
     if (!toggleKey) return { enqueued: false };
 
