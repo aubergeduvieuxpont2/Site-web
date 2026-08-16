@@ -7,6 +7,7 @@ import reservationConfirmationSample from "../../emails/samples/reservation-conf
 import reservationCancellationSample from "../../emails/samples/reservation-cancellation.json";
 import invoiceReceiptSample from "../../emails/samples/invoice-receipt.json";
 import reviewRequestSample from "../../emails/samples/review-request.json";
+import reviewReminderSample from "../../emails/samples/review-reminder.json";
 import roomAssignedSample from "../../emails/samples/room-assigned.json";
 import otaWelcomeSample from "../../emails/samples/ota-welcome.json";
 import emailVerificationSample from "../../emails/samples/email-verification.json";
@@ -21,6 +22,7 @@ export type TemplateKey =
   | "reservation-cancellation"
   | "invoice-receipt"
   | "review-request"
+  | "review-reminder"
   | "room-assigned"
   | "ota-welcome"
   | "email-verification"
@@ -34,6 +36,7 @@ export const SAMPLES: Record<TemplateKey, Record<string, unknown>> = {
   "reservation-cancellation": reservationCancellationSample,
   "invoice-receipt": invoiceReceiptSample,
   "review-request": reviewRequestSample,
+  "review-reminder": reviewReminderSample,
   "room-assigned": roomAssignedSample,
   "ota-welcome": otaWelcomeSample,
   "email-verification": emailVerificationSample,

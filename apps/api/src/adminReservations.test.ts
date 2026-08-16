@@ -285,6 +285,45 @@ describe("GET /api/admin/reservations (OP-Reservation.listAdmin)", () => {
     expect(row.code).toBe("AVP-ABCDEF");
   });
 
+  it("includes review-request state on each row", async () => {
+    let capturedQuery = "";
+    neonHolder.sql = makeAdminSql((q) => {
+      if (q.includes("FROM reservations")) {
+        capturedQuery = q;
+        return [
+          {
+            ...RESERVATION_ROW,
+            review_sent_at: "2026-07-20T10:00:00Z",
+            review_reminder_sent_at: null,
+            review_responded_at: null,
+          },
+        ];
+      }
+      return undefined;
+    });
+
+    const res = await app.request(
+      "http://localhost/api/admin/reservations",
+      { headers: { Cookie: "session=t" } },
+      ENV,
+    );
+
+    // Pin the exact join, not just a substring: a wrong ON clause, a wrong
+    // alias, or an INNER JOIN silently substituted for LEFT JOIN would all
+    // still contain "review_requests" but must not pass this check.
+    const normalizedQuery = capturedQuery.replace(/\s+/g, " ").trim();
+    expect(normalizedQuery).toContain(
+      "LEFT JOIN review_requests rr ON rr.reservation_id = r.id",
+    );
+    expect(normalizedQuery).toContain("review_sent_at");
+    expect(normalizedQuery).toContain("review_reminder_sent_at");
+    expect(normalizedQuery).toContain("review_responded_at");
+
+    const body = (await res.json()) as any;
+    expect(body.reservations[0]).toHaveProperty("review_sent_at");
+    expect(body.reservations[0].review_sent_at).toBe("2026-07-20T10:00:00Z");
+  });
+
   it("returns an empty array when no reservations match the query", async () => {
     neonHolder.sql = makeAdminSql((q) => {
       if (q.includes("FROM reservations")) return [];

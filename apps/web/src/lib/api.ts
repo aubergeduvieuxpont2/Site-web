@@ -64,6 +64,10 @@ export interface ReservationRow {
   invoice_status?: string | null;
   paid_at?: string | null;
   hosted_invoice_url?: string | null;
+  /** Review-request lifecycle (migration 0046); null when never requested. */
+  review_sent_at?: string | null;
+  review_reminder_sent_at?: string | null;
+  review_responded_at?: string | null;
 }
 
 export interface OutboxRow {
@@ -133,6 +137,9 @@ export interface AdminSettings {
   emailRoomAssignmentEnabled: boolean;
   emailWelcomeEnabled: boolean;
   emailReviewRequestEnabled: boolean;
+  reviewRequestDelayDays: number;
+  reviewReminderDelayDays: number;
+  reviewSuppressionMonths: number;
 }
 
 /**
@@ -492,6 +499,21 @@ export async function adminSetReservationStatus(
   return fetchJson<{ reservation: ReservationRow }>(
     `/admin/reservations/${encodeURIComponent(String(safeId))}/status`,
     { method: "PATCH", body: JSON.stringify({ status }) },
+  );
+}
+
+// POST /admin/reservations/:id/review-request — admin-initiated feedback
+// request. Bypasses the send-timing settings and the email toggle server-side.
+export async function adminSendReviewRequest(
+  id: number,
+): Promise<{ sent: true; sentAt: string; resent: boolean } | ApiError> {
+  const safeId = Math.trunc(id);
+  if (!Number.isInteger(safeId) || safeId <= 0) {
+    return { error: "Identifiant invalide" };
+  }
+  return fetchJson<{ sent: true; sentAt: string; resent: boolean }>(
+    `/admin/reservations/${encodeURIComponent(String(safeId))}/review-request`,
+    { method: "POST" },
   );
 }
 

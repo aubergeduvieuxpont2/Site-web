@@ -4,7 +4,7 @@ import { contactContext } from "./emails/routes";
 
 export const EMAIL_FROM = "Auberge du Vieux Pont <no-reply@aubergeduvieuxpont.ca>";
 
-// The outbox carries these five toggle-gated transactional templates plus two
+// The outbox carries these six toggle-gated transactional templates plus two
 // security-critical templates (email-verification, email-change-alert). The
 // remaining TemplateKey values (welcome, reservation-cancellation,
 // invoice-receipt) are preview-only and never enqueued.
@@ -14,10 +14,11 @@ export type EmailTemplate =
   | "room-assigned"
   | "ota-welcome"
   | "review-request"
+  | "review-reminder"
   | "email-verification"
   | "email-change-alert";
 
-// Only the five notification templates are gated by an opt-in settings toggle.
+// Only the six notification templates are gated by an opt-in settings toggle.
 // The two security templates below are intentionally absent — they are always
 // sent (see ALWAYS_SEND).
 export const EMAIL_TOGGLE_KEYS: Partial<Record<EmailTemplate, string>> = {
@@ -26,6 +27,7 @@ export const EMAIL_TOGGLE_KEYS: Partial<Record<EmailTemplate, string>> = {
   "room-assigned": "email_room_assignment_enabled",
   "ota-welcome": "email_welcome_enabled",
   "review-request": "email_review_request_enabled",
+  "review-reminder": "email_review_request_enabled",
 };
 
 // Security-required emails that MUST bypass the opt-in notification toggle:
@@ -55,12 +57,19 @@ export async function enqueueEmail(
     to: string;
     locale?: "fr" | "en";
     payload: Record<string, unknown>;
+    /**
+     * Admin-initiated override to bypass the per-template settings toggle.
+     * When `true`, skips the EMAIL_TOGGLE_KEYS check only. Does not affect
+     * ALWAYS_SEND (security-critical templates), retry backoff, or max attempts.
+     */
+    force?: boolean;
   }
 ): Promise<{ enqueued: boolean }> {
-  const { template, to, locale = "fr", payload } = input;
+  const { template, to, locale = "fr", payload, force = false } = input;
 
   // Security-critical templates always send; the other four are opt-in gated.
-  if (!ALWAYS_SEND.has(template)) {
+  // `force` admin override — see field docs above.
+  if (!force && !ALWAYS_SEND.has(template)) {
     const toggleKey = EMAIL_TOGGLE_KEYS[template];
     if (!toggleKey) return { enqueued: false };
 

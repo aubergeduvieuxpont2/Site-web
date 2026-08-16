@@ -30,6 +30,9 @@ const EXTRA_REQUIRED = {
   assignableRoomCount: 12,
   reservationsEnabled: true,
   ...EMAIL_TOGGLES_ALL_FALSE,
+  reviewRequestDelayDays: 0,
+  reviewReminderDelayDays: 7,
+  reviewSuppressionMonths: 6,
 };
 const SETTINGS_KEYS_SORTED = [
   "accommodationTax",
@@ -41,6 +44,21 @@ const SETTINGS_KEYS_SORTED = [
   "tvq",
   "weeklyPrice",
 ];
+// Complete valid payload — every field required by SettingsUpdateSchema —
+// reused across tests that only care about one or two fields.
+const VALID_SETTINGS = {
+  nightlyPrice: 99,
+  weeklyPrice: 560,
+  contactEmail: "admin@example.com",
+  ...CONTACT,
+  ...DEFAULT_TAXES,
+  assignableRoomCount: 12,
+  reservationsEnabled: true,
+  ...EMAIL_TOGGLES_ALL_FALSE,
+  reviewRequestDelayDays: 0,
+  reviewReminderDelayDays: 7,
+  reviewSuppressionMonths: 6,
+};
 
 describe("Settings", () => {
   describe("parseBool", () => {
@@ -91,6 +109,9 @@ describe("Settings", () => {
         assignableRoomCount: 12,
         reservationsEnabled: true,
         ...EMAIL_TOGGLES_ALL_FALSE,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -109,6 +130,9 @@ describe("Settings", () => {
         assignableRoomCount: 12,
         reservationsEnabled: true,
         ...EMAIL_TOGGLES_ALL_FALSE,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -127,6 +151,9 @@ describe("Settings", () => {
         assignableRoomCount: 0,
         reservationsEnabled: true,
         ...EMAIL_TOGGLES_ALL_FALSE,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(valid);
       expect(result.success).toBe(true);
@@ -258,6 +285,9 @@ describe("Settings", () => {
         assignableRoomCount: "12",
         reservationsEnabled: "true",
         ...EMAIL_TOGGLES_ALL_FALSE,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(stringPayload);
       expect(result.success).toBe(true);
@@ -282,6 +312,9 @@ describe("Settings", () => {
         assignableRoomCount: "12",
         reservationsEnabled: "false",
         ...EMAIL_TOGGLES_ALL_FALSE,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);
@@ -533,6 +566,9 @@ describe("Settings", () => {
         assignableRoomCount: 12,
         reservationsEnabled: true,
         ...EMAIL_TOGGLE_DEFAULTS,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       });
     });
 
@@ -548,6 +584,9 @@ describe("Settings", () => {
         assignableRoomCount: 12,
         reservationsEnabled: true,
         ...EMAIL_TOGGLE_DEFAULTS,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       });
     });
 
@@ -598,6 +637,9 @@ describe("Settings", () => {
         emailRoomAssignmentEnabled: "true",
         emailWelcomeEnabled: "false",
         emailReviewRequestEnabled: true,
+        reviewRequestDelayDays: 0,
+        reviewReminderDelayDays: 7,
+        reviewSuppressionMonths: 6,
       };
       const result = SettingsUpdateSchema.safeParse(payload);
       expect(result.success).toBe(true);
@@ -637,5 +679,46 @@ describe("Settings", () => {
 
       expect(result1).toEqual(result2);
     });
+  });
+});
+
+describe("review timing settings", () => {
+  it("defaults to 0 / 7 / 6 when no rows exist", () => {
+    const s = rowsToAdminSettings([]);
+    expect(s.reviewRequestDelayDays).toBe(0);
+    expect(s.reviewReminderDelayDays).toBe(7);
+    expect(s.reviewSuppressionMonths).toBe(6);
+  });
+
+  it("reads stored values", () => {
+    const s = rowsToAdminSettings([
+      { key: "review_request_delay_days", value: "2" },
+      { key: "review_reminder_delay_days", value: "10" },
+      { key: "review_suppression_months", value: "3" },
+    ]);
+    expect(s.reviewRequestDelayDays).toBe(2);
+    expect(s.reviewReminderDelayDays).toBe(10);
+    expect(s.reviewSuppressionMonths).toBe(3);
+  });
+
+  it("falls back to the default when a stored value is unparseable", () => {
+    const s = rowsToAdminSettings([
+      { key: "review_reminder_delay_days", value: "not-a-number" },
+    ]);
+    expect(s.reviewReminderDelayDays).toBe(7);
+  });
+
+  it("rejects negatives and non-integers", () => {
+    expect(SettingsUpdateSchema.safeParse({ ...VALID_SETTINGS, reviewRequestDelayDays: -1 }).success).toBe(false);
+    expect(SettingsUpdateSchema.safeParse({ ...VALID_SETTINGS, reviewSuppressionMonths: 1.5 }).success).toBe(false);
+  });
+
+  it("rejects values above the caps", () => {
+    expect(SettingsUpdateSchema.safeParse({ ...VALID_SETTINGS, reviewRequestDelayDays: 366 }).success).toBe(false);
+    expect(SettingsUpdateSchema.safeParse({ ...VALID_SETTINGS, reviewSuppressionMonths: 61 }).success).toBe(false);
+  });
+
+  it("accepts 0 for reminder and suppression", () => {
+    expect(SettingsUpdateSchema.safeParse({ ...VALID_SETTINGS, reviewReminderDelayDays: 0, reviewSuppressionMonths: 0 }).success).toBe(true);
   });
 });

@@ -27,6 +27,7 @@ const KEYS = [
   "reservation-cancellation",
   "invoice-receipt",
   "review-request",
+  "review-reminder",
   "room-assigned",
   "ota-welcome",
   "email-verification",

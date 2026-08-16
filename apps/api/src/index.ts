@@ -10,7 +10,11 @@ import { resolveLocale } from "./emailLocale";
 import { buildReservationConfirmationData } from "./emailPayloads";
 import { provisionOtaGuest, SITE_ORIGIN } from "./provisioning";
 import { generateCode } from "./reservationCode";
-import { enqueueReviewRequests } from "./reviewRequests";
+import {
+  enqueueReviewRequests,
+  buildReviewPayload,
+  type ReservationForReview,
+} from "./reviewRequests";
 import { hashPassword, verifyPassword, needsRehash } from "./auth/password";
 import { isPasswordBreached } from "./auth/hibp";
 import {
@@ -1626,10 +1630,20 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, hosted_invoice_url, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
-    FROM reservations
-    WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
-    ORDER BY created_at DESC
+    SELECT r.id, r.code, r.name, r.first_name, r.last_name, r.email, r.phone, r.room,
+           to_char(r.arrive, 'YYYY-MM-DD') as arrive,
+           to_char(r.depart, 'YYYY-MM-DD') as depart,
+           r.people, r.room_count, r.message, r.status, r.source, r.external_ref,
+           r.user_id, r.stripe_invoice_id, r.invoice_status, r.hosted_invoice_url,
+           to_char(r.paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at,
+           r.created_at,
+           to_char(rr.sent_at,          'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_sent_at,
+           to_char(rr.reminder_sent_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_reminder_sent_at,
+           to_char(rr.responded_at,     'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_responded_at
+    FROM reservations r
+    LEFT JOIN review_requests rr ON rr.reservation_id = r.id
+    WHERE r.name ILIKE ${"%" + q + "%"} OR r.email ILIKE ${"%" + q + "%"}
+    ORDER BY r.created_at DESC
     LIMIT ${limit}
   `) as ReservationRow[];
 
@@ -2473,6 +2487,70 @@ app.patch(
   }
 );
 
+// Admin-initiated review request. Deliberately ignores the send-timing
+// settings, the per-guest suppression window, and the email toggle — an admin
+// pressing this button IS the operator expressing intent. It does not ignore
+// `responded_at`: re-asking someone who already answered is pure noise.
+app.post("/api/admin/reservations/:id/review-request", async (c) => {
+  const user = await getAuthUser(c);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
+
+  const reservationId = parseIdParam(c.req.param("id"));
+  if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
+
+  const sql = neon(c.env.DB_CONN);
+
+  const rows = (await sql`
+    SELECT r.id, r.email, r.first_name, r.name, r.code,
+           to_char(r.arrive, 'YYYY-MM-DD') AS arrive,
+           to_char(r.depart, 'YYYY-MM-DD')  AS depart,
+           rr.reservation_id IS NOT NULL AS has_request,
+           rr.responded_at,
+           EXISTS (
+             SELECT 1 FROM reviews rv WHERE rv.reservation_id = r.id
+           ) AS has_review
+    FROM reservations r
+    LEFT JOIN review_requests rr ON rr.reservation_id = r.id
+    WHERE r.id = ${reservationId}
+    LIMIT 1
+  `) as (ReservationForReview & {
+    has_request: boolean;
+    responded_at: string | null;
+    has_review: boolean;
+  })[];
+
+  const res = rows[0];
+  if (!res) return c.json({ error: "Reservation not found" }, 404);
+  if (!res.email) return c.json({ error: "Cette réservation n'a pas de courriel" }, 400);
+  if (!res.code) return c.json({ error: "Cette réservation n'a pas de code" }, 400);
+  // `responded_at` is only backfilled going forward (migration 0046); a
+  // guest who reviewed before that migration ran has a `reviews` row but no
+  // `responded_at` stamp, so both must be checked to avoid re-soliciting them.
+  if (res.responded_at || res.has_review) {
+    return c.json({ error: "Le client a déjà laissé un avis" }, 409);
+  }
+
+  const resent = res.has_request;
+
+  // Upsert restarts the reminder clock from this send.
+  await sql`
+    INSERT INTO review_requests (reservation_id, channel, sent_at)
+    VALUES (${res.id}, 'email', now())
+    ON CONFLICT (reservation_id)
+    DO UPDATE SET sent_at = now(), reminder_sent_at = NULL
+  `;
+
+  await enqueueEmail(sql, {
+    template: "review-request",
+    to: res.email,
+    payload: buildReviewPayload(res),
+    force: true,
+  });
+
+  return c.json({ sent: true, sentAt: new Date().toISOString(), resent });
+});
+
 // Admin blackout endpoints
 app.get("/api/admin/blackouts", async (c) => {
   const user = await getAuthUser(c);
@@ -2707,6 +2785,9 @@ app.post(
       sql`INSERT INTO settings (key, value) VALUES ('email_room_assignment_enabled', ${data.emailRoomAssignmentEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_welcome_enabled', ${data.emailWelcomeEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       sql`INSERT INTO settings (key, value) VALUES ('email_review_request_enabled', ${data.emailReviewRequestEnabled ? "true" : "false"}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_request_delay_days', ${data.reviewRequestDelayDays.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_reminder_delay_days', ${data.reviewReminderDelayDays.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+      sql`INSERT INTO settings (key, value) VALUES ('review_suppression_months', ${data.reviewSuppressionMonths.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     ]);
 
     // `assignable_room_count` is derived, never taken from the request body:
@@ -2953,12 +3034,19 @@ export { app };
 export default {
   fetch: app.fetch,
   scheduled: async (controller: ScheduledController, env: Bindings, ctx: ExecutionContext) => {
-    // Enqueue review-request emails first so the drain pass picks them up in
-    // the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
+    // Enqueue review-request and reminder emails first so the drain pass
+    // picks them up in the same cron invocation (spec §6c: "BEFORE drainEmailOutbox").
+    // Each pass is caught independently — a throw in one (e.g. enqueueing
+    // review requests) must not prevent the others from running, since they
+    // are otherwise-unrelated cron duties sharing one invocation.
     ctx.waitUntil((async () => {
-      await enqueueReviewRequests(neon(env.DB_CONN));
-      await releaseExpiredHolds(neon(env.DB_CONN));
-      await drainEmailOutbox(env);
+      await enqueueReviewRequests(neon(env.DB_CONN)).catch((e) =>
+        console.error("review_requests_failed", e)
+      );
+      await releaseExpiredHolds(neon(env.DB_CONN)).catch((e) =>
+        console.error("release_holds_failed", e)
+      );
+      await drainEmailOutbox(env).catch((e) => console.error("drain_outbox_failed", e));
     })());
   },
 } satisfies ExportedHandler<Bindings>;

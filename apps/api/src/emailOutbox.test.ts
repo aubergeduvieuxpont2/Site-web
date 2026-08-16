@@ -9,6 +9,13 @@ import {
   type EmailTemplate,
 } from "./emailOutbox";
 
+// ── Helper ─────────────────────────────────────────────────────────────────────
+
+function makeSql(responses: unknown[][]): ReturnType<typeof vi.fn> {
+  let i = 0;
+  return vi.fn().mockImplementation(() => Promise.resolve(responses[i++] ?? []));
+}
+
 // ── EMAIL_TOGGLE_KEYS ─────────────────────────────────────────────────────────
 
 describe("EMAIL_TOGGLE_KEYS", () => {
@@ -298,5 +305,47 @@ describe("enqueueEmail", () => {
     });
     const insertCallArgs = mockSql.mock.calls[0];
     expect(insertCallArgs[3]).toBe("en");
+  });
+
+  // ── force option ───────────────────────────────────────────────────────────
+
+  describe("enqueueEmail force", () => {
+    it("does not enqueue toggle-gated template when toggle is off", async () => {
+      const sql = makeSql([[{ value: "false" }]]);
+      const r = await enqueueEmail(sql as any, {
+        template: "review-request",
+        to: "a@b.com",
+        payload: {},
+      });
+      expect(r.enqueued).toBe(false);
+    });
+
+    it("enqueues when force true even though toggle off", async () => {
+      const sql = makeSql([[]]);
+      const r = await enqueueEmail(sql as any, {
+        template: "review-request",
+        to: "a@b.com",
+        payload: {},
+        force: true,
+      });
+      expect(r.enqueued).toBe(true);
+    });
+
+    it("does not query settings table when force true", async () => {
+      const sql = makeSql([[]]);
+      await enqueueEmail(sql as any, {
+        template: "review-request",
+        to: "a@b.com",
+        payload: {},
+        force: true,
+      });
+      // Only INSERT should run — no toggle SELECT.
+      expect(sql).toHaveBeenCalledTimes(1);
+      // Verify the single call is INSERT (4+ args: strings + to, template, locale, payload),
+      // not SELECT (2 args: strings + toggleKey "email_review_request_enabled")
+      expect(sql.mock.calls[0].length).toBeGreaterThan(2);
+      // If it were a SELECT, the second argument would be the toggle key
+      expect(sql.mock.calls[0][1]).not.toBe("email_review_request_enabled");
+    });
   });
 });

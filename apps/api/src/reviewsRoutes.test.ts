@@ -325,6 +325,71 @@ describe("POST /api/reviews (INV-route-mounted)", () => {
     expect(res.status).toBe(409);
   });
 
+  it("stamps responded_at on matching review_requests row after successful submission", async () => {
+    const statements: string[] = [];
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+      statements.push(q);
+      // INSERT INTO reviews also lists "stays_count"/"nights_total" as columns,
+      // so check it before the stats-query pattern (see 409 test above).
+      if (q.includes("INSERT INTO reviews")) return Promise.resolve([]);
+      if (q.includes("FROM reservations") && q.includes("code")) {
+        return Promise.resolve([ELIGIBLE_RESERVATION]);
+      }
+      if (q.includes("stays_count") || q.includes("nights_total")) {
+        return Promise.resolve([{ stays_count: 2, nights_total: 7 }]);
+      }
+      return Promise.resolve([]);
+    };
+
+    const res = await app.request(
+      "http://localhost/api/reviews",
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(VALID_BODY),
+      },
+      ENV
+    );
+
+    expect(res.status).toBe(201);
+    const updateStatement = statements.find((s) => s.includes("UPDATE review_requests"));
+    expect(updateStatement).toBeDefined();
+    expect(updateStatement).toContain("responded_at = now()");
+    expect(updateStatement).toContain("responded_at IS NULL");
+  });
+
+  it("does not stamp responded_at when submission is rejected as a duplicate (ERR-CONFLICT)", async () => {
+    const statements: string[] = [];
+    neonHolder.sql = (strings: TemplateStringsArray, ...vals: unknown[]) => {
+      const q = strings.join(" ");
+      statements.push(q);
+      if (q.includes("INSERT INTO reviews")) {
+        throw new Error("duplicate key value violates unique constraint");
+      }
+      if (q.includes("FROM reservations") && q.includes("code")) {
+        return Promise.resolve([ELIGIBLE_RESERVATION]);
+      }
+      if (q.includes("stays_count") || q.includes("nights_total")) {
+        return Promise.resolve([{ stays_count: 1, nights_total: 3 }]);
+      }
+      return Promise.resolve([]);
+    };
+
+    const res = await app.request(
+      "http://localhost/api/reviews",
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(VALID_BODY),
+      },
+      ENV
+    );
+
+    expect(res.status).toBe(409);
+    expect(statements.some((s) => s.includes("UPDATE review_requests"))).toBe(false);
+  });
+
   it("returns 400 when rating is out of range (validation)", async () => {
     neonHolder.sql = makePublicSql();
 
