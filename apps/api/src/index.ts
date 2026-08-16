@@ -1630,10 +1630,20 @@ app.get("/api/admin/reservations", async (c) => {
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
   const reservations = (await sql`
-    SELECT id, code, name, first_name, last_name, email, phone, room, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, people, room_count, message, status, source, external_ref, user_id, stripe_invoice_id, invoice_status, hosted_invoice_url, to_char(paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at, created_at
-    FROM reservations
-    WHERE name ILIKE ${"%" + q + "%"} OR email ILIKE ${"%" + q + "%"}
-    ORDER BY created_at DESC
+    SELECT r.id, r.code, r.name, r.first_name, r.last_name, r.email, r.phone, r.room,
+           to_char(r.arrive, 'YYYY-MM-DD') as arrive,
+           to_char(r.depart, 'YYYY-MM-DD') as depart,
+           r.people, r.room_count, r.message, r.status, r.source, r.external_ref,
+           r.user_id, r.stripe_invoice_id, r.invoice_status, r.hosted_invoice_url,
+           to_char(r.paid_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as paid_at,
+           r.created_at,
+           to_char(rr.sent_at,          'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_sent_at,
+           to_char(rr.reminder_sent_at, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_reminder_sent_at,
+           to_char(rr.responded_at,     'YYYY-MM-DD"T"HH24:MI:SS"Z"') as review_responded_at
+    FROM reservations r
+    LEFT JOIN review_requests rr ON rr.reservation_id = r.id
+    WHERE r.name ILIKE ${"%" + q + "%"} OR r.email ILIKE ${"%" + q + "%"}
+    ORDER BY r.created_at DESC
     LIMIT ${limit}
   `) as ReservationRow[];
 
