@@ -113,6 +113,27 @@ describe("computeGuestStats", () => {
     expect(callArgs).toContain(null);
   });
 
+  // Regression guard: a null userId is sent as an UNTYPED parameter, and
+  // Postgres cannot infer a type from `$1 IS NOT NULL` alone — it rejects the
+  // whole statement with "could not determine data type parameter $1". That is
+  // every guest reservation with no linked account, and it made
+  // POST /api/reviews return 500 for them in production.
+  //
+  // This asserts the SQL TEXT only. These tests drive a mocked tagged template
+  // that never reaches Postgres, so nothing asserted here can prove the query
+  // executes — the fix was verified by running it against the real database.
+  // Treat this as a guard against silently dropping the casts, not as proof of
+  // correctness.
+  it("casts userId so Postgres can type the parameter when it is null", async () => {
+    const sql = vi.fn().mockResolvedValue([{ stays_count: 0, nights_total: 0 }]);
+    await computeGuestStats(sql as any, null, "guest@example.com");
+    const queryText = (sql.mock.calls[0][0] as unknown as string[]).join("?");
+    expect(queryText).toContain("::int IS NOT NULL");
+    expect(queryText).toContain("::int IS NULL");
+    // The bare, uncast form is exactly what broke production.
+    expect(queryText).not.toMatch(/\?\s*IS NOT NULL/);
+  });
+
   it("returns 0/0 when no matching reservations", async () => {
     const sql = vi.fn().mockResolvedValue([{ stays_count: 0, nights_total: 0 }]);
     const result = await computeGuestStats(sql as any, null, "new@example.com");

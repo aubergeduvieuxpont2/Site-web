@@ -27,6 +27,13 @@ export function maskDisplayName(
 // Compute stays_count and nights_total snapshot at submission time.
 // Guest key: user_id when set, else lower(email). Counts only confirmed
 // reservations with depart ≤ today (including the stay being reviewed).
+//
+// The `::int` casts on ${userId} are REQUIRED, not cosmetic. When userId is
+// null the driver sends an untyped parameter, and Postgres cannot infer a type
+// for it from `$1 IS NOT NULL` alone — it rejects the whole statement with
+// "could not determine data type parameter $1". That is every guest
+// reservation without a linked account, i.e. the common case, and it made
+// POST /api/reviews return 500 for them. The cast gives Postgres the type.
 export async function computeGuestStats(
   sql: (...args: any[]) => any,
   userId: number | null,
@@ -40,8 +47,8 @@ export async function computeGuestStats(
     WHERE status = 'confirmed'
       AND depart <= CURRENT_DATE
       AND (
-        (${userId} IS NOT NULL AND user_id = ${userId})
-        OR (${userId} IS NULL AND lower(email) = lower(${email}))
+        (${userId}::int IS NOT NULL AND user_id = ${userId}::int)
+        OR (${userId}::int IS NULL AND lower(email) = lower(${email}))
       )
   `) as { stays_count: number; nights_total: number }[];
   const row = rows[0];
