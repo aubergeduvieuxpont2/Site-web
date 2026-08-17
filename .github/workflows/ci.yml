@@ -17,6 +17,30 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    # Real-database tests run against this container. The rest of the suite
+    # drives a mocked tagged template that returns canned rows regardless of
+    # the SQL handed to it — it pins call shape but cannot observe whether
+    # Postgres would accept the statement. Three defects reached production
+    # through a green suite that way: an untyped null parameter (#74), a
+    # timezone expression nothing evaluated, and a join nothing executed.
+    #
+    # Plain Postgres rather than a Neon branch: those defects are ordinary
+    # Postgres behaviour, and a container needs no secrets and no cleanup.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sitewebtest
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -32,6 +56,15 @@ jobs:
 
       - name: Test (all workspaces)
         run: npm test --workspaces --if-present
+
+      # Executes real SQL against the service container above. Schema comes from
+      # applying the existing migrations, which are already idempotent and
+      # ordered — schema.sql covers only 10 tables, so migrations are the source
+      # of truth. Each test runs in a transaction that is rolled back.
+      - name: Test (real database)
+        run: npm run test:db --workspace apps/api
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/sitewebtest
 
       # Deploy-safety gates: neither `tsc` nor vitest catch Cloudflare Worker
       # startup errors. (1) A static guard for global-scope async I/O / crypto /
