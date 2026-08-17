@@ -56,6 +56,34 @@ jobs:
           fi
           npm run build:web
 
+      # Schema must lead the code. Every schema-changing PR deploys new SQL that
+      # references columns the database may not have yet, and merging fires this
+      # workflow automatically — so "remember to migrate first" has failed twice
+      # in production (PR #35, PR #71). PR #71's admin reservations list 500'd for
+      # ~2h, and because the cron threw on every tick, `drainEmailOutbox` and
+      # `releaseExpiredHolds` silently stopped too: no confirmation emails, no
+      # password resets, no hold releases. Running migrations here makes the
+      # ordering structural instead of a thing to remember.
+      #
+      # Placed before ALL deploys (not just the API) because email-ingest writes
+      # to the same database. Migrations are additive and idempotent by
+      # convention, so the currently-deployed code tolerates them landing first.
+      #
+      # WARN-only while DB_CONN is unset, matching the Stripe-secret check below:
+      # an unset secret must not brick deploys that work today. Once DB_CONN is
+      # set (Settings → Secrets and variables → Actions → Secrets, use the Neon
+      # *pooled* connection string with sslmode=require), a migration failure
+      # fails the deploy before any Worker ships.
+      - name: Apply database migrations
+        env:
+          DB_CONN: ${{ secrets.DB_CONN }}
+        run: |
+          if [ -z "$DB_CONN" ]; then
+            echo "::warning::DB_CONN secret is not set — skipping migrations. Schema-changing deploys must be migrated by hand first (npm run db:migrate), or they will 500 in production. Set DB_CONN as a repo Secret to make this automatic."
+            exit 0
+          fi
+          npm run db:migrate
+
       - name: Deploy HubSpot gateway
         run: npx wrangler deploy
         working-directory: apps/hubspot
