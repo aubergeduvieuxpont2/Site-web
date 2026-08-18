@@ -1,5 +1,5 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "/node_modules/wrangler/config-schema.json",
   "name": "site-web-hubspot",
   "main": "src/index.ts",
   "compatibility_date": "2025-06-16",
@@ -24,15 +24,17 @@
   // same time as apps/api — this Worker queries the same database, so leaving
   // it behind would point it at a provider the rest of the stack has left.
   //
-  // "hyperdrive": [
-  //   { "binding": "HYPERDRIVE", "id": "<hyperdrive-config-id>" }
-  // ],
-
   // Every 5 minutes, matching apps/api. A per-minute schedule keeps Neon's
   // serverless compute from ever autosuspending, which is what exhausted the
   // compute quota and took the whole API down. #77 fixed the API's cron but
   // missed this one, so this Worker kept waking the database every minute.
   "triggers": {
     "crons": ["*/5 * * * *"]
-  }
+  },
+  "hyperdrive": [
+    {
+      "binding": "aivendb",
+      "id": "f047f5604b114666bc0a674a5ee5ab77"
+    }
+  ]
 }

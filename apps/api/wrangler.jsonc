@@ -1,92 +1,114 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "site-web-api",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-06-16",
-  // The Neon serverless driver uses fetch/WebSocket; nodejs_compat is not
-  // required for HTTP queries but is enabled for broader driver compatibility.
-  "compatibility_flags": ["nodejs_compat"],
-  "observability": { "enabled": true },
-
-  // Precompile the Handlebars email templates before every bundle (dev + deploy)
-  // so the Worker never calls new Function()/eval, which Cloudflare's isolate
-  // forbids ("Code generation from strings disallowed"). Regenerates
-  // src/emails/precompiled.ts from apps/api/emails/*.hbs.
-  "build": { "command": "node scripts/precompile-emails.mjs" },
-
-  // Custom-domain routing: the more-specific /api/* route wins over the web
-  // Worker's catch-all, so the SPA's relative `/api/*` calls stay same-origin.
-  // NOTE: only deploy with this route once the `aubergeduvieuxpont.ca` zone is
-  // ACTIVE on the account (Add Site + registrar nameservers + a proxied `www`
-  // DNS record). Deploying against an inactive zone fails; until then the
-  // Worker stays reachable on its workers.dev URL.
-  // The same API Worker backs every surface. Each host gets its own /api/*
-  // route (more specific than the web/splitter catch-alls), so the SPA's
-  // relative /api/* calls stay same-origin on www, dev, and the A/B subdomains.
-  // /internal/* must never be exposed via workers.dev.
-  "workers_dev": false,
-  "routes": [
-    { "pattern": "www.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" },
-    { "pattern": "dev.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" },
-    { "pattern": "a.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" },
-    { "pattern": "b.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" }
-  ],
-
-  // Database access goes through `getSql(env)` in src/db.ts, which picks a
-  // driver at runtime:
-  //
-  //   1. The HYPERDRIVE binding below, once configured — postgres.js over
-  //      Cloudflare Hyperdrive, which fronts a TCP database (Aiven) and pools
-  //      connections at the edge. This is the target.
-  //   2. Otherwise DB_CONN — Neon's HTTP driver. Still used by local dev and
-  //      the migration runner, and it keeps this branch deployable before any
-  //      Hyperdrive config exists.
-  //
-  // Cutover is therefore a config change rather than a code deploy: add the
-  // binding with a real id and every call site switches at once.
-  //
-  // CRITICAL when creating the Hyperdrive config: DISABLE query caching.
-  // Hyperdrive caches reads by default, and for a booking system a stale
-  // availability read can double-sell a room:
-  //   npx wrangler hyperdrive create site-web-db \
-  //     --connection-string="postgres://..." --caching-disabled
-  //
-  //   - Local dev: DB_CONN is loaded from the repo-root `.dev.env`
-  //     (the `dev` script passes `--env-file ../../.dev.env`).
-  //   - Production: set it as a secret with `wrangler secret put DB_CONN`.
-  //
-  // "hyperdrive": [
-  //   { "binding": "HYPERDRIVE", "id": "<hyperdrive-config-id>" }
-  // ],
-
-  // ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
-  // Set to the real admin address in production; leave blank to skip seeding.
-  // SECURITY (follow-up): this is a personal email committed in plaintext.
-  // Prefer moving it to a Worker secret (`wrangler secret put ADMIN_EMAIL`) or a
-  // CI-injected var so it is not stored in the repo. Left in `vars` for now
-  // because removing it here would break deploys until the secret is set.
-  "vars": {
-    "ADMIN_EMAIL": "ychasse01@gmail.com"
-  },
-
-  // Cron trigger: enqueue review requests/reminders, release expired holds,
-  // and drain the email_outbox.
-  //
-  // Every 5 minutes, NOT every minute. A per-minute schedule queries Postgres
-  // 1,440 times a day, which prevents Neon's serverless compute from ever
-  // autosuspending — so the database bills ~744 compute-hours a month instead
-  // of idling near zero. That exhausted the compute quota and took the entire
-  // API down with HTTP 402 on every query: no settings, no auth, no rooms.
-  //
-  // Nothing here needs 60-second latency. The 15-minute payment hold tolerates
-  // a 5-minute release granularity, and transactional email is not
-  // time-critical to the minute. Raising this interval again means re-checking
-  // the compute budget first.
-  "triggers": { "crons": ["*/5 * * * *"] },
-
-  // Internal service binding to the HubSpot gateway Worker.
-  // The gateway has no public route; the API reaches it exclusively via this binding.
-  "services": [
-    { "binding": "HUBSPOT", "service": "site-web-hubspot" }
-  ]
+	"$schema": "/node_modules/wrangler/config-schema.json",
+	"name": "site-web-api",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-06-16",
+	// The Neon serverless driver uses fetch/WebSocket; nodejs_compat is not
+	// required for HTTP queries but is enabled for broader driver compatibility.
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"observability": {
+		"enabled": true
+	},
+	// Precompile the Handlebars email templates before every bundle (dev + deploy)
+	// so the Worker never calls new Function()/eval, which Cloudflare's isolate
+	// forbids ("Code generation from strings disallowed"). Regenerates
+	// src/emails/precompiled.ts from apps/api/emails/*.hbs.
+	"build": {
+		"command": "node scripts/precompile-emails.mjs"
+	},
+	// Custom-domain routing: the more-specific /api/* route wins over the web
+	// Worker's catch-all, so the SPA's relative `/api/*` calls stay same-origin.
+	// NOTE: only deploy with this route once the `aubergeduvieuxpont.ca` zone is
+	// ACTIVE on the account (Add Site + registrar nameservers + a proxied `www`
+	// DNS record). Deploying against an inactive zone fails; until then the
+	// Worker stays reachable on its workers.dev URL.
+	// The same API Worker backs every surface. Each host gets its own /api/*
+	// route (more specific than the web/splitter catch-alls), so the SPA's
+	// relative /api/* calls stay same-origin on www, dev, and the A/B subdomains.
+	// /internal/* must never be exposed via workers.dev.
+	"workers_dev": false,
+	"routes": [
+		{
+			"pattern": "www.aubergeduvieuxpont.ca/api/*",
+			"zone_name": "aubergeduvieuxpont.ca"
+		},
+		{
+			"pattern": "dev.aubergeduvieuxpont.ca/api/*",
+			"zone_name": "aubergeduvieuxpont.ca"
+		},
+		{
+			"pattern": "a.aubergeduvieuxpont.ca/api/*",
+			"zone_name": "aubergeduvieuxpont.ca"
+		},
+		{
+			"pattern": "b.aubergeduvieuxpont.ca/api/*",
+			"zone_name": "aubergeduvieuxpont.ca"
+		}
+	],
+	// Database access goes through `getSql(env)` in src/db.ts, which picks a
+	// driver at runtime:
+	//
+	//   1. The HYPERDRIVE binding below, once configured — postgres.js over
+	//      Cloudflare Hyperdrive, which fronts a TCP database (Aiven) and pools
+	//      connections at the edge. This is the target.
+	//   2. Otherwise DB_CONN — Neon's HTTP driver. Still used by local dev and
+	//      the migration runner, and it keeps this branch deployable before any
+	//      Hyperdrive config exists.
+	//
+	// Cutover is therefore a config change rather than a code deploy: add the
+	// binding with a real id and every call site switches at once.
+	//
+	// CRITICAL when creating the Hyperdrive config: DISABLE query caching.
+	// Hyperdrive caches reads by default, and for a booking system a stale
+	// availability read can double-sell a room:
+	//   npx wrangler hyperdrive create site-web-db \
+	//     --connection-string="postgres://..." --caching-disabled
+	//
+	//   - Local dev: DB_CONN is loaded from the repo-root `.dev.env`
+	//     (the `dev` script passes `--env-file ../../.dev.env`).
+	//   - Production: set it as a secret with `wrangler secret put DB_CONN`.
+	//
+	// ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
+	// Set to the real admin address in production; leave blank to skip seeding.
+	// SECURITY (follow-up): this is a personal email committed in plaintext.
+	// Prefer moving it to a Worker secret (`wrangler secret put ADMIN_EMAIL`) or a
+	// CI-injected var so it is not stored in the repo. Left in `vars` for now
+	// because removing it here would break deploys until the secret is set.
+	"vars": {
+		"ADMIN_EMAIL": "ychasse01@gmail.com"
+	},
+	// Cron trigger: enqueue review requests/reminders, release expired holds,
+	// and drain the email_outbox.
+	//
+	// Every 5 minutes, NOT every minute. A per-minute schedule queries Postgres
+	// 1,440 times a day, which prevents Neon's serverless compute from ever
+	// autosuspending — so the database bills ~744 compute-hours a month instead
+	// of idling near zero. That exhausted the compute quota and took the entire
+	// API down with HTTP 402 on every query: no settings, no auth, no rooms.
+	//
+	// Nothing here needs 60-second latency. The 15-minute payment hold tolerates
+	// a 5-minute release granularity, and transactional email is not
+	// time-critical to the minute. Raising this interval again means re-checking
+	// the compute budget first.
+	"triggers": {
+		"crons": [
+			"*/5 * * * *"
+		]
+	},
+	// Internal service binding to the HubSpot gateway Worker.
+	// The gateway has no public route; the API reaches it exclusively via this binding.
+	"services": [
+		{
+			"binding": "HUBSPOT",
+			"service": "site-web-hubspot"
+		}
+	],
+	"hyperdrive": [
+		{
+			"binding": "aivendb",
+			"id": "f047f5604b114666bc0a674a5ee5ab77"
+		}
+	]
 }
