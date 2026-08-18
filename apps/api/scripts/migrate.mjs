@@ -10,7 +10,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { neon } from "@neondatabase/serverless";
+import postgres from "postgres";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "..", "migrations");
@@ -83,7 +83,10 @@ function splitStatements(sql) {
 }
 
 async function main() {
-  const sql = neon(resolveConnectionString());
+  // postgres.js over TCP rather than Neon's HTTP driver, so this runner works
+  // against any Postgres — Neon, Aiven, or a local container. neon() only
+  // speaks to Neon, which would have made migrating providers impossible.
+  const sql = postgres(resolveConnectionString(), { max: 1, onnotice: () => {} });
 
   const files = readdirSync(migrationsDir)
     .filter((file) => file.endsWith(".sql"))
@@ -104,13 +107,15 @@ async function main() {
     if (adminEmail) contents = contents.replaceAll(":ADMIN_EMAIL", adminEmail);
     const statements = splitStatements(contents);
     for (const statement of statements) {
-      // Ordinary (non-tagged) call form: sql(queryString, params?).
-      await sql(statement);
+      // .unsafe() runs a raw statement string; the tagged form would treat it
+      // as a parameterised query with no parameters.
+      await sql.unsafe(statement);
     }
     console.log(`Applied ${file} (${statements.length} statement(s))`);
   }
 
   console.log("Migrations complete.");
+  await sql.end();
 }
 
 main().catch((error) => {
