@@ -132,7 +132,7 @@ describe("page-connexion", () => {
 
       expect(register).not.toHaveBeenCalled();
       expect(getByTestId("register-error").getAttribute("data-visible")).toBe("true");
-      expect(getByTestId("register-error").textContent).toContain("8 caractères");
+      expect(getByTestId("register-error").textContent).toContain("12 caractères");
     });
 
     it("registers with all-null profile fields when blank and redirects on success", async () => {
@@ -140,11 +140,11 @@ describe("page-connexion", () => {
       const { getByTestId } = render(Page);
 
       await fireEvent.input(getByTestId("register-email"), { target: { value: "new@b.co" } });
-      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough" } });
+      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough12" } });
       await fireEvent.submit(getByTestId("form-register"));
       await tick();
 
-      expect(register).toHaveBeenCalledWith("new@b.co", "longenough", {
+      expect(register).toHaveBeenCalledWith("new@b.co", "longenough12", {
         firstName: null,
         lastName: null,
         phone: null,
@@ -161,11 +161,11 @@ describe("page-connexion", () => {
       await fireEvent.input(getByTestId("register-last-name"), { target: { value: "Lovelace" } });
       await fireEvent.input(getByTestId("register-company"), { target: { value: "  Hydro-Québec " } });
       await fireEvent.input(getByTestId("register-email"), { target: { value: "n@b.co" } });
-      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough" } });
+      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough12" } });
       await fireEvent.submit(getByTestId("form-register"));
       await tick();
 
-      expect(register).toHaveBeenCalledWith("n@b.co", "longenough", {
+      expect(register).toHaveBeenCalledWith("n@b.co", "longenough12", {
         firstName: "Ada",
         lastName: "Lovelace",
         phone: null,
@@ -178,7 +178,7 @@ describe("page-connexion", () => {
       const { getByTestId } = render(Page);
 
       await fireEvent.input(getByTestId("register-email"), { target: { value: "dup@b.co" } });
-      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough" } });
+      await fireEvent.input(getByTestId("register-password"), { target: { value: "longenough12" } });
       await fireEvent.submit(getByTestId("form-register"));
       await tick();
 

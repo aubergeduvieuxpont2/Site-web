@@ -38,7 +38,7 @@
     formError = "";
 
     // Client-side checks are UX-only; the API enforces the same rules server-side.
-    if (newPassword.length < 8) {
+    if (newPassword.length < 12) {
       formError = t('reinitialisation.errors.short');
       return;
     }

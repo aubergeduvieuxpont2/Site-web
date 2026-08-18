@@ -190,7 +190,7 @@
       pwError = "Veuillez saisir votre mot de passe actuel.";
       return;
     }
-    if (pwNew.length < 8) {
+    if (pwNew.length < 12) {
       pwError = "Le nouveau mot de passe doit contenir au moins 8 caractères.";
       return;
     }

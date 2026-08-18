@@ -131,10 +131,10 @@ describe("auth helpers", () => {
 
   it("register sends null profile fields by default and maps 409 to an error", async () => {
     const { calls } = stubFetch({ error: "Un compte existe déjà" }, 409);
-    const res = await register("dup@ex.com", "longenough");
+    const res = await register("dup@ex.com", "longenough12");
     expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
       email: "dup@ex.com",
-      password: "longenough",
+      password: "longenough12",
       firstName: null,
       lastName: null,
       phone: null,
@@ -145,14 +145,14 @@ describe("auth helpers", () => {
 
   it("register forwards explicit profile fields", async () => {
     const { calls } = stubFetch({ user: { id: 2 } }, 201);
-    await register("new@ex.com", "longenough", {
+    await register("new@ex.com", "longenough12", {
       firstName: "Marie",
       lastName: "Curie",
       company: "Hydro-Québec",
     });
     expect(JSON.parse(lastCall(calls).init.body as string)).toEqual({
       email: "new@ex.com",
-      password: "longenough",
+      password: "longenough12",
       firstName: "Marie",
       lastName: "Curie",
       phone: null,
