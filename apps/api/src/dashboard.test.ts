@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import type { Sql } from "./db";
 import {
   toISODate,
   occupancyRatio,
@@ -22,12 +22,12 @@ const mockAvailability = vi.mocked(availabilityForRange);
  * Works as a tagged template literal (sql`...`) because that is just a
  * function call with (TemplateStringsArray, ...values).
  */
-function makeSql(responses: unknown[][]): NeonQueryFunction<any, any> {
+function makeSql(responses: unknown[][]): Sql {
   let callIndex = 0;
   return ((_strings: TemplateStringsArray, ..._values: unknown[]) =>
     Promise.resolve(
       responses[callIndex++] ?? []
-    )) as unknown as NeonQueryFunction<any, any>;
+    )) as unknown as Sql;
 }
 
 // Default 7-night stub used in getDashboardData tests

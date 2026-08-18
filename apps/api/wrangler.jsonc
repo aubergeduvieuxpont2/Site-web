@@ -32,11 +32,32 @@
     { "pattern": "b.aubergeduvieuxpont.ca/api/*", "zone_name": "aubergeduvieuxpont.ca" }
   ],
 
-  // Data lives in Neon Postgres, reached via the DB_CONN connection string.
+  // Database access goes through `getSql(env)` in src/db.ts, which picks a
+  // driver at runtime:
+  //
+  //   1. The HYPERDRIVE binding below, once configured — postgres.js over
+  //      Cloudflare Hyperdrive, which fronts a TCP database (Aiven) and pools
+  //      connections at the edge. This is the target.
+  //   2. Otherwise DB_CONN — Neon's HTTP driver. Still used by local dev and
+  //      the migration runner, and it keeps this branch deployable before any
+  //      Hyperdrive config exists.
+  //
+  // Cutover is therefore a config change rather than a code deploy: add the
+  // binding with a real id and every call site switches at once.
+  //
+  // CRITICAL when creating the Hyperdrive config: DISABLE query caching.
+  // Hyperdrive caches reads by default, and for a booking system a stale
+  // availability read can double-sell a room:
+  //   npx wrangler hyperdrive create site-web-db \
+  //     --connection-string="postgres://..." --caching-disabled
+  //
   //   - Local dev: DB_CONN is loaded from the repo-root `.dev.env`
   //     (the `dev` script passes `--env-file ../../.dev.env`).
   //   - Production: set it as a secret with `wrangler secret put DB_CONN`.
-  // No binding block is needed — DB_CONN is a plain var/secret on `c.env`.
+  //
+  // "hyperdrive": [
+  //   { "binding": "HYPERDRIVE", "id": "<hyperdrive-config-id>" }
+  // ],
 
   // ADMIN_EMAIL seeds the admin role via the 0006_admin_seed migration.
   // Set to the real admin address in production; leave blank to skip seeding.

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./db";
 import type { Env } from "./env";
 import { parseEnvelope, type ParseResult, executeOp, EnvelopeSchema } from "./ops/registry";
 import { enqueue } from "./outbox";
@@ -72,7 +72,7 @@ app.get("/health", async (c) => {
   // error string. Any token or DB check failure collapses to {status:degraded}.
   try {
     await hubspotFetch(c.env, "/account-info/v3/details");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     await sql`SELECT 1`;
   } catch {
     return c.json({ status: "degraded" }, 503);

@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./db";
 import { renderEmail } from "./emails/render";
 import { contactContext } from "./emails/routes";
 
@@ -94,7 +94,7 @@ export async function drainEmailOutbox(
   let failed = 0;
 
   try {
-    const sql = neon(env.DB_CONN);
+    const sql = getSql(env);
 
     // Atomic claim: increment `attempts` and lock the row in the same
     // statement so two overlapping drains can never both process it (the

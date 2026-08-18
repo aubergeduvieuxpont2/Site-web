@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./db";
 
 export async function linkContactToUser(
   env: any,
@@ -6,7 +6,7 @@ export async function linkContactToUser(
   hubspotId: string
 ): Promise<void> {
   try {
-    const sql = neon(env.DB_CONN);
+    const sql = getSql(env);
     await sql`
       UPDATE users
       SET hubspot_contact_id = ${hubspotId}

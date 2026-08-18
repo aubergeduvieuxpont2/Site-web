@@ -1,4 +1,4 @@
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import type { Sql } from "./db";
 
 type Locale = "fr" | "en";
 
@@ -13,7 +13,7 @@ function validateLocale(value: unknown): Locale {
  * locale is absent, or any DB error occurs (safe fr fallback invariant).
  */
 export async function resolveLocale(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   selector: number | string
 ): Promise<Locale> {
   try {

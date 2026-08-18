@@ -1,5 +1,5 @@
 import type { Context, Next } from "hono";
-import { neon } from "@neondatabase/serverless";
+import { getSql, type DbEnv } from "../db";
 import { validateSession } from "./session";
 import type { User } from "./session";
 import { rateLimitAllow } from "./rateLimit";
@@ -83,7 +83,7 @@ function extractSessionToken(cookieHeader: string): string | null {
 // per request is the accepted tradeoff; rateLimitAllow fails OPEN on DB errors.
 export async function authRateLimiter(c: Context, next: Next): Promise<Response | void> {
   const ip = c.req.header("cf-connecting-ip") || "noip";
-  const sql = neon((c.env as { DB_CONN: string }).DB_CONN);
+  const sql = getSql(c.env as DbEnv);
 
   const allowed = await rateLimitAllow(sql, `auth:${ip}`, 10, 15 * 60 * 1000, Date.now());
   if (!allowed) {

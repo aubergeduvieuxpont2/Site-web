@@ -1,4 +1,4 @@
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import type { Sql } from "./db";
 
 export interface AvailabilityNight {
   date: string; // "YYYY-MM-DD"
@@ -36,7 +36,7 @@ function dateRange(checkIn: string, checkOut: string): string[] {
 }
 
 export async function availabilityForRange(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   checkIn: string,
   checkOut: string,
   rooms: number,

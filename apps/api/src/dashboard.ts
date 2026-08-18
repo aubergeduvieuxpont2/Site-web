@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
-import { neon } from "@neondatabase/serverless";
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import { getSql } from "./db";
+import type { Sql } from "./db";
 import type { User } from "./auth/session";
 import { availabilityForRange, type AvailabilityNight } from "./availability";
 import { rowsToAdminSettings } from "./settings";
@@ -84,7 +84,7 @@ export function weekBounds(now: Date): {
  * the date without mocking globals.
  */
 export async function getDashboardData(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   assignableRoomCount: number,
   now: Date = new Date()
 ): Promise<DashboardResult> {
@@ -228,7 +228,7 @@ export function createDashboardRouter(deps: {
     if (!user) return c.json({ error: "Unauthorized" }, 401);
     if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
 
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // Fetch settings for assignableRoomCount.
     const settingsRows = (await sql`SELECT key, value FROM settings`) as {

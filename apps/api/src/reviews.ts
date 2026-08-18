@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./db";
 import { rateLimitAllow } from "./auth/rateLimit";
 import type { User } from "./auth/session";
 
@@ -91,7 +91,7 @@ export function createReviewsRouter(deps: {
   // Reuses the general bucket (30 req / 15 min per IP) per auth.rateLimit pattern.
   const publicRateLimit = async (c: Context<{ Bindings: Bindings }>, next: () => Promise<void>) => {
     const ip = c.req.header("cf-connecting-ip") || "noip";
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     const allowed = await rateLimitAllow(sql, `general:${ip}`, 30, 15 * 60 * 1000, Date.now());
     if (!allowed) return c.json({ error: "Rate limit exceeded" }, 429);
     await next();
@@ -104,7 +104,7 @@ export function createReviewsRouter(deps: {
     const code = c.req.query("code");
     if (!code) return c.json({ error: "Code requis" }, 400);
 
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     const today = new Date().toISOString().slice(0, 10);
 
     const rows = (await sql`
@@ -155,7 +155,7 @@ export function createReviewsRouter(deps: {
     zValidator("json", ReviewSubmitSchema, validationHook),
     async (c) => {
       const data = c.req.valid("json");
-      const sql = neon(c.env.DB_CONN);
+      const sql = getSql(c.env);
       const today = new Date().toISOString().slice(0, 10);
 
       const rows = (await sql`
@@ -244,7 +244,7 @@ export function createReviewsRouter(deps: {
   router.get("/api/reviews", publicRateLimit, async (c) => {
     const rawLimit = c.req.query("limit");
     const limit = Math.min(Math.max(parseInt(rawLimit || "3") || 3, 1), 100);
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const reviews = (await sql`
       SELECT id, display_name, rating, body, stays_count, nights_total, created_at
@@ -298,7 +298,7 @@ export function createReviewsRouter(deps: {
     if (user.role !== "admin") return c.json({ error: "Forbidden" }, 403);
 
     const status = c.req.query("status") || "pending";
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const reviews = (await sql`
       SELECT rv.id, rv.reservation_id, rv.rating, rv.body, rv.status,
@@ -346,7 +346,7 @@ export function createReviewsRouter(deps: {
       const id = parseIdParam(c.req.param("id"));
       if (id === null) return c.json({ error: "Invalid id" }, 400);
       const data = c.req.valid("json");
-      const sql = neon(c.env.DB_CONN);
+      const sql = getSql(c.env);
 
       const rows = (await sql`
         UPDATE reviews

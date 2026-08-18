@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import type { Sql } from "./db";
 
 export const AssignRoomSchema = z.object({
   roomSlug: z.string().min(1),
@@ -29,7 +29,7 @@ function parseDate(date: string | Date): Date | null {
 }
 
 export async function isRoomFreeForRange(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   roomSlug: string,
   arrive: string,
   depart: string,
@@ -49,7 +49,7 @@ export async function isRoomFreeForRange(
 }
 
 export async function freeRoomsForRange(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   arrive: string,
   depart: string,
   excludeReservationId?: number
