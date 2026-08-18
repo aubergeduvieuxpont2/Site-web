@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./db";
 import type { Env } from "./env";
 import type { OpEnvelope } from "./ops/registry";
 
@@ -44,7 +44,7 @@ export async function enqueue(
   env: Env,
   envelope: OpEnvelope
 ): Promise<string> {
-  const sql = neon(env.DB_CONN);
+  const sql = getSql(env);
   const rows = await sql`
     INSERT INTO hubspot_outbox (kind, payload, dedupe_key)
     VALUES (${envelope.kind}, ${JSON.stringify(envelope.payload)}, ${envelope.dedupeKey || null})
@@ -66,7 +66,7 @@ export const CLAIM_LEASE_SECONDS = 5 * 60;
 // the reaper: a row still in 'processing' past its lease/next_attempt_at (a
 // drain that died mid-flight) is treated as claimable again.
 export async function claimBatch(env: Env, limit: number = 25): Promise<OutboxRow[]> {
-  const sql = neon(env.DB_CONN);
+  const sql = getSql(env);
   const rows = await sql`
     UPDATE hubspot_outbox
     SET status = 'processing',
@@ -90,7 +90,7 @@ export async function markDelivered(
   id: string,
   hubspotId: string
 ): Promise<void> {
-  const sql = neon(env.DB_CONN);
+  const sql = getSql(env);
   await sql`
     UPDATE hubspot_outbox
     SET status = 'delivered', hubspot_id = ${hubspotId}, updated_at = now()
@@ -106,7 +106,7 @@ export async function markRetry(
   retryAfterSeconds?: number
 ): Promise<void> {
   const backoffSeconds = computeBackoff(attempts, retryAfterSeconds);
-  const sql = neon(env.DB_CONN);
+  const sql = getSql(env);
 
   const nextAttemptAt = new Date(Date.now() + backoffSeconds * 1000).toISOString();
 
@@ -122,7 +122,7 @@ export async function markFailed(
   id: string,
   error: string
 ): Promise<void> {
-  const sql = neon(env.DB_CONN);
+  const sql = getSql(env);
   await sql`
     UPDATE hubspot_outbox
     SET status = 'failed', last_error = ${error}, updated_at = now()

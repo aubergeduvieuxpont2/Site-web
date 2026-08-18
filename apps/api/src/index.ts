@@ -3,7 +3,7 @@ import type { ExportedHandler, ScheduledController, ExecutionContext } from "@cl
 import { cors } from "hono/cors";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
+import { getSql, type Sql, type DbEnv } from "./db";
 import { drainEmailOutbox, enqueueEmail } from "./emailOutbox";
 import { releaseExpiredHolds } from "./holds";
 import { resolveLocale } from "./emailLocale";
@@ -331,7 +331,7 @@ type SettingsRow = {
 // availability endpoint (which reads the row) and the admin UI stay in sync.
 // Called after every room mutation and on settings load/save. Returns the count.
 async function syncAssignableRoomCount(
-  sql: NeonQueryFunction<any, any>
+  sql: Sql
 ): Promise<number> {
   const rows = (await sql`
     SELECT count(*)::int AS count FROM rooms WHERE is_public = true
@@ -358,7 +358,7 @@ function getSessionToken(cookieHeader: string): string | null {
 async function getAuthUser(c: Context<{ Bindings: Bindings }>): Promise<User | null> {
   const token = getSessionToken(c.req.header("Cookie") || "");
   if (!token) return null;
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   return validateSession(sql, token);
 }
 
@@ -391,7 +391,7 @@ function getDummyHash(): Promise<string> {
 // Insert a code, retrying up to 5 times on the rare uniqueness collision.
 // Code generation lives in ./reservationCode (single source of truth, unit-tested).
 async function insertReservationCode(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   reservationId: number
 ): Promise<string | null> {
   for (let i = 0; i < 5; i++) {
@@ -422,7 +422,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 // a missing IP still counts under a fixed "noip" bucket. Fails OPEN on DB error.
 const rateLimitMiddleware = async (c: Context, next: () => Promise<void>) => {
   const ip = c.req.header("cf-connecting-ip") || "noip";
-  const sql = neon((c.env as { DB_CONN: string }).DB_CONN);
+  const sql = getSql(c.env as DbEnv);
 
   const allowed = await rateLimitAllow(sql, `general:${ip}`, 30, 15 * 60 * 1000, Date.now());
   if (!allowed) {
@@ -462,7 +462,7 @@ app.get("/api/messages", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const rows = (await sql`
     SELECT id, body, created_at
     FROM messages
@@ -480,7 +480,7 @@ app.post(
   async (c) => {
     const data = c.req.valid("json");
 
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     const rows = (await sql`
       INSERT INTO messages (body)
       VALUES (${data.body.trim()})
@@ -500,7 +500,7 @@ app.post(
   "/api/reservations",
   rateLimitMiddleware,
   async (c, next) => {
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
     const adminSettings = rowsToAdminSettings(settingsRows);
 
@@ -533,7 +533,7 @@ app.post(
     }
 
     const name = [data.firstName, data.lastName].filter(Boolean).join(" ");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // Friendly pre-check availability
     {
@@ -720,7 +720,7 @@ app.get("/api/availability", rateLimitMiddleware, async (c) => {
     return c.json({ error: "Invalid date range" }, 400);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const settingsRows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
   const adminSettings = rowsToAdminSettings(settingsRows);
 
@@ -756,7 +756,7 @@ app.post("/internal/ota-bookings", async (c) => {
     return c.json({ error: "invalid JSON" }, 400);
   }
   const status = (raw as { status?: unknown } | null)?.status;
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   if (status === "parse_failed" || status === "ignored") {
     const parsed = OtaFailureSchema.safeParse(raw);
@@ -859,7 +859,7 @@ app.post("/internal/ota-bookings", async (c) => {
 // user_id, which closes the email-reassignment IDOR: changing your email can no
 // longer surface another person's bookings.
 export async function linkGuestReservations(
-  sql: NeonQueryFunction<any, any>,
+  sql: Sql,
   userId: number,
   email: string
 ): Promise<void> {
@@ -875,7 +875,7 @@ app.post(
   zValidator("json", RegisterSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // L2: reject known-breached passwords (fails open if HIBP is unreachable).
     if (await isPasswordBreached(data.password)) {
@@ -982,7 +982,7 @@ app.post(
   zValidator("json", LoginSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       SELECT id, email, password_hash, name, role, email_verified, locale
@@ -1068,7 +1068,7 @@ app.get("/api/auth/me", async (c) => {
     return c.json({ user: null });
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const userRows = (await sql`
     SELECT discount_percent, fixed_nightly_price, fixed_weekly_price, locale FROM users WHERE id = ${user.id}
   `) as { discount_percent: number | null; fixed_nightly_price: number | null; fixed_weekly_price: number | null; locale: string }[];
@@ -1099,7 +1099,7 @@ app.get("/api/auth/me", async (c) => {
 app.post("/api/auth/logout", async (c) => {
   const token = getSessionToken(c.req.header("Cookie") || "");
   if (token) {
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     await deleteSession(sql, token);
   }
   return c.json({ ok: true }, 200, {
@@ -1119,7 +1119,7 @@ app.post(
       return c.json({ error: "Unauthorized" }, 401);
     }
     const { locale } = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     await sql`UPDATE users SET locale = ${locale} WHERE id = ${user.id}`;
     return c.json({ ok: true, locale });
   }
@@ -1137,7 +1137,7 @@ app.post(
     }
 
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       SELECT password_hash FROM users WHERE id = ${user.id}
@@ -1175,7 +1175,7 @@ app.post(
   zValidator("json", ForgotPasswordSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       SELECT id, email, first_name, name, locale FROM users WHERE lower(email) = lower(${data.email})
@@ -1220,7 +1220,7 @@ app.post(
   zValidator("json", ResetPasswordSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const tokenHash = await sha256hex(data.token);
 
@@ -1261,7 +1261,7 @@ app.post(
   zValidator("json", VerifyEmailSchema, authHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const tokenHash = await sha256hex(data.token);
 
@@ -1417,7 +1417,7 @@ app.get("/api/profile", async (c) => {
     return c.json({ error: "Unauthorized" }, 401);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const userRows = (await sql`
     SELECT id, email, name, role, hubspot_contact_id, first_name, last_name, phone, company, locale, pending_email,
@@ -1475,7 +1475,7 @@ app.patch(
       return c.json({ error: "Unauthorized" }, 401);
     }
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       UPDATE users SET
@@ -1536,7 +1536,7 @@ app.post(
     }
 
     const { newEmail, currentPassword } = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // Verify password
     const userRow = (await sql`
@@ -1603,7 +1603,7 @@ app.post(
 
 // Public rooms endpoint
 app.get("/api/rooms", async (c) => {
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   // Public endpoint: never selects/returns the pass-key (a door/lock code).
   const rows = (await sql`
     SELECT slug, name, capacity, image_key, is_public
@@ -1625,7 +1625,7 @@ app.get("/api/admin/reservations", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const q = c.req.query("q") || "";
   const limit = Math.min(parseInt(c.req.query("limit") || "100") || 100, 200);
 
@@ -1659,7 +1659,7 @@ app.get("/api/admin/outbox", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const status = c.req.query("status") || "all";
 
   let rows: OutboxRow[];
@@ -1691,7 +1691,7 @@ app.get("/api/admin/email-ingest", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const rows = (await sql`
     SELECT id, provider, status, reservation_id, subject, error, created_at
     FROM email_ingest_log
@@ -1711,7 +1711,7 @@ app.post("/api/admin/outbox/:id/requeue", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const id = parseIdParam(c.req.param("id"));
   if (id === null) return c.json({ error: "Invalid id" }, 400);
 
@@ -1747,7 +1747,7 @@ app.get("/api/admin/rooms", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const rooms = (await sql`
     SELECT slug, name, capacity, image_key, is_public, passkey_enabled, passkey, created_at, updated_at
     FROM rooms
@@ -1772,7 +1772,7 @@ app.post(
   zValidator("json", RoomCreateSchema),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     const slug = slugify(data.name);
 
     try {
@@ -1811,7 +1811,7 @@ app.put(
   async (c) => {
     const slug = c.req.param("slug");
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       UPDATE rooms
@@ -1845,7 +1845,7 @@ app.delete(
   },
   async (c) => {
     const slug = c.req.param("slug");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       DELETE FROM rooms
@@ -1874,7 +1874,7 @@ app.get("/api/admin/users", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const q = c.req.query("q") || "";
 
   // No NUMERIC normalization needed here: this list selects no pricing columns
@@ -1917,7 +1917,7 @@ app.post(
     }
 
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       UPDATE users
@@ -1945,7 +1945,7 @@ app.post("/api/admin/users/:id/reset-link", async (c) => {
 
   const targetId = parseIdParam(c.req.param("id"));
   if (targetId === null) return c.json({ error: "Invalid id" }, 400);
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const rows = (await sql`
     SELECT id FROM users WHERE id = ${targetId}
@@ -1993,7 +1993,7 @@ app.get("/api/admin/reservations/:id/assignments", async (c) => {
 
   const reservationId = parseIdParam(c.req.param("id"));
   if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const assignments = (await sql`
     SELECT room_slug FROM reservation_room_assignments WHERE reservation_id = ${reservationId}
@@ -2013,7 +2013,7 @@ app.get("/api/admin/reservations/:id/free-rooms", async (c) => {
 
   const reservationId = parseIdParam(c.req.param("id"));
   if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const res = (await sql`
     SELECT to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart
@@ -2045,7 +2045,7 @@ app.post(
     const reservationId = parseIdParam(c.req.param("id"));
     if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const res = (await sql`
       SELECT to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count
@@ -2130,7 +2130,7 @@ app.delete("/api/admin/reservations/:id/assignments/:roomSlug", async (c) => {
   const reservationId = parseIdParam(c.req.param("id"));
   if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
   const roomSlug = c.req.param("roomSlug");
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const deleted = (await sql`
     DELETE FROM reservation_room_assignments
@@ -2169,7 +2169,7 @@ app.post(
     const reservationId = parseIdParam(c.req.param("id"));
     if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const res = (await sql`
       SELECT email, to_char(arrive, 'YYYY-MM-DD') as arrive, to_char(depart, 'YYYY-MM-DD') as depart, room_count, invoice_status
@@ -2323,7 +2323,7 @@ app.get("/api/admin/users/:id", async (c) => {
 
   const targetId = parseIdParam(c.req.param("id"));
   if (targetId === null) return c.json({ error: "Invalid id" }, 400);
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const userRows = (await sql`
     SELECT id, email, name, role, first_name, last_name, phone, company, created_at, hubspot_contact_id, discount_percent, fixed_nightly_price, fixed_weekly_price
@@ -2412,7 +2412,7 @@ app.post(
       return c.json({ error: "Un seul mode de tarification est permis." }, 400);
     }
 
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const updated = (await sql`
       UPDATE users
@@ -2470,7 +2470,7 @@ app.patch(
     const reservationId = parseIdParam(c.req.param("id"));
     if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     const rows = (await sql`
       UPDATE reservations
@@ -2499,7 +2499,7 @@ app.post("/api/admin/reservations/:id/review-request", async (c) => {
   const reservationId = parseIdParam(c.req.param("id"));
   if (reservationId === null) return c.json({ error: "Invalid id" }, 400);
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   const rows = (await sql`
     SELECT r.id, r.email, r.first_name, r.name, r.code,
@@ -2561,7 +2561,7 @@ app.get("/api/admin/blackouts", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const rows = (await sql`
     SELECT to_char(date, 'YYYY-MM-DD') as date, rooms_blocked, note, created_at
     FROM blackout_dates
@@ -2595,7 +2595,7 @@ app.post(
       return c.json({ error: "La plage ne peut dépasser 366 jours" }, 400);
     }
 
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
     await sql`
       INSERT INTO blackout_dates (date, rooms_blocked, note)
       SELECT
@@ -2627,7 +2627,7 @@ app.delete("/api/admin/blackouts/range", async (c) => {
     return c.json({ error: "start doit être ≤ end" }, 400);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const deleted = (await sql`
     DELETE FROM blackout_dates
     WHERE date >= ${start}::date AND date <= ${end}::date
@@ -2653,7 +2653,7 @@ app.put(
   async (c) => {
     const date = c.req.param("date");
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // Validate date format
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -2685,7 +2685,7 @@ app.delete(
   },
   async (c) => {
     const date = c.req.param("date");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     // Validate date format
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
@@ -2708,7 +2708,7 @@ app.delete(
 
 // Public settings endpoint
 app.get("/api/settings", async (c) => {
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   const rows = (await sql`SELECT key, value FROM settings`) as SettingsRow[];
 
   const adminSettings = rowsToAdminSettings(rows);
@@ -2740,7 +2740,7 @@ app.get("/api/admin/settings", async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
   // Refresh the derived public-room count before reading so the read-only field
   // always reflects the current rooms table (self-heals any drift).
   await syncAssignableRoomCount(sql);
@@ -2769,7 +2769,7 @@ app.post(
   zValidator("json", SettingsUpdateSchema, settingsHook),
   async (c) => {
     const data = c.req.valid("json");
-    const sql = neon(c.env.DB_CONN);
+    const sql = getSql(c.env);
 
     await Promise.all([
       sql`INSERT INTO settings (key, value) VALUES ('nightly_price', ${data.nightlyPrice.toString()}) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
@@ -2838,7 +2838,7 @@ app.post("/api/webhooks/stripe", async (c) => {
     return c.json({ error: "Invalid signature" }, 400);
   }
 
-  const sql = neon(c.env.DB_CONN);
+  const sql = getSql(c.env);
 
   // Booking branch: handle checkout.session.completed for held reservations
   if (event.type === "checkout.session.completed") {
@@ -3040,10 +3040,10 @@ export default {
     // review requests) must not prevent the others from running, since they
     // are otherwise-unrelated cron duties sharing one invocation.
     ctx.waitUntil((async () => {
-      await enqueueReviewRequests(neon(env.DB_CONN)).catch((e) =>
+      await enqueueReviewRequests(getSql(env)).catch((e) =>
         console.error("review_requests_failed", e)
       );
-      await releaseExpiredHolds(neon(env.DB_CONN)).catch((e) =>
+      await releaseExpiredHolds(getSql(env)).catch((e) =>
         console.error("release_holds_failed", e)
       );
       await drainEmailOutbox(env).catch((e) => console.error("drain_outbox_failed", e));

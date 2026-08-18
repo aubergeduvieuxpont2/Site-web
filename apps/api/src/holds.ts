@@ -1,7 +1,7 @@
-import type { NeonQueryFunction } from "@neondatabase/serverless";
+import type { Sql } from "./db";
 
 export async function releaseExpiredHolds(
-  sql: NeonQueryFunction<any, any>
+  sql: Sql
 ): Promise<{ released_count: number }> {
   const rows = (await sql`
     UPDATE reservations
