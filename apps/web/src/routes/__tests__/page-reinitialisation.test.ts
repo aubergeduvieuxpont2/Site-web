@@ -99,12 +99,12 @@ describe("page-reinitialisation", () => {
       expect(resetPassword).not.toHaveBeenCalled();
       const err = getByTestId("reset-form-error");
       expect(err.getAttribute("data-visible")).toBe("true");
-      expect(err.textContent).toContain("8 caractères");
+      expect(err.textContent).toContain("12 caractères");
     });
 
     it("blocks mismatched passwords before any network call", async () => {
       const { getByTestId } = render(Page);
-      await fillPasswords(getByTestId, "longenough", "different1");
+      await fillPasswords(getByTestId, "longenough12", "different1");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 
@@ -120,7 +120,7 @@ describe("page-reinitialisation", () => {
       expect(section.getAttribute("data-welcome")).toBe("false");
       expect(getByTestId("reset-card-tag").textContent).toContain("PASS-RESET");
       expect(getByTestId("reset-heading").textContent).toContain("Nouveau mot de passe");
-      expect(getByTestId("reset-subhead").textContent).toContain("8 caractères");
+      expect(getByTestId("reset-subhead").textContent).toContain("12 caractères");
       expect(document.title).toContain("Réinitialisation du mot de passe");
     });
 
@@ -161,11 +161,11 @@ describe("page-reinitialisation", () => {
       resetPassword.mockResolvedValue({ ok: true });
       const { getByTestId } = render(Page);
 
-      await fillPasswords(getByTestId, "longenough");
+      await fillPasswords(getByTestId, "longenough12");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 
-      expect(resetPassword).toHaveBeenCalledWith("tok-123", "longenough");
+      expect(resetPassword).toHaveBeenCalledWith("tok-123", "longenough12");
       expect(getByTestId("reset-success-state")).toBeTruthy();
     });
   });
@@ -175,11 +175,11 @@ describe("page-reinitialisation", () => {
       resetPassword.mockResolvedValue({ ok: true });
       const { getByTestId, queryByTestId } = render(Page);
 
-      await fillPasswords(getByTestId, "longenough");
+      await fillPasswords(getByTestId, "longenough12");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 
-      expect(resetPassword).toHaveBeenCalledWith("tok-123", "longenough");
+      expect(resetPassword).toHaveBeenCalledWith("tok-123", "longenough12");
       expect(getByTestId("reset-success-state")).toBeTruthy();
       expect(getByTestId("reset-success-state").textContent).toContain("mis à jour");
       expect(queryByTestId("reset-form-section")).toBeNull();
@@ -190,7 +190,7 @@ describe("page-reinitialisation", () => {
       resetPassword.mockResolvedValue({ error: "Lien invalide ou expiré" });
       const { getByTestId, queryByTestId } = render(Page);
 
-      await fillPasswords(getByTestId, "longenough");
+      await fillPasswords(getByTestId, "longenough12");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 
@@ -202,7 +202,7 @@ describe("page-reinitialisation", () => {
       resetPassword.mockResolvedValue({ error: "Réseau indisponible" });
       const { getByTestId, queryByTestId } = render(Page);
 
-      await fillPasswords(getByTestId, "longenough");
+      await fillPasswords(getByTestId, "longenough12");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 
@@ -218,7 +218,7 @@ describe("page-reinitialisation", () => {
       resetPassword.mockReturnValue(new Promise((r) => (resolve = r)));
       const { getByTestId, container } = render(Page);
 
-      await fillPasswords(getByTestId, "longenough");
+      await fillPasswords(getByTestId, "longenough12");
       await fireEvent.submit(getByTestId("reset-form"));
       await tick();
 

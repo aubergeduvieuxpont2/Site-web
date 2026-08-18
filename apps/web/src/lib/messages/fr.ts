@@ -513,7 +513,7 @@ export const fr = {
     errors: {
       invalidCredentials: 'Identifiants invalides.',
       network: 'Connexion impossible. Veuillez réessayer.',
-      passwordTooShort: 'Le mot de passe doit contenir au moins 8 caractères.',
+      passwordTooShort: 'Le mot de passe doit contenir au moins 12 caractères.',
     },
     forgot: {
       trigger: 'Mot de passe oublié ?',
@@ -751,7 +751,7 @@ export const fr = {
       new: 'Nouveau mot de passe',
       hint: '(8 caractères minimum)',
       errors: {
-        tooShort: 'Le nouveau mot de passe doit contenir au moins 8 caractères.',
+        tooShort: 'Le nouveau mot de passe doit contenir au moins 12 caractères.',
       },
       success: 'Mot de passe modifié avec succès.',
       submitAriaLabel: 'Modifier le mot de passe',
@@ -796,7 +796,7 @@ export const fr = {
     },
     subhead: {
       welcome: 'Choisissez votre mot de passe pour accéder à votre espace client.',
-      reset: "Choisissez un mot de passe d'au moins 8 caractères.",
+      reset: "Choisissez un mot de passe d'au moins 12 caractères.",
     },
     form: {
       ariaLabel: 'Formulaire de réinitialisation de mot de passe',
@@ -807,7 +807,7 @@ export const fr = {
       submitting: 'Envoi…',
     },
     errors: {
-      short: 'Le mot de passe doit contenir au moins 8 caractères.',
+      short: 'Le mot de passe doit contenir au moins 12 caractères.',
       mismatch: 'Les mots de passe ne correspondent pas.',
       network: 'Connexion impossible. Veuillez réessayer.',
     },

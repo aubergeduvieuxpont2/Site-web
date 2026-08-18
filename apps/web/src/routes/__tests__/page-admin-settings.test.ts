@@ -114,9 +114,9 @@ describe("AdminParametresTab component — change-password sub-section", () => {
     expect(content).toContain("changePasswordInPanel");
   });
 
-  it("enforces the 8-character minimum on the new password client-side", () => {
+  it("enforces the 12-character minimum on the new password client-side", () => {
     const content = readComponent();
-    expect(content).toContain("pwNew.length < 8");
+    expect(content).toContain("pwNew.length < 12");
   });
 
   it("headings label both sub-sections for assistive tech", () => {

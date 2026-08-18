@@ -514,7 +514,7 @@ export const en: Messages = {
     errors: {
       invalidCredentials: 'Invalid credentials.',
       network: 'Connection failed. Please try again.',
-      passwordTooShort: 'Password must be at least 8 characters.',
+      passwordTooShort: 'Password must be at least 12 characters.',
     },
     forgot: {
       trigger: 'Forgot your password?',
@@ -752,7 +752,7 @@ export const en: Messages = {
       new: 'New password',
       hint: '(minimum 8 characters)',
       errors: {
-        tooShort: 'New password must be at least 8 characters.',
+        tooShort: 'New password must be at least 12 characters.',
       },
       success: 'Password changed successfully.',
       submitAriaLabel: 'Change password',
@@ -797,7 +797,7 @@ export const en: Messages = {
     },
     subhead: {
       welcome: 'Choose your password to access your guest area.',
-      reset: "Choose a password of at least 8 characters.",
+      reset: "Choose a password of at least 12 characters.",
     },
     form: {
       ariaLabel: 'Password reset form',
@@ -808,7 +808,7 @@ export const en: Messages = {
       submitting: 'Sending…',
     },
     errors: {
-      short: 'Password must be at least 8 characters.',
+      short: 'Password must be at least 12 characters.',
       mismatch: 'Passwords do not match.',
       network: 'Connection failed. Please try again.',
     },
