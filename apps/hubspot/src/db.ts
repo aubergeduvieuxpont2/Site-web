@@ -57,12 +57,21 @@ export function getSql(env: DbEnv): Sql {
   const hyperdriveUrl = env.HYPERDRIVE?.connectionString;
 
   if (hyperdriveUrl) {
-    // `max: 1` because Hyperdrive already pools on the edge; a second pool
-    // inside the isolate would multiply connections against the database's
-    // cap, which matters on plans with a low connection limit.
+    // `max: 5` sizes the pool from THIS isolate to Hyperdrive. It is not a
+    // slice of the origin database's connection cap: Hyperdrive owns the pool
+    // to Aiven and multiplexes many isolates onto it, so Aiven's 20-connection
+    // limit is not divided across isolates. The number that matters here is
+    // how many queries one invocation may have in flight at once — 5 gives
+    // headroom for concurrent queries within a request without holding
+    // connections idle.
+    //
+    // If the HYPERDRIVE binding is ever removed while a TCP database is still
+    // in use, this reasoning no longer holds and the origin cap becomes a real
+    // per-isolate constraint.
+    //
     // `prepare: false` because pooled connections may be handed to a different
     // session than the one that prepared the statement.
-    const sql = postgres(hyperdriveUrl, { max: 1, prepare: false });
+    const sql = postgres(hyperdriveUrl, { max: 5, prepare: false });
     return ((strings: TemplateStringsArray, ...values: unknown[]) =>
       // postgres.js returns an array-like result; callers treat it as rows.
       (sql as unknown as (s: TemplateStringsArray, ...v: unknown[]) => Promise<any[]>)(
