@@ -3052,7 +3052,38 @@ app.notFound((c) => {
 // error) returns a generic JSON 500 — never a raw message or stack trace, which
 // could leak SQL, connection strings, or PII. The error name is logged for ops.
 app.onError((err, c) => {
-  console.error("unhandled_error", err instanceof Error ? err.name : "unknown");
+  // Log enough to identify the fault without a log dive. This previously
+  // recorded only `err.name`, which for an ordinary Error is the literal
+  // string "Error" — it told you something threw and nothing else. Diagnosing
+  // a 500 then meant reproducing statement by statement against the database,
+  // which cost hours during the Aiven cutover.
+  //
+  // The client response is unchanged: callers still get a generic
+  // "Internal server error" with no internals. This is server-side logging,
+  // visible only in `wrangler tail` and the Cloudflare dashboard.
+  const e = err instanceof Error ? err : undefined;
+  console.error("unhandled_error", {
+    name: e?.name ?? "unknown",
+    // The message names the actual fault — a missing column, a rejected
+    // parameter, a failed connection.
+    message: e?.message ?? String(err),
+    // Which endpoint threw. Without this, a log line is unattributable when
+    // several requests are in flight.
+    method: c.req.method,
+    path: new URL(c.req.url).pathname,
+    // Postgres attaches these; they pinpoint the statement far faster than a
+    // stack through the driver does. Undefined for non-database errors, and
+    // omitted from the output rather than logged as noise.
+    ...(() => {
+      const pg = err as { code?: string; detail?: string; hint?: string; position?: string };
+      return {
+        ...(pg?.code ? { pgCode: pg.code } : {}),
+        ...(pg?.detail ? { pgDetail: pg.detail } : {}),
+        ...(pg?.hint ? { pgHint: pg.hint } : {}),
+      };
+    })(),
+    stack: e?.stack,
+  });
   return c.json({ error: "Internal server error" }, 500);
 });
 
