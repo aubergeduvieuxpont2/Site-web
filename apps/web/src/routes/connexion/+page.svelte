@@ -89,7 +89,7 @@
 
     // Client-side length check before hitting the network. The API enforces the
     // same rule server-side; this is only a fast-fail for UX.
-    if (regPassword.length < 8) {
+    if (regPassword.length < 12) {
       regError = t('connexion.errors.passwordTooShort');
       return;
     }
@@ -109,6 +109,17 @@
           ? t('connexion.errors.network')
           : result.error; // includes server-side messages e.g. "Un compte existe déjà"
       regStatus = "idle";
+
+      // "This address already has an account" only helps if the way out is one
+      // click away, so open the reset panel with the address already filled in.
+      // Matching on the server's wording is crude, but the API returns a bare
+      // { error } string with no machine-readable code to branch on.
+      if (result.error.includes("Un compte existe déjà")) {
+        forgotEmail = regEmail;
+        forgotOpen = true;
+        forgotError = "";
+        forgotSent = false;
+      }
     } else {
       // Confirm the account was created and a verification email is on its way.
       // The account is usable immediately; confirming the address reconnects any
