@@ -19,7 +19,20 @@
     "HUBSPOT_TIMELINE_EVENT_TEMPLATE_ID": ""
   },
 
+  // Database access goes through `getSql(env)` in src/db.ts, which prefers the
+  // HYPERDRIVE binding and falls back to DB_CONN. Add the binding here at the
+  // same time as apps/api — this Worker queries the same database, so leaving
+  // it behind would point it at a provider the rest of the stack has left.
+  //
+  // "hyperdrive": [
+  //   { "binding": "HYPERDRIVE", "id": "<hyperdrive-config-id>" }
+  // ],
+
+  // Every 5 minutes, matching apps/api. A per-minute schedule keeps Neon's
+  // serverless compute from ever autosuspending, which is what exhausted the
+  // compute quota and took the whole API down. #77 fixed the API's cron but
+  // missed this one, so this Worker kept waking the database every minute.
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": ["*/5 * * * *"]
   }
 }
