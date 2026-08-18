@@ -27,8 +27,14 @@ import postgres from "postgres";
 
 /** The subset of the environment this module needs. */
 export interface DbEnv {
-  /** Cloudflare Hyperdrive binding. Absent until the binding is configured. */
-  HYPERDRIVE?: { connectionString: string };
+  /**
+   * Cloudflare Hyperdrive binding. Named `aivendb` to match the binding name in
+   * wrangler.jsonc — the operator keeps it aligned with the resource name shown
+   * in the Cloudflare dashboard. This identifier is a contract between the
+   * config and this file: renaming it in one place without the other silently
+   * falls through to the DB_CONN branch below.
+   */
+  aivendb?: { connectionString: string };
   /** Direct Postgres connection string. Used for local dev and as a fallback. */
   DB_CONN?: string;
 }
@@ -54,7 +60,7 @@ export type Sql = (
  * pin a pooled connection. Hyperdrive makes acquiring one cheap.
  */
 export function getSql(env: DbEnv): Sql {
-  const hyperdriveUrl = env.HYPERDRIVE?.connectionString;
+  const hyperdriveUrl = env.aivendb?.connectionString;
 
   if (hyperdriveUrl) {
     // `max: 5` sizes the pool from THIS isolate to Hyperdrive. It is not a
@@ -65,7 +71,7 @@ export function getSql(env: DbEnv): Sql {
     // headroom for concurrent queries within a request without holding
     // connections idle.
     //
-    // If the HYPERDRIVE binding is ever removed while a TCP database is still
+    // If the aivendb binding is ever removed while a TCP database is still
     // in use, this reasoning no longer holds and the origin cap becomes a real
     // per-isolate constraint.
     //
@@ -82,7 +88,30 @@ export function getSql(env: DbEnv): Sql {
 
   if (!env.DB_CONN) {
     throw new Error(
-      "No database configured: neither the HYPERDRIVE binding nor DB_CONN is set.",
+      "No database configured: neither the aivendb Hyperdrive binding nor DB_CONN is set.",
+    );
+  }
+
+  // The fallback speaks Neon's HTTP protocol and CANNOT reach any other
+  // Postgres. Fail loudly rather than handing a non-Neon URL to neon(), whose
+  // failure surfaces as a generic 500 with nothing pointing at the cause.
+  //
+  // This exact situation cost hours during the Aiven cutover: a binding-name
+  // mismatch made `env.aivendb` undefined, execution fell through to here with
+  // DB_CONN pointing at Aiven, and every database-backed endpoint returned
+  // "Internal server error" while the real problem was three characters in a
+  // config file.
+  // Only trips on a real remote host that is not Neon. Local and stub strings
+  // (`postgres://stub`, `…@localhost:5432/…`) have no dotted hostname and pass
+  // through, so unit tests and local dev are unaffected.
+  const remoteHost = env.DB_CONN.match(/@([^/:?]+)/)?.[1] ?? "";
+  if (remoteHost.includes(".") && !remoteHost.endsWith(".neon.tech")) {
+    throw new Error(
+      `Hyperdrive binding 'aivendb' is missing and DB_CONN points at ${remoteHost}, ` +
+        "which is not a Neon host. The DB_CONN fallback uses Neon's HTTP driver " +
+        "and cannot reach other Postgres providers. Check that the `hyperdrive` " +
+        "binding name and id in wrangler.jsonc match a config listed by " +
+        "`wrangler hyperdrive list`.",
     );
   }
 
