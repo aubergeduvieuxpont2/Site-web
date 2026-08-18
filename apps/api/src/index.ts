@@ -154,14 +154,24 @@ const MessageRequestSchema = z.object({
 });
 
 // L2: shown when a submitted password is found in the HIBP breach corpus.
+// Shown when someone registers an email that already has an account. Names the
+// situation and the way out, rather than leaving them at a dead end.
+const ACCOUNT_EXISTS_ERROR =
+  "Un compte existe déjà avec cette adresse courriel. Utilisez « Mot de passe oublié » pour le réinitialiser.";
+
 const BREACHED_PASSWORD_ERROR =
   "Ce mot de passe figure dans une fuite de données connue. Veuillez en choisir un autre.";
 
 const HOLD_MINUTES = 15;
 
+// Accepts a missing field, an explicit null, or a string. `.nullish()` rather
+// than `.optional()` because the registration form sends `phone: value || null`
+// for every blank optional field — with `.optional()` alone, zod rejected the
+// null with "Invalid input: expected string, received null" and NO ONE COULD
+// REGISTER unless they filled in every optional field.
 const trimToNull = z
   .string()
-  .optional()
+  .nullish()
   .transform((v) => {
     const t = (v ?? "").trim();
     return t.length > 0 ? t : null;
@@ -887,6 +897,24 @@ app.post(
       [data.firstName, data.lastName].filter(Boolean).join(" ") ||
       data.name ||
       null;
+
+    // An email that is already registered is a normal thing for a returning
+    // guest to do, not a server fault. Checked before the INSERT so the answer
+    // is a clear 409 telling them what to do next; previously the unique
+    // violation propagated uncaught and they were shown
+    // "Internal server error", which suggests the site is broken and gives no
+    // way forward.
+    //
+    // This is deliberately NOT treated as an account-enumeration risk: the
+    // login and forgot-password forms already reveal nothing, but registration
+    // cannot both refuse a duplicate and stay silent about why. Telling the
+    // person their account exists is the only way they can act on it.
+    const existing = (await sql`
+      SELECT 1 FROM users WHERE lower(email) = lower(${data.email}) LIMIT 1
+    `) as unknown[];
+    if (existing.length > 0) {
+      return c.json({ error: ACCOUNT_EXISTS_ERROR }, 409);
+    }
 
     try {
       const passwordHash = await hashPassword(data.password);
