@@ -1,7 +1,26 @@
-// OWASP 2023 guidance for PBKDF2-HMAC-SHA256. New hashes use this count; older
-// hashes (embedding a lower count) still verify and are transparently upgraded
-// on the next successful login. See `needsRehash`.
-export const PBKDF2_ITERATIONS = 600_000;
+// Cloudflare Workers' WebCrypto REJECTS PBKDF2 above 100,000 iterations:
+//
+//   NotSupportedError: Pbkdf2 failed: iteration counts above 100000 are not
+//   supported (requested 600000).
+//
+// This was set to 600,000 on OWASP 2023 guidance, which is correct advice for
+// a runtime that allows it. On Workers it meant hashPassword() threw on every
+// call, so registration and password reset could never succeed — the failure
+// surfaced only as a generic 500 because the register handler discarded the
+// error (fixed in #86).
+//
+// 100,000 is the platform ceiling, not a preference. Raising it again breaks
+// account creation outright, so treat this constant as fixed by the runtime.
+// If the work factor needs to increase beyond this, it requires a different
+// KDF (scrypt/Argon2 via WASM), not a larger number here.
+//
+// New hashes use this count; older hashes embed their own count, still verify,
+// and are transparently upgraded on the next successful login. See
+// `needsRehash`.
+export const PBKDF2_ITERATIONS = 100_000;
+
+// Enforced by the runtime; exported so tests can pin it.
+export const PBKDF2_MAX_SUPPORTED_ITERATIONS = 100_000;
 
 export async function hashPassword(password: string): Promise<string> {
   const iterations = PBKDF2_ITERATIONS;
@@ -21,6 +40,21 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const iterations = parseInt(parts[1], 10);
   const saltB64 = parts[2];
   const hashB64 = parts[3];
+
+  // A hash embedding a count above the runtime ceiling cannot be verified here:
+  // deriveKey would throw NotSupportedError and turn a failed login into a 500.
+  // Such hashes are producible outside Workers — Node's WebCrypto accepts
+  // 600,000 — so they can arrive with imported data. Refuse cleanly and say so,
+  // rather than crashing: the account then needs a password reset, which is the
+  // real remedy.
+  if (!Number.isFinite(iterations) || iterations > PBKDF2_MAX_SUPPORTED_ITERATIONS) {
+    console.error("password_hash_unverifiable", {
+      reason: "iteration count exceeds the runtime maximum",
+      iterations,
+      max: PBKDF2_MAX_SUPPORTED_ITERATIONS,
+    });
+    return false;
+  }
 
   const salt = new Uint8Array(
     atob(saltB64)
