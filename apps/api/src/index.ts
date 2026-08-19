@@ -991,6 +991,25 @@ app.post(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
+
+      // Log before branching. This catch used to discard the error entirely:
+      // anything that was not a duplicate returned a bare 500 with nothing
+      // recorded anywhere, and because it never reached app.onError, the
+      // global handler's logging could not see it either. A registration
+      // failure was therefore undiagnosable from production — it cost hours,
+      // and improving onError did not help precisely because this path
+      // short-circuits it.
+      const e = err instanceof Error ? err : undefined;
+      const pg = err as { code?: string; detail?: string; hint?: string };
+      console.error("register_failed", {
+        name: e?.name ?? "unknown",
+        message: message || String(err),
+        ...(pg?.code ? { pgCode: pg.code } : {}),
+        ...(pg?.detail ? { pgDetail: pg.detail } : {}),
+        ...(pg?.hint ? { pgHint: pg.hint } : {}),
+        stack: e?.stack,
+      });
+
       if (message.includes("duplicate") || message.includes("UNIQUE")) {
         // M9 (anti-enumeration): keep the 409 status (the frontend/onboarding flow
         // in PR #45 branches on it), but return a GENERIC body that does not
