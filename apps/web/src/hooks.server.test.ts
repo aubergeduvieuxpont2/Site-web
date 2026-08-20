@@ -75,6 +75,38 @@ describe('kit.csp directives (svelte.config.js)', () => {
     expect(directives['style-src']).toContain('unsafe-inline');
   });
 
+  // Cloudflare injects this beacon into every response when Web Analytics is
+  // enabled on the zone. It is referenced nowhere in this codebase, so it is
+  // easy to "clean up" from the allowlist without realising the browser will
+  // then block it on every page load.
+  it('allows the Cloudflare Web Analytics beacon', () => {
+    expect(directives['script-src']).toContain('https://static.cloudflareinsights.com');
+  });
+
+  // Svelte 5 delegates events via inline handler attributes, governed by
+  // script-src-attr, which does NOT inherit script-src's hashes. Without
+  // 'unsafe-hashes' the browser blocks them and handlers silently never fire.
+  it("permits Svelte's delegated event handlers without allowing inline script", () => {
+    // 'unsafe-hashes' alone permits nothing — the hash must accompany it.
+    expect(directives['script-src-attr']).toContain('unsafe-hashes');
+    expect(directives['script-src-attr']).toContain(
+      'sha256-7dQwUgLau1NFCCGjfn9FsYptB6ZtWxJin6VohGIu20I=',
+    );
+    expect(directives['script-src-attr']).not.toContain('unsafe-inline');
+  });
+
+  // Pins the hash to its source rather than trusting a copied literal: if a
+  // Svelte upgrade changes the delegated-handler string, this fails and names
+  // the reason instead of handlers silently dying in production.
+  it("the attribute hash matches Svelte's handler source exactly", async () => {
+    const digest = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode('this.__e=event'),
+    );
+    const b64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
+    expect(directives['script-src-attr']).toContain(`sha256-${b64}`);
+  });
+
   it('scopes frame-src to Stripe domains for embedded checkout', () => {
     expect(directives['frame-src']).toContain('https://js.stripe.com');
     expect(directives['frame-src']).toContain('https://*.stripe.com');
