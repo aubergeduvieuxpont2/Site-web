@@ -2,6 +2,23 @@ import { describe, it, expect } from "vitest";
 import { provisionOtaGuest } from "../src/provisioning";
 import { sha256hex } from "../src/auth/session";
 
+// The outbox payload is interpolated as an OBJECT (postgres.js serialises it to
+// jsonb; a pre-stringified string would store a JSON *string* and every field
+// would read back undefined). These tests previously searched the bound values
+// for a STRING containing "setPasswordUrl" and JSON.parse'd it — that stopped
+// matching once the value became a real object, which is the correct shape.
+function outboxPayload(vals: unknown[]): any {
+  const obj = vals.find(
+    (v) => v !== null && typeof v === "object" && "setPasswordUrl" in (v as object),
+  );
+  if (obj) return obj;
+  // Tolerate the legacy stringified shape so this helper reports a useful
+  // failure rather than a JSON.parse crash if the bug is ever reintroduced.
+  const str = vals.find((v) => typeof v === "string" && String(v).includes("setPasswordUrl"));
+  return str ? JSON.parse(String(str)) : undefined;
+}
+
+
 type Q = { q: string; vals: unknown[] };
 
 function makeSql(script: (q: string, vals: unknown[]) => unknown[] | undefined) {
@@ -46,7 +63,7 @@ describe("provisionOtaGuest", () => {
     expect(token!.q).not.toContain("30 days");
     const outbox = calls.find((c) => c.q.includes("INSERT INTO email_outbox"));
     expect(outbox).toBeDefined();
-    const payload = JSON.parse(String(outbox!.vals.find((v) => typeof v === "string" && String(v).includes("setPasswordUrl"))));
+    const payload = outboxPayload(outbox!.vals);
     expect(payload.setPasswordUrl).toMatch(/^https:\/\/www\.aubergeduvieuxpont\.ca\/reinitialisation\?token=[0-9a-f]{64}&welcome=1$/);
     expect(payload.confirmationCode).toBe("2511634261");
     expect(payload.firstName).toBe("Marie");
@@ -96,9 +113,7 @@ describe("provisionOtaGuest", () => {
 
     // Recover the raw token the guest was emailed.
     const outbox = calls.find((c) => c.q.includes("INSERT INTO email_outbox"));
-    const payload = JSON.parse(
-      String(outbox!.vals.find((v) => typeof v === "string" && String(v).includes("setPasswordUrl")))
-    );
+    const payload = outboxPayload(outbox!.vals);
     const rawToken = new URL(payload.setPasswordUrl).searchParams.get("token")!;
 
     const tokenInsert = calls.find((c) => c.q.includes("INSERT INTO password_reset_tokens"));
