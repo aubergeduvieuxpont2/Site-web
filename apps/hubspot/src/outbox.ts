@@ -45,9 +45,13 @@ export async function enqueue(
   envelope: OpEnvelope
 ): Promise<string> {
   const sql = getSql(env);
+  // `payload` is passed as an OBJECT, not JSON.stringify'd — see the same note
+  // in apps/api/src/emailOutbox.ts. Stringifying stores a JSON *string*, so
+  // payload.email read back as undefined and HubSpot rejected its search
+  // filter with "operator EQ requires a value".
   const rows = await sql`
     INSERT INTO hubspot_outbox (kind, payload, dedupe_key)
-    VALUES (${envelope.kind}, ${JSON.stringify(envelope.payload)}, ${envelope.dedupeKey || null})
+    VALUES (${envelope.kind}, ${envelope.payload}, ${envelope.dedupeKey || null})
     RETURNING id
   `;
   return rows[0].id.toString();

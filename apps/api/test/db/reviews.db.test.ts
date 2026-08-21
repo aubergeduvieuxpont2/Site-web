@@ -13,11 +13,11 @@
  *   - invert the AT TIME ZONE comparison in reviewRequests
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
-import type { Client } from "pg";
+import type { TestClient } from "./harness";
 import { connectTestDb, type SqlFn } from "./harness";
 import { computeGuestStats } from "../../src/reviews";
 
-let client: Client;
+let client: TestClient;
 let sql: SqlFn;
 
 beforeAll(async () => {

@@ -78,9 +78,18 @@ export async function enqueueEmail(
     if (!enabled) return { enqueued: false };
   }
 
+  // `payload` is passed as an OBJECT, not JSON.stringify'd. postgres.js
+  // serialises objects to jsonb correctly; handing it a pre-stringified string
+  // stores a JSON *string* instead ("{\"a\":1}"), so reading it back yields a
+  // string and every field is undefined. A `::jsonb` cast does NOT fix this —
+  // verified against the database — because the parameter is already a JSON
+  // string by the time the cast applies.
+  //
+  // Neon's HTTP driver parsed the stringified form, which is why this was
+  // correct before the Hyperdrive migration and silently wrong after it.
   await sql`
     INSERT INTO email_outbox (to_email, template, locale, payload)
-    VALUES (${to}, ${template}, ${locale}, ${JSON.stringify(payload)}::jsonb)
+    VALUES (${to}, ${template}, ${locale}, ${payload})
   `;
 
   return { enqueued: true };
