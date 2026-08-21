@@ -1550,6 +1550,58 @@ app.patch(
       return c.json({ error: "Unauthorized" }, 401);
     }
 
+    // Push the change to HubSpot, which is the source of truth for CRM data.
+    // Fire-and-forget: the profile save has already committed and must not fail
+    // or block on a CRM hiccup — the gateway's outbox retries independently.
+    //
+    // `contact.upsert` keys on email, so this both updates an existing contact
+    // and creates one for a user who never had a sync (an account predating the
+    // integration, or one whose registration enqueue failed). Sending only
+    // non-empty fields mirrors registration: HubSpot treats an empty string as
+    // "clear this property", so blanks here would erase CRM data the operator
+    // may have curated by hand.
+    const hubspotSync = (async () => {
+        try {
+          const contactPayload: Record<string, string> = { email: ur.email };
+          if (ur.name) contactPayload.name = ur.name;
+          if (ur.first_name) contactPayload.firstname = ur.first_name;
+          if (ur.last_name) contactPayload.lastname = ur.last_name;
+          if (ur.phone) contactPayload.phone = ur.phone;
+          if (ur.company) contactPayload.company = ur.company;
+          if (ur.address_street) contactPayload.address = ur.address_street;
+          if (ur.address_city) contactPayload.city = ur.address_city;
+          if (ur.address_province) contactPayload.state = ur.address_province;
+          if (ur.address_postal_code) contactPayload.zip = ur.address_postal_code;
+
+          await c.env.HUBSPOT.fetch(
+            new Request("http://hubspot/ops/enqueue", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-Internal-Auth": c.env.GATEWAY_AUTH_SECRET ?? "",
+              },
+              body: JSON.stringify({
+                kind: "contact.upsert",
+                payload: contactPayload,
+              }),
+            })
+          );
+        } catch (err) {
+          console.error("profile_hubspot_enqueue_failed", err);
+        }
+      })();
+
+    // `c.executionCtx` THROWS when no execution context is present rather than
+    // returning undefined, so it must be reached inside a try. Without this the
+    // sync turned a successful save into a 500 wherever the context is absent.
+    // The promise already swallows its own errors, so letting it run detached
+    // is safe.
+    try {
+      c.executionCtx.waitUntil(hubspotSync);
+    } catch {
+      void hubspotSync;
+    }
+
     return c.json({
       user: {
         id: ur.id,
