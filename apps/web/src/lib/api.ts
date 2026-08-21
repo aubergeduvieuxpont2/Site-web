@@ -26,15 +26,24 @@ export interface User {
   hubspotContactId?: string | null;
   effectiveNightlyPrice?: number;
   effectiveWeeklyPrice?: number;
-  first_name?: string | null;
-  last_name?: string | null;
+  // camelCase, matching what every /api/* endpoint returns. These were
+  // previously declared in snake_case (first_name, address_street, …), which
+  // the API never sends — so `user.first_name` typechecked, evaluated to
+  // undefined, and the profile page rendered em-dashes while the database held
+  // the real values. Worse, the edit form prefilled from the same undefineds,
+  // so saving wrote blanks back over stored data.
+  //
+  // Keep these camelCase: the snake_case spelling is the wire format of
+  // ReservationRow, not of User, and having both here defeats the type check.
+  firstName?: string | null;
+  lastName?: string | null;
   phone?: string | null;
   company?: string | null;
-  pending_email?: string | null;
-  address_street?: string | null;
-  address_city?: string | null;
-  address_province?: string | null;
-  address_postal_code?: string | null;
+  pendingEmail?: string | null;
+  addressStreet?: string | null;
+  addressCity?: string | null;
+  addressProvince?: string | null;
+  addressPostalCode?: string | null;
 }
 
 export interface ReservationRow {

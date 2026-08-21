@@ -452,14 +452,14 @@ describe("page-profil logout", () => {
 describe("page-profil contact section", () => {
   const RICH_GUEST: User = {
     ...GUEST,
-    first_name: "Marie",
-    last_name: "Dupont",
+    firstName: "Marie",
+    lastName: "Dupont",
     phone: "418-555-0001",
     company: "ACME Corp",
-    address_street: "123 Rue Principale",
-    address_city: "Saint-Raymond",
-    address_province: "QC",
-    address_postal_code: "G3L 1A1",
+    addressStreet: "123 Rue Principale",
+    addressCity: "Saint-Raymond",
+    addressProvince: "QC",
+    addressPostalCode: "G3L 1A1",
   };
 
   it("renders contact fields in display mode by default", async () => {
@@ -520,7 +520,7 @@ describe("page-profil contact section", () => {
   });
 
   it("submitting the form calls updateContactProfile with trimmed values", async () => {
-    const updatedUser: User = { ...GUEST, first_name: "Jean", last_name: "Martin" };
+    const updatedUser: User = { ...GUEST, firstName: "Jean", lastName: "Martin" };
     updateContactProfile.mockResolvedValue({ user: updatedUser });
 
     const utils = render(Page);

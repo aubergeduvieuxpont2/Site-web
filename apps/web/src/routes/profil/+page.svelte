@@ -55,14 +55,14 @@
   let editAddressPostalCode = $state("");
 
   function startContactEdit() {
-    editFirstName = user?.first_name ?? "";
-    editLastName = user?.last_name ?? "";
+    editFirstName = user?.firstName ?? "";
+    editLastName = user?.lastName ?? "";
     editPhone = user?.phone ?? "";
     editCompany = user?.company ?? "";
-    editAddressStreet = user?.address_street ?? "";
-    editAddressCity = user?.address_city ?? "";
-    editAddressProvince = user?.address_province ?? "";
-    editAddressPostalCode = user?.address_postal_code ?? "";
+    editAddressStreet = user?.addressStreet ?? "";
+    editAddressCity = user?.addressCity ?? "";
+    editAddressProvince = user?.addressProvince ?? "";
+    editAddressPostalCode = user?.addressPostalCode ?? "";
     contactEditing = true;
     contactError = null;
     contactSuccess = false;
@@ -312,11 +312,11 @@
             <dl class="profil__user-dl">
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.firstName')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-firstName">{user.first_name ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-firstName">{user.firstName ?? "—"}</dd>
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.lastName')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-lastName">{user.last_name ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-lastName">{user.lastName ?? "—"}</dd>
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.phone')}</dt>
@@ -328,19 +328,19 @@
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.addressStreet')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-addressStreet">{user.address_street ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressStreet">{user.addressStreet ?? "—"}</dd>
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.addressCity')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-addressCity">{user.address_city ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressCity">{user.addressCity ?? "—"}</dd>
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.addressProvince')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-addressProvince">{user.address_province ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressProvince">{user.addressProvince ?? "—"}</dd>
               </div>
               <div class="profil__user-field">
                 <dt class="profil__user-dt">{t('profil.fields.addressPostalCode')}</dt>
-                <dd class="profil__user-dd" data-testid="profil-contact-addressPostalCode">{user.address_postal_code ?? "—"}</dd>
+                <dd class="profil__user-dd" data-testid="profil-contact-addressPostalCode">{user.addressPostalCode ?? "—"}</dd>
               </div>
             </dl>
             <button
